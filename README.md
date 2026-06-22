@@ -1,4 +1,4 @@
-# 个人技术博客
+# Ralph Rong 个人技术博客
 
 这是一个可部署到 GitHub Pages 的个人技术博客。前台是静态页面，文章数据保存在 `data/posts.json`；管理后台通过 GitHub Contents API 将数据写回仓库，实现无传统服务器的数据持久化。
 
