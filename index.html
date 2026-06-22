@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="个人技术博客，记录工程实践、系统设计、前端开发和学习笔记。"
+    />
+    <title>个人技术博客</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./index.html" aria-label="返回首页">
+        <span class="brand-mark">T</span>
+        <span>
+          <strong id="siteTitle">Tech Notes</strong>
+          <small id="siteSubtitle">个人技术博客</small>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="#posts">文章</a>
+        <a href="#about">关于</a>
+        <a href="./admin.html">管理</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <div class="intro-copy">
+          <p class="eyebrow">Engineering Journal</p>
+          <h1>把技术思考沉淀成可复用的知识资产。</h1>
+          <p>
+            这里适合发布前端、后端、云服务、工具链、系统设计和项目复盘。内容来自仓库数据文件，
+            管理页可以直接写回 GitHub，实现静态托管下的数据持久化。
+          </p>
+        </div>
+        <div class="signal-panel" aria-label="博客状态">
+          <div>
+            <span class="metric" id="postCount">0</span>
+            <span class="metric-label">篇文章</span>
+          </div>
+          <div>
+            <span class="metric" id="tagCount">0</span>
+            <span class="metric-label">个标签</span>
+          </div>
+          <div>
+            <span class="metric" id="latestDate">-</span>
+            <span class="metric-label">最近更新</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="toolbar" id="posts" aria-label="文章筛选">
+        <label class="search">
+          <span>搜索</span>
+          <input id="searchInput" type="search" placeholder="标题、摘要、标签..." />
+        </label>
+        <div class="tag-filter" id="tagFilter" aria-label="标签筛选"></div>
+      </section>
+
+      <section class="content-layout">
+        <div>
+          <div class="section-heading">
+            <p class="eyebrow">Posts</p>
+            <h2>最新文章</h2>
+          </div>
+          <div class="post-list" id="postList"></div>
+          <p class="empty-state" id="emptyState" hidden>没有匹配的文章。</p>
+        </div>
+
+        <aside class="profile" id="about">
+          <div class="avatar" aria-hidden="true">CN</div>
+          <h2 id="authorName">作者名</h2>
+          <p id="authorBio">
+            专注构建可靠、清晰、可维护的软件系统。这里记录从问题到方案的完整思考。
+          </p>
+          <div class="profile-links" id="profileLinks"></div>
+        </aside>
+      </section>
+
+      <article class="reader" id="reader" hidden>
+        <button class="ghost-button" id="backButton" type="button">返回列表</button>
+        <p class="eyebrow" id="readerMeta"></p>
+        <h1 id="readerTitle"></h1>
+        <p class="reader-summary" id="readerSummary"></p>
+        <div class="article-body" id="readerBody"></div>
+      </article>
+    </main>
+
+    <footer class="footer">
+      <span>Powered by GitHub Pages</span>
+      <span>Data: <code>data/posts.json</code></span>
+    </footer>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

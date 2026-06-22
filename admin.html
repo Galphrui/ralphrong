@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>博客管理后台</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./index.html">
+        <span class="brand-mark">A</span>
+        <span>
+          <strong>Blog Admin</strong>
+          <small>GitHub 数据管理</small>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="./index.html">前台</a>
+        <a href="#settings">设置</a>
+        <a href="#editor">编辑</a>
+      </nav>
+    </header>
+
+    <main class="admin-shell">
+      <section class="admin-panel" id="settings">
+        <div class="section-heading">
+          <p class="eyebrow">Repository</p>
+          <h1>仓库连接</h1>
+        </div>
+        <div class="form-grid">
+          <label>
+            GitHub 用户名或组织
+            <input id="ownerInput" autocomplete="username" placeholder="your-github-name" />
+          </label>
+          <label>
+            仓库名
+            <input id="repoInput" placeholder="your-blog-repo" />
+          </label>
+          <label>
+            分支
+            <input id="branchInput" placeholder="main" />
+          </label>
+          <label>
+            数据文件路径
+            <input id="pathInput" placeholder="data/posts.json" />
+          </label>
+          <label class="wide">
+            GitHub Token
+            <input
+              id="tokenInput"
+              type="password"
+              autocomplete="off"
+              placeholder="fine-grained token with Contents read/write"
+            />
+          </label>
+        </div>
+        <div class="actions-row">
+          <button id="saveSettingsButton" type="button">保存设置</button>
+          <button id="loadRemoteButton" class="secondary-button" type="button">从 GitHub 读取</button>
+          <button id="downloadButton" class="secondary-button" type="button">导出 JSON</button>
+          <label class="file-button">
+            导入 JSON
+            <input id="importInput" type="file" accept="application/json" />
+          </label>
+        </div>
+        <p class="hint">
+          Token 只保存在当前浏览器。部署到 GitHub Pages 后，前台公开读取 JSON，后台登录你的 Token 后写回仓库。
+        </p>
+      </section>
+
+      <section class="admin-grid">
+        <aside class="admin-panel">
+          <div class="section-heading">
+            <p class="eyebrow">Posts</p>
+            <h2>文章列表</h2>
+          </div>
+          <button id="newPostButton" type="button">新建文章</button>
+          <div class="admin-list" id="adminPostList"></div>
+        </aside>
+
+        <section class="admin-panel" id="editor">
+          <div class="section-heading">
+            <p class="eyebrow">Editor</p>
+            <h2>内容编辑</h2>
+          </div>
+          <form id="postForm">
+            <div class="form-grid">
+              <label>
+                标题
+                <input id="titleInput" required />
+              </label>
+              <label>
+                Slug
+                <input id="slugInput" required />
+              </label>
+              <label>
+                发布日期
+                <input id="dateInput" type="date" required />
+              </label>
+              <label>
+                标签，逗号分隔
+                <input id="tagsInput" placeholder="JavaScript, 架构" />
+              </label>
+              <label class="wide">
+                摘要
+                <textarea id="summaryInput" rows="3"></textarea>
+              </label>
+              <label class="wide">
+                正文 Markdown
+                <textarea id="contentInput" rows="14"></textarea>
+              </label>
+            </div>
+            <div class="actions-row">
+              <button type="submit">保存到本地数据</button>
+              <button id="deletePostButton" class="danger-button" type="button">删除文章</button>
+              <button id="publishButton" class="publish-button" type="button">发布到 GitHub</button>
+            </div>
+          </form>
+          <p class="status" id="statusText" role="status"></p>
+        </section>
+      </section>
+
+      <section class="admin-panel">
+        <div class="section-heading">
+          <p class="eyebrow">Site</p>
+          <h2>站点信息</h2>
+        </div>
+        <div class="form-grid">
+          <label>
+            站点标题
+            <input id="siteTitleInput" />
+          </label>
+          <label>
+            副标题
+            <input id="siteSubtitleInput" />
+          </label>
+          <label>
+            作者
+            <input id="authorInput" />
+          </label>
+          <label class="wide">
+            作者简介
+            <textarea id="bioInput" rows="3"></textarea>
+          </label>
+        </div>
+        <div class="actions-row">
+          <button id="saveSiteButton" type="button">保存站点信息</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="./admin.js"></script>
+  </body>
+</html>
