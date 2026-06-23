@@ -218,10 +218,20 @@
           <h2>账号管理</h2>
         </div>
         <p class="RaHint">
-          账号管理只在本地后台服务中可用。保存后提交并推送 `data/admin-users.json`，外网后台会读取这些哈希数据登录。
+          重置指令用于登录页找回密码。账号新增、删除和直接改密只在本地后台服务中可用。
         </p>
-        <div class="RaList" id="RaAccountList"></div>
         <div class="RaFormGrid">
+          <label class="RaField RaWide">
+            新重置指令
+            <input id="RaResetCodeInput" type="password" autocomplete="new-password" placeholder="至少 8 位" />
+          </label>
+        </div>
+        <div class="RaActions">
+          <button id="RaSaveResetCodeButton" type="button">保存重置指令</button>
+        </div>
+        <div id="RaLocalAccountTools">
+          <div class="RaList" id="RaAccountList"></div>
+          <div class="RaFormGrid">
           <label class="RaField">
             账号
             <input id="RaAccountUserInput" placeholder="new-admin" />
@@ -230,12 +240,13 @@
             新密码
             <input id="RaAccountPasswordInput" type="password" autocomplete="new-password" />
           </label>
-        </div>
-        <div class="RaActions">
-          <button id="RaCreateAccountButton" type="button">新增账号</button>
-          <button id="RaResetPasswordButton" class="RaSecondaryButton" type="button">重置密码</button>
-          <button id="RaDeleteAccountButton" class="RaDangerButton" type="button">删除账号</button>
-          <button id="RaRefreshAccountsButton" class="RaSecondaryButton" type="button">刷新账号</button>
+          </div>
+          <div class="RaActions">
+            <button id="RaCreateAccountButton" type="button">新增账号</button>
+            <button id="RaResetPasswordButton" class="RaSecondaryButton" type="button">重置密码</button>
+            <button id="RaDeleteAccountButton" class="RaDangerButton" type="button">删除账号</button>
+            <button id="RaRefreshAccountsButton" class="RaSecondaryButton" type="button">刷新账号</button>
+          </div>
         </div>
         <p class="RaStatus" id="RaAccountStatus" role="status"></p>
       </section>

@@ -48,6 +48,21 @@ async function handleApi(request, response) {
     return;
   }
 
+  if (url.pathname === "/api/password-reset" && request.method === "POST") {
+    const body = await readJson(request);
+    const result = await resetPasswordWithCode(body.username, body.password, body.resetCode);
+    sendJson(response, 200, { ok: true, user: publicUser(result.user) });
+    return;
+  }
+
+  if (url.pathname === "/api/reset-code" && request.method === "PUT") {
+    requireSession(request);
+    const body = await readJson(request);
+    await changeResetCode(body.resetCode);
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
   if (url.pathname === "/api/users" && request.method === "GET") {
     requireSession(request);
     const store = await readUsers();
@@ -155,6 +170,37 @@ async function changePassword(username, password) {
   user.updatedAt = new Date().toISOString();
   await writeUsers(store);
   return { user };
+}
+
+async function resetPasswordWithCode(username, password, resetCode) {
+  const cleanUser = normalizeUsername(username);
+  validatePassword(password);
+  const store = await readUsers();
+  const user = store.users.find((item) => item.username.toLowerCase() === cleanUser.toLowerCase());
+  if (!user) throw httpError(404, "账号不存在。");
+  if (!verifyResetCode(store, resetCode)) throw httpError(401, "重置指令错误。");
+
+  user.salt = randomBytes(16).toString("hex");
+  user.iterations = 210000;
+  user.passwordHash = hashPassword(password, user.salt, user.iterations);
+  user.updatedAt = new Date().toISOString();
+  await writeUsers(store);
+  return { user };
+}
+
+async function changeResetCode(resetCode) {
+  const value = String(resetCode || "");
+  if (value.length < 8) throw httpError(400, "重置指令至少需要 8 位。");
+  const store = await readUsers();
+  const salt = randomBytes(16).toString("hex");
+  const iterations = 210000;
+  store.resetCode = {
+    passwordHash: hashPassword(value, salt, iterations),
+    salt,
+    iterations,
+    updatedAt: new Date().toISOString(),
+  };
+  await writeUsers(store);
 }
 
 async function deleteUser(username) {
@@ -269,6 +315,15 @@ function validatePassword(password) {
 
 function hashPassword(password, salt, iterations) {
   return pbkdf2Sync(String(password), salt, iterations, 32, "sha256").toString("hex");
+}
+
+function verifyResetCode(store, resetCode) {
+  if (!store.resetCode?.passwordHash || !store.resetCode?.salt) return false;
+  const actual = hashPassword(resetCode, store.resetCode.salt, store.resetCode.iterations || 210000);
+  return (
+    actual.length === store.resetCode.passwordHash.length &&
+    timingSafeEqual(Buffer.from(actual, "hex"), Buffer.from(store.resetCode.passwordHash, "hex"))
+  );
 }
 
 function publicUser(user) {

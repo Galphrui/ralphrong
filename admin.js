@@ -14,9 +14,12 @@ const RaEls = {
   logout: document.querySelector("#RaLogoutButton"),
   accountsNavLink: document.querySelector("#RaAccountsNavLink"),
   accountsPanel: document.querySelector("#RaAccountsPanel"),
+  localAccountTools: document.querySelector("#RaLocalAccountTools"),
   accountList: document.querySelector("#RaAccountList"),
   accountUser: document.querySelector("#RaAccountUserInput"),
   accountPassword: document.querySelector("#RaAccountPasswordInput"),
+  resetCode: document.querySelector("#RaResetCodeInput"),
+  saveResetCode: document.querySelector("#RaSaveResetCodeButton"),
   createAccount: document.querySelector("#RaCreateAccountButton"),
   resetPassword: document.querySelector("#RaResetPasswordButton"),
   deleteAccount: document.querySelector("#RaDeleteAccountButton"),
@@ -83,8 +86,9 @@ async function initRaAdmin() {
 
   document.body.classList.remove("RaAuthPending");
   RaEls.adminShell.hidden = false;
-  RaEls.accountsNavLink.hidden = !RA_IS_LOCAL_ADMIN;
-  RaEls.accountsPanel.hidden = !RA_IS_LOCAL_ADMIN;
+  RaEls.accountsNavLink.hidden = false;
+  RaEls.accountsPanel.hidden = false;
+  RaEls.localAccountTools.hidden = !RA_IS_LOCAL_ADMIN;
 
   await loadInitialData();
   renderSiteForm();
@@ -244,6 +248,21 @@ async function resetAccountPassword() {
     setAccountStatus("密码已重置。记得提交并推送 data/admin-users.json。");
   } catch (error) {
     setAccountStatus(`重置密码失败：${error.message}`);
+  }
+}
+
+async function saveResetCode() {
+  try {
+    const resetCode = RaEls.resetCode.value;
+    if (!resetCode) throw new Error("请填写新的重置指令。");
+    await raApi("/api/reset-code", {
+      method: "PUT",
+      body: JSON.stringify({ resetCode }),
+    });
+    RaEls.resetCode.value = "";
+    setAccountStatus(RA_IS_LOCAL_ADMIN ? "重置指令已保存。记得提交并推送 data/admin-users.json。" : "重置指令已保存到 GitHub。");
+  } catch (error) {
+    setAccountStatus(`保存重置指令失败：${error.message}`);
   }
 }
 
@@ -740,6 +759,7 @@ RaEls.createAccount.addEventListener("click", createAccount);
 RaEls.resetPassword.addEventListener("click", resetAccountPassword);
 RaEls.deleteAccount.addEventListener("click", deleteAccount);
 RaEls.refreshAccounts.addEventListener("click", loadAccounts);
+RaEls.saveResetCode.addEventListener("click", saveResetCode);
 RaEls.accountList.addEventListener("click", (event) => {
   const item = event.target.closest("[data-RaAccount]");
   if (!item) return;

@@ -8,8 +8,12 @@ const RaLoginEls = {
   password: document.querySelector("#RaLoginPasswordInput"),
   registerPassword: document.querySelector("#RaRegisterPasswordInput"),
   registerPasswordField: document.querySelector("#RaRegisterPasswordField"),
+  resetCode: document.querySelector("#RaResetCodeInput"),
+  resetCodeField: document.querySelector("#RaResetCodeField"),
   login: document.querySelector("#RaLoginButton"),
   register: document.querySelector("#RaRegisterButton"),
+  showReset: document.querySelector("#RaShowResetButton"),
+  resetPassword: document.querySelector("#RaResetPasswordButton"),
   status: document.querySelector("#RaLoginStatus"),
 };
 
@@ -17,7 +21,6 @@ initRaLogin();
 
 async function initRaLogin() {
   RaLoginEls.register.hidden = !RA_IS_LOCAL_ADMIN;
-  RaLoginEls.registerPasswordField.hidden = !RA_IS_LOCAL_ADMIN;
   if (!RA_API_BASE) {
     setLoginStatus("外网后台 API 尚未配置。请部署 Worker 并在 admin-config.js 写入地址。");
   }
@@ -66,6 +69,35 @@ async function register() {
   }
 }
 
+function showResetPassword() {
+  RaLoginEls.resetCodeField.hidden = false;
+  RaLoginEls.resetPassword.hidden = false;
+  RaLoginEls.register.hidden = true;
+  setLoginStatus("请输入账号、新密码、确认密码和重置指令。");
+}
+
+async function resetPassword() {
+  try {
+    const username = RaLoginEls.user.value.trim();
+    const password = RaLoginEls.password.value;
+    const confirmPassword = RaLoginEls.registerPassword.value;
+    const resetCode = RaLoginEls.resetCode.value;
+    if (!username || !password || !confirmPassword || !resetCode) {
+      throw new Error("请填写账号、新密码、确认密码和重置指令。");
+    }
+    if (password !== confirmPassword) throw new Error("两次输入的新密码不一致。");
+
+    const result = await raApi("/api/password-reset", {
+      method: "POST",
+      body: JSON.stringify({ username, password, resetCode }),
+    });
+    RaLoginEls.resetCode.value = "";
+    setLoginStatus(`密码已重置：${result.user}。请使用新密码登录。`);
+  } catch (error) {
+    setLoginStatus(`重置失败：${error.message}`);
+  }
+}
+
 async function getSession() {
   return raApi("/api/session");
 }
@@ -100,6 +132,8 @@ function setLoginStatus(message) {
 
 RaLoginEls.login.addEventListener("click", login);
 RaLoginEls.register.addEventListener("click", register);
+RaLoginEls.showReset.addEventListener("click", showResetPassword);
+RaLoginEls.resetPassword.addEventListener("click", resetPassword);
 RaLoginEls.password.addEventListener("keydown", (event) => {
   if (event.key === "Enter") login();
 });
