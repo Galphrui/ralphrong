@@ -4,13 +4,26 @@
 
 ## 本地预览
 
+前台 React/Vite 开发服务：
+
+```bash
+npm run dev
+```
+
+访问：
+
+```text
+http://localhost:5173/
+```
+
+本地后台服务：
+
 ```bash
 node local-admin-server.mjs
 ```
 
 访问：
 
-- 前台：`http://localhost:8080/`
 - 后台：`http://localhost:8080/admin.html`
 
 ## 后台账号体系
@@ -135,9 +148,11 @@ worker/admin-worker.js
 
 1. 将仓库设为 public。
 2. 进入仓库 `Settings` -> `Pages`。
-3. Source 选择 `Deploy from a branch`。
-4. Branch 选择 `main`，目录选择 `/root`。
+3. Source 选择 `GitHub Actions`。
+4. 推送到 `main` 后，`.github/workflows/deploy.yml` 会自动执行 `npm run build` 并上传 `dist`。
 5. 保存后等待 GitHub Pages 生成访问地址。
+
+不要把 Pages 配成 `Deploy from a branch` 的 `main / root`。当前前台入口是 React + Vite 源码，必须先构建成 `dist` 后再部署；直接托管仓库根目录会导致浏览器加载未编译的 `/src/main.jsx`，页面可能一片空白。
 
 ## 数据文件
 

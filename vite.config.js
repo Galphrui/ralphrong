@@ -4,9 +4,9 @@ import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-export default {
+export default ({ command }) => ({
   plugins: [react()],
-  base: process.env.VITE_BASE || '/',
+  base: process.env.VITE_BASE || (command === 'build' ? '/ralphrong/' : '/'),
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -34,4 +34,4 @@ export default {
       },
     },
   },
-}
+})
