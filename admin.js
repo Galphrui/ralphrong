@@ -19,6 +19,7 @@ const els = {
   token: document.querySelector("#tokenInput"),
   saveSettings: document.querySelector("#saveSettingsButton"),
   loadRemote: document.querySelector("#loadRemoteButton"),
+  checkAccess: document.querySelector("#checkAccessButton"),
   openRepo: document.querySelector("#openRepoButton"),
   download: document.querySelector("#downloadButton"),
   importInput: document.querySelector("#importInput"),
@@ -129,27 +130,37 @@ async function loadRemoteData() {
 async function publishData() {
   try {
     saveSettings();
-    if (!remoteSha) {
-      try {
-        const remote = await githubRequest("GET");
-        remoteSha = remote.sha;
-      } catch (error) {
-        remoteSha = "";
-      }
-    }
+    const settings = getSettings();
+    validatePublishSettings(settings);
+
+    const remote = await githubRequest("GET");
+    remoteSha = remote.sha;
 
     const payload = {
       message: `chore: update blog data ${new Date().toISOString()}`,
       content: toBase64(JSON.stringify(data, null, 2) + "\n"),
-      branch: getSettings().branch,
+      branch: settings.branch,
     };
-    if (remoteSha) payload.sha = remoteSha;
+    payload.sha = remoteSha;
 
     const result = await githubRequest("PUT", payload);
     remoteSha = result.content.sha;
     setStatus("发布成功，GitHub Pages 稍后会展示新内容。");
   } catch (error) {
     setStatus(`发布失败：${error.message}`);
+  }
+}
+
+async function checkGitHubAccess() {
+  try {
+    applyRepositoryUrl(false);
+    saveSettings();
+    validatePublishSettings(getSettings());
+    const remote = await githubRequest("GET");
+    remoteSha = remote.sha;
+    setStatus("权限检查通过：token 可以读取数据文件，发布时会写回同一个文件。");
+  } catch (error) {
+    setStatus(`权限检查失败：${error.message}`);
   }
 }
 
@@ -173,9 +184,46 @@ async function githubRequest(method, body) {
 
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(result.message || `GitHub API ${response.status}`);
+    throw new Error(formatGitHubError(response.status, result, method, settings));
   }
   return result;
+}
+
+function validatePublishSettings(settings) {
+  if (!settings.owner || !settings.repo) {
+    throw new Error("请先填写 GitHub 仓库地址，或点击“从当前网址识别”。");
+  }
+  if (!settings.token) {
+    throw new Error("发布写回必须填写 GitHub token。浏览器已登录 GitHub 不能替代 API token。");
+  }
+  if (!settings.path) {
+    throw new Error("请填写数据文件路径，默认是 data/posts.json。");
+  }
+}
+
+function formatGitHubError(status, result, method, settings) {
+  const message = result.message || `GitHub API ${status}`;
+  const detail = Array.isArray(result.errors)
+    ? result.errors.map((item) => item.message || item.code).filter(Boolean).join("；")
+    : "";
+  const suffix = detail ? ` GitHub 详情：${detail}` : "";
+
+  if (status === 401) {
+    return "token 无效或已过期，请重新创建 fine-grained token。";
+  }
+  if (status === 403) {
+    return "token 没有写入权限。请确认 token 选择了 Galphrui/ralphrong，并授予 Contents: Read and write。";
+  }
+  if (status === 404) {
+    return `找不到仓库或数据文件。私有仓库需要 token 允许访问 ${settings.owner}/${settings.repo}，并确认 ${settings.path} 已存在。`;
+  }
+  if (status === 409) {
+    return "远端文件刚被更新过，请先点击“从 GitHub 读取”，再重新发布。";
+  }
+  if (status === 422 && method === "PUT") {
+    return `GitHub 拒绝写入。常见原因是 token 没有 Contents 写权限，或目标分支/文件状态不匹配。${suffix}`;
+  }
+  return `${message}${suffix}`;
 }
 
 async function fetchPublicData() {
@@ -564,6 +612,7 @@ els.detectRepo.addEventListener("click", () => {
   saveSettings();
 });
 els.loadRemote.addEventListener("click", loadRemoteData);
+els.checkAccess.addEventListener("click", checkGitHubAccess);
 els.openRepo.addEventListener("click", openRepository);
 els.publish.addEventListener("click", publishData);
 els.download.addEventListener("click", exportJson);
