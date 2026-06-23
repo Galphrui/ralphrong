@@ -6,6 +6,12 @@ let selectedSlug = "";
 let remoteSha = "";
 
 const els = {
+  repoUrl: document.querySelector("#repoUrlInput"),
+  applyRepoUrl: document.querySelector("#applyRepoUrlButton"),
+  detectRepo: document.querySelector("#detectRepoButton"),
+  openDataLink: document.querySelector("#openDataLink"),
+  openTokenLink: document.querySelector("#openTokenLink"),
+  repoHint: document.querySelector("#repoHint"),
   owner: document.querySelector("#ownerInput"),
   repo: document.querySelector("#repoInput"),
   branch: document.querySelector("#branchInput"),
@@ -13,6 +19,7 @@ const els = {
   token: document.querySelector("#tokenInput"),
   saveSettings: document.querySelector("#saveSettingsButton"),
   loadRemote: document.querySelector("#loadRemoteButton"),
+  openRepo: document.querySelector("#openRepoButton"),
   download: document.querySelector("#downloadButton"),
   importInput: document.querySelector("#importInput"),
   adminPostList: document.querySelector("#adminPostList"),
@@ -38,6 +45,8 @@ init();
 
 async function init() {
   loadSettings();
+  detectRepositoryFromPage();
+  updateGitHubLinks();
   await loadInitialData();
   renderSiteForm();
   renderPostList();
@@ -46,6 +55,7 @@ async function init() {
 
 function loadSettings() {
   const settings = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+  els.repoUrl.value = settings.repoUrl || "";
   els.owner.value = settings.owner || "";
   els.repo.value = settings.repo || "";
   els.branch.value = settings.branch || "main";
@@ -62,8 +72,10 @@ function saveSettings() {
       branch: els.branch.value.trim() || "main",
       path: els.path.value.trim() || "data/posts.json",
       token: els.token.value.trim(),
+      repoUrl: els.repoUrl.value.trim(),
     }),
   );
+  updateGitHubLinks();
   setStatus("仓库设置已保存。");
 }
 
@@ -92,14 +104,23 @@ function saveLocalData() {
 
 async function loadRemoteData() {
   try {
+    applyRepositoryUrl(false);
     saveSettings();
-    const remote = await githubRequest("GET");
-    remoteSha = remote.sha;
-    data = normalizeData(JSON.parse(fromBase64(remote.content)));
+    const settings = getSettings();
+    let remote;
+    if (settings.token) {
+      remote = await githubRequest("GET");
+      remoteSha = remote.sha;
+      data = normalizeData(JSON.parse(fromBase64(remote.content)));
+    } else {
+      remote = await fetchPublicData();
+      remoteSha = "";
+      data = normalizeData(remote);
+    }
     saveLocalData();
     renderSiteForm();
     selectPost(data.posts[0]?.slug || "");
-    setStatus("已从 GitHub 读取最新数据。");
+    setStatus(settings.token ? "已通过 GitHub API 读取最新数据。" : "已从 GitHub 公开数据文件读取最新数据。");
   } catch (error) {
     setStatus(`读取失败：${error.message}`);
   }
@@ -157,6 +178,23 @@ async function githubRequest(method, body) {
   return result;
 }
 
+async function fetchPublicData() {
+  const settings = getSettings();
+  if (!settings.owner || !settings.repo) {
+    throw new Error("请填写仓库地址，或让后台从当前网址识别仓库");
+  }
+
+  const url = getRawDataUrl(settings);
+  const response = await fetch(`${url}?t=${Date.now()}`);
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error("公开数据文件读取失败：仓库可能是私有仓库，或 data/posts.json 尚未存在。请填写 token 后读取，或将仓库公开。");
+    }
+    throw new Error(`公开数据文件读取失败：${response.status}`);
+  }
+  return response.json();
+}
+
 function getSettings() {
   return {
     owner: els.owner.value.trim(),
@@ -164,7 +202,122 @@ function getSettings() {
     branch: els.branch.value.trim() || "main",
     path: els.path.value.trim() || "data/posts.json",
     token: els.token.value.trim(),
+    repoUrl: els.repoUrl.value.trim(),
   };
+}
+
+function applyRepositoryUrl(showStatus = true) {
+  const parsed = parseGitHubRepository(els.repoUrl.value);
+  if (!parsed) {
+    if (showStatus) setStatus("请输入有效的 GitHub 仓库地址，例如 https://github.com/Galphrui/ralphrong。");
+    return false;
+  }
+
+  els.owner.value = parsed.owner;
+  els.repo.value = parsed.repo;
+  els.branch.value = parsed.branch || els.branch.value || "main";
+  els.path.value = parsed.path || els.path.value || "data/posts.json";
+  updateGitHubLinks();
+  if (showStatus) setStatus("已从仓库地址自动填充连接信息。");
+  return true;
+}
+
+function detectRepositoryFromPage() {
+  const settings = getSettings();
+  if (settings.owner && settings.repo) return;
+
+  const detected = getRepositoryFromLocation();
+  if (!detected) {
+    if (!els.repoUrl.value) els.repoUrl.value = "https://github.com/Galphrui/ralphrong";
+    applyRepositoryUrl(false);
+    return;
+  }
+
+  els.owner.value = detected.owner;
+  els.repo.value = detected.repo;
+  els.branch.value = settings.branch || "main";
+  els.path.value = settings.path || "data/posts.json";
+  els.repoUrl.value = `https://github.com/${detected.owner}/${detected.repo}`;
+  els.repoHint.textContent = "已从当前 GitHub Pages 网址识别仓库。";
+}
+
+function getRepositoryFromLocation() {
+  const host = location.hostname.toLowerCase();
+  const parts = location.pathname.split("/").filter(Boolean);
+  const ownerFromPages = host.match(/^([a-z0-9-]+)\.github\.io$/i)?.[1];
+  if (!ownerFromPages) return null;
+
+  const repoFromPath = parts[0];
+  if (repoFromPath && repoFromPath !== "admin.html") {
+    return { owner: ownerFromPages, repo: repoFromPath };
+  }
+
+  return { owner: ownerFromPages, repo: `${ownerFromPages}.github.io` };
+}
+
+function parseGitHubRepository(value) {
+  const input = value.trim();
+  if (!input) return null;
+
+  const ssh = input.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/i);
+  if (ssh) return { owner: ssh[1], repo: ssh[2] };
+
+  const shorthand = input.match(/^([^/\s]+)\/([^/\s#?]+)$/);
+  if (shorthand) return { owner: shorthand[1], repo: shorthand[2].replace(/\.git$/, "") };
+
+  try {
+    const url = new URL(input);
+    if (!url.hostname.includes("github.com")) return null;
+    const [owner, repo, mode, branch, ...rest] = url.pathname.split("/").filter(Boolean);
+    if (!owner || !repo) return null;
+    const parsed = { owner, repo: repo.replace(/\.git$/, "") };
+    if ((mode === "blob" || mode === "tree") && branch) parsed.branch = branch;
+    if (mode === "blob" && rest.length) parsed.path = rest.join("/");
+    return parsed;
+  } catch (error) {
+    return null;
+  }
+}
+
+function updateGitHubLinks() {
+  const settings = getSettings();
+  const repoUrl = settings.owner && settings.repo ? `https://github.com/${settings.owner}/${settings.repo}` : "#";
+  const dataUrl =
+    settings.owner && settings.repo
+      ? `${repoUrl}/blob/${encodeURIComponent(settings.branch)}/${settings.path}`
+      : "#";
+  const tokenUrl = buildTokenUrl(settings);
+
+  els.openDataLink.href = dataUrl;
+  els.openDataLink.toggleAttribute("aria-disabled", dataUrl === "#");
+  els.openTokenLink.href = tokenUrl;
+  els.openRepo.disabled = repoUrl === "#";
+}
+
+function buildTokenUrl(settings) {
+  const repoName = settings.owner && settings.repo ? `${settings.owner}/${settings.repo}` : "";
+  const params = new URLSearchParams({
+    name: "Tech Blog Admin",
+    description: "Allow the blog admin page to update data/posts.json",
+    target_name: settings.owner || "",
+    contents: "write",
+    metadata: "read",
+  });
+  if (repoName) params.set("repositories", repoName);
+  return `https://github.com/settings/personal-access-tokens/new?${params.toString()}`;
+}
+
+function getRawDataUrl(settings) {
+  return `https://raw.githubusercontent.com/${settings.owner}/${settings.repo}/${settings.branch}/${settings.path}`;
+}
+
+function openRepository() {
+  const settings = getSettings();
+  if (!settings.owner || !settings.repo) {
+    setStatus("请先填写或识别 GitHub 仓库。");
+    return;
+  }
+  window.open(`https://github.com/${settings.owner}/${settings.repo}`, "_blank", "noreferrer");
 }
 
 function renderPostList() {
@@ -396,7 +549,22 @@ function escapeAttr(value) {
 }
 
 els.saveSettings.addEventListener("click", saveSettings);
+els.applyRepoUrl.addEventListener("click", () => {
+  applyRepositoryUrl(true);
+  saveSettings();
+});
+els.detectRepo.addEventListener("click", () => {
+  const detected = getRepositoryFromLocation();
+  if (!detected) {
+    setStatus("当前不是 GitHub Pages 地址，无法自动识别；请粘贴 GitHub 仓库地址。");
+    return;
+  }
+  els.repoUrl.value = `https://github.com/${detected.owner}/${detected.repo}`;
+  applyRepositoryUrl(true);
+  saveSettings();
+});
 els.loadRemote.addEventListener("click", loadRemoteData);
+els.openRepo.addEventListener("click", openRepository);
 els.publish.addEventListener("click", publishData);
 els.download.addEventListener("click", exportJson);
 els.importInput.addEventListener("change", importJson);
@@ -410,4 +578,11 @@ els.deletePost.addEventListener("click", deleteSelectedPost);
 els.saveSite.addEventListener("click", saveSiteInfo);
 els.title.addEventListener("input", () => {
   if (!selectedSlug) els.slug.value = slugify(els.title.value);
+});
+els.repoUrl.addEventListener("change", () => {
+  applyRepositoryUrl(false);
+  saveSettings();
+});
+[els.owner, els.repo, els.branch, els.path].forEach((input) => {
+  input.addEventListener("input", updateGitHubLinks);
 });

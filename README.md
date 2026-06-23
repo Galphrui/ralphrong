@@ -23,14 +23,21 @@ python3 -m http.server 8080
 
 ## 后台发布配置
 
-后台需要一个 GitHub token 才能写回 `data/posts.json`。
+后台可以通过仓库地址自动生成连接信息。部署到 GitHub Pages 后，后台也会尝试从当前网址识别 owner 和 repo。
+
+读取数据有两种方式：
+
+- 公开仓库：点击“从 GitHub 读取”，后台会直接读取 `data/posts.json`。
+- 私有仓库：需要填写 GitHub token 后再读取和发布。
+
+写回 `data/posts.json` 始终需要 GitHub token。
 
 建议创建 fine-grained personal access token：
 
 1. GitHub 头像菜单 -> `Settings` -> `Developer settings` -> `Personal access tokens` -> `Fine-grained tokens`。
 2. Repository access 只选择当前博客仓库。
 3. Permissions 中将 `Contents` 设置为 `Read and write`。
-4. 生成 token 后，在 `admin.html` 填入 owner、repo、branch、path 和 token。
+4. 生成 token 后，在 `admin.html` 填入仓库地址和 token，或让后台自动识别仓库。
 5. 点击“从 GitHub 读取”，编辑内容后点击“发布到 GitHub”。
 
 Token 只保存在浏览器 `localStorage`，不要把 token 写进仓库。

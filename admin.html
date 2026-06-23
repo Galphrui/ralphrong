@@ -29,6 +29,19 @@
           <p class="eyebrow">Repository</p>
           <h1>仓库连接</h1>
         </div>
+        <div class="quick-connect">
+          <label>
+            GitHub 仓库地址
+            <input id="repoUrlInput" placeholder="https://github.com/Galphrui/ralphrong" />
+          </label>
+          <div class="quick-actions">
+            <button id="applyRepoUrlButton" type="button">应用仓库地址</button>
+            <button id="detectRepoButton" class="secondary-button" type="button">从当前网址识别</button>
+            <a id="openDataLink" class="link-button" href="#" target="_blank" rel="noreferrer">打开数据文件</a>
+            <a id="openTokenLink" class="link-button" href="#" target="_blank" rel="noreferrer">创建 Token</a>
+          </div>
+          <p class="hint" id="repoHint">填写仓库地址后，后台会自动生成 owner、repo、branch 和数据路径。</p>
+        </div>
         <div class="form-grid">
           <label>
             GitHub 用户名或组织
@@ -59,6 +72,7 @@
         <div class="actions-row">
           <button id="saveSettingsButton" type="button">保存设置</button>
           <button id="loadRemoteButton" class="secondary-button" type="button">从 GitHub 读取</button>
+          <button id="openRepoButton" class="secondary-button" type="button">打开仓库</button>
           <button id="downloadButton" class="secondary-button" type="button">导出 JSON</button>
           <label class="file-button">
             导入 JSON
