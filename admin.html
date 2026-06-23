@@ -20,10 +20,43 @@
         <a href="./index.html">前台</a>
         <a href="#settings">设置</a>
         <a href="#editor">编辑</a>
+        <button id="logoutButton" class="nav-button" type="button">退出</button>
       </nav>
     </header>
 
-    <main class="admin-shell">
+    <section class="login-screen" id="loginScreen">
+      <div class="login-panel">
+        <div class="section-heading">
+          <p class="eyebrow">Admin Login</p>
+          <h1>管理员登录</h1>
+        </div>
+        <p class="hint">
+          使用 GitHub 账号名和 fine-grained token 登录后台。Token 只保存在当前浏览器，不会写入仓库。
+        </p>
+        <div class="form-grid">
+          <label>
+            GitHub 用户名
+            <input id="loginUserInput" autocomplete="username" placeholder="Galphrui" />
+          </label>
+          <label>
+            GitHub Token
+            <input
+              id="loginTokenInput"
+              type="password"
+              autocomplete="current-password"
+              placeholder="github_pat_..."
+            />
+          </label>
+        </div>
+        <div class="actions-row">
+          <button id="loginButton" type="button">登录后台</button>
+          <a id="loginTokenLink" class="link-button" href="#" target="_blank" rel="noreferrer">创建 Token</a>
+        </div>
+        <p class="status" id="loginStatus" role="status"></p>
+      </div>
+    </section>
+
+    <main class="admin-shell" id="adminShell" hidden>
       <section class="admin-panel" id="settings">
         <div class="section-heading">
           <p class="eyebrow">Repository</p>

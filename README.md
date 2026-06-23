@@ -25,6 +25,14 @@ python3 -m http.server 8080
 
 后台可以通过仓库地址自动生成连接信息。部署到 GitHub Pages 后，后台也会尝试从当前网址识别 owner 和 repo。
 
+外网后台地址是：
+
+```text
+https://galphrui.github.io/ralphrong/admin.html
+```
+
+后台是静态页面，不能把真实账号密码写在前端代码里。管理员登录使用 GitHub 用户名和 fine-grained token，登录时会验证 token 是否能访问当前仓库和 `data/posts.json`。
+
 读取数据有两种方式：
 
 - 公开仓库：点击“从 GitHub 读取”，后台会直接读取 `data/posts.json`。

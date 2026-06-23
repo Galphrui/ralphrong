@@ -6,6 +6,14 @@ let selectedSlug = "";
 let remoteSha = "";
 
 const els = {
+  adminShell: document.querySelector("#adminShell"),
+  loginScreen: document.querySelector("#loginScreen"),
+  loginUser: document.querySelector("#loginUserInput"),
+  loginToken: document.querySelector("#loginTokenInput"),
+  loginButton: document.querySelector("#loginButton"),
+  loginTokenLink: document.querySelector("#loginTokenLink"),
+  loginStatus: document.querySelector("#loginStatus"),
+  logout: document.querySelector("#logoutButton"),
   repoUrl: document.querySelector("#repoUrlInput"),
   applyRepoUrl: document.querySelector("#applyRepoUrlButton"),
   detectRepo: document.querySelector("#detectRepoButton"),
@@ -48,6 +56,7 @@ async function init() {
   loadSettings();
   detectRepositoryFromPage();
   updateGitHubLinks();
+  updateAuthView();
   await loadInitialData();
   renderSiteForm();
   renderPostList();
@@ -62,6 +71,7 @@ function loadSettings() {
   els.branch.value = settings.branch || "main";
   els.path.value = settings.path || "data/posts.json";
   els.token.value = settings.token || "";
+  els.loginUser.value = settings.loginUser || settings.owner || "";
 }
 
 function saveSettings() {
@@ -74,10 +84,68 @@ function saveSettings() {
       path: els.path.value.trim() || "data/posts.json",
       token: els.token.value.trim(),
       repoUrl: els.repoUrl.value.trim(),
+      loginUser: els.loginUser.value.trim(),
     }),
   );
   updateGitHubLinks();
   setStatus("仓库设置已保存。");
+}
+
+async function loginAdmin() {
+  try {
+    applyRepositoryUrl(false);
+    const token = els.loginToken.value.trim();
+    if (!token) throw new Error("请填写 GitHub token。");
+
+    const settings = {
+      ...getSettings(),
+      token,
+    };
+    if (!settings.owner || !settings.repo) {
+      throw new Error("请先填写或自动识别 GitHub 仓库。");
+    }
+    const user = await githubMetaRequest("/user", settings);
+    await githubMetaRequest(`/repos/${settings.owner}/${settings.repo}`, settings);
+    await githubMetaRequest(
+      `/repos/${settings.owner}/${settings.repo}/contents/${settings.path}?ref=${encodeURIComponent(settings.branch)}`,
+      settings,
+    );
+    const expectedUser = els.loginUser.value.trim();
+    if (expectedUser && user.login.toLowerCase() !== expectedUser.toLowerCase()) {
+      throw new Error(`当前 token 属于 ${user.login}，不是 ${expectedUser}。`);
+    }
+
+    els.loginUser.value = user.login;
+    els.token.value = token;
+    if (!els.owner.value.trim()) els.owner.value = user.login;
+    saveSettings();
+    els.loginToken.value = "";
+    setLoginStatus(`登录成功：${user.login}`);
+    updateAuthView();
+  } catch (error) {
+    setLoginStatus(`登录失败：${error.message}`);
+  }
+}
+
+function logoutAdmin() {
+  const settings = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+  settings.token = "";
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  els.token.value = "";
+  els.loginToken.value = "";
+  remoteSha = "";
+  updateAuthView();
+  setLoginStatus("已退出后台。");
+}
+
+function updateAuthView() {
+  const isLoggedIn = Boolean(els.token.value.trim());
+  els.adminShell.hidden = !isLoggedIn;
+  els.loginScreen.hidden = isLoggedIn;
+  els.logout.hidden = !isLoggedIn;
+  if (!isLoggedIn) {
+    els.loginTokenLink.href = buildTokenUrl(getSettings());
+  }
 }
 
 async function loadInitialData() {
@@ -361,6 +429,7 @@ function updateGitHubLinks() {
   els.openDataLink.href = dataUrl;
   els.openDataLink.toggleAttribute("aria-disabled", dataUrl === "#");
   els.openTokenLink.href = tokenUrl;
+  els.loginTokenLink.href = tokenUrl;
   els.openRepo.disabled = repoUrl === "#";
 }
 
@@ -605,6 +674,10 @@ function setStatus(message) {
   els.status.textContent = message;
 }
 
+function setLoginStatus(message) {
+  els.loginStatus.textContent = message;
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -619,6 +692,11 @@ function escapeAttr(value) {
 }
 
 els.saveSettings.addEventListener("click", saveSettings);
+els.loginButton.addEventListener("click", loginAdmin);
+els.loginToken.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") loginAdmin();
+});
+els.logout.addEventListener("click", logoutAdmin);
 els.applyRepoUrl.addEventListener("click", () => {
   applyRepositoryUrl(true);
   saveSettings();
