@@ -53,6 +53,9 @@ export default function Hero() {
           <p className="max-w-3xl text-lg leading-8 text-slate-600">
             记录 Framework、调试、构建发布与系统适配中的真实问题，把零散经验整理成下次能直接拿来用的排查路径。
           </p>
+          <div className="mt-6 inline-flex border border-primary-100 bg-white/80 px-4 py-2 text-sm font-bold text-primary-700 shadow-sm">
+            Ralph Rong / Ra
+          </div>
         </motion.div>
 
         {/* Stats cards */}

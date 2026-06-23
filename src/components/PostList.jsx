@@ -3,7 +3,6 @@ import { motion } from 'framer-motion'
 import PostCard from './PostCard'
 import TagFilter from './TagFilter'
 import { useBlogStore } from '../store/useStore'
-import { fetchPosts } from '../utils/api'
 
 export default function PostList() {
   const {
@@ -11,33 +10,9 @@ export default function PostList() {
     searchQuery,
     selectedTag,
     setSearchQuery,
-    setPosts,
-    setTotalPosts,
-    setAllTags,
-    setIsLoading,
   } = useBlogStore()
 
   const [filteredPosts, setFilteredPosts] = useState([])
-
-  // Load posts on mount
-  useEffect(() => {
-    const loadPosts = async () => {
-      setIsLoading(true)
-      try {
-        const data = await fetchPosts()
-        setPosts(data.posts)
-        setTotalPosts(data.total)
-        const allTags = [...new Set(data.posts.flatMap((p) => p.tags || []))].sort()
-        setAllTags(allTags)
-      } catch (error) {
-        console.error('Failed to load posts:', error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadPosts()
-  }, [])
 
   // Filter posts
   useEffect(() => {
@@ -96,7 +71,13 @@ export default function PostList() {
             transition={{ staggerChildren: 0.1 }}
           >
             {filteredPosts.map((post) => (
-              <PostCard key={post.slug} post={post} onClick={() => {}} />
+              <PostCard
+                key={post.slug}
+                post={post}
+                onClick={() => {
+                  window.location.hash = `post/${encodeURIComponent(post.slug)}`
+                }}
+              />
             ))}
           </motion.div>
         ) : (
