@@ -17,6 +17,13 @@ node local-admin-server.mjs
 
 账号控制只在本地进行，外网后台只允许已经注册过的账号登录和管理博客内容。
 
+后台拆成两个独立页面：
+
+- `login.html`：登录页，本地环境可以注册账号。
+- `admin.html`：管理页，未登录会跳转到 `login.html`。
+
+后台页面的 id/class/data 标识统一使用 `Ra` 前缀，方便你后续按自己的风格改样式。
+
 本地启动后台：
 
 ```bash
@@ -29,13 +36,21 @@ node local-admin-server.mjs
 http://localhost:8080/admin.html
 ```
 
-首次使用点击“注册账号”。本地后台还提供账号管理，可以新增账号、重置密码、删除账号。账号数据会写入：
+首次使用打开 `login.html` 点击“本地注册账号”。本地后台还提供账号管理，可以新增账号、重置密码、删除账号。账号数据会写入：
 
 ```text
 data/admin-users.json
 ```
 
 这个文件只保存 PBKDF2 加盐哈希，不保存明文密码。提交到 GitHub 后，仓库里看到的也是哈希后的账号数据。
+
+加密规则：
+
+- 算法：PBKDF2
+- 哈希：SHA-256
+- salt：16 字节随机数，hex 存储
+- iterations：210000
+- 输出：32 字节 hash，hex 存储
 
 本地账号管理后执行：
 
@@ -53,6 +68,12 @@ git push
 
 ```text
 https://galphrui.github.io/ralphrong/admin.html
+```
+
+外网登录页：
+
+```text
+https://galphrui.github.io/ralphrong/login.html
 ```
 
 GitHub Pages 是纯静态托管，不能单独安全地完成登录和写入。因此外网后台需要部署 `worker/admin-worker.js` 作为 API：

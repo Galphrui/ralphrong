@@ -4,240 +4,182 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
-    <title>博客管理后台</title>
+    <title>Ra 后台管理</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
-    <header class="topbar">
-      <a class="brand" href="./index.html">
-        <span class="brand-mark">A</span>
+  <body class="RaPage RaAdminPage">
+    <header class="RaTopbar">
+      <a class="RaBrand" href="./index.html">
+        <span class="RaBrandMark">Ra</span>
         <span>
-          <strong>Blog Admin</strong>
-          <small>GitHub 数据管理</small>
+          <strong>Ralph Admin</strong>
+          <small>Content Studio</small>
         </span>
       </a>
-      <nav class="nav">
+      <nav class="RaNav">
         <a href="./index.html">前台</a>
-        <a href="#settings">设置</a>
-        <a href="#editor">编辑</a>
-        <a href="#accounts" id="accountsNavLink">账号</a>
-        <button id="logoutButton" class="nav-button" type="button">退出</button>
+        <a href="#RaSettingsPanel">设置</a>
+        <a href="#RaEditorPanel">编辑</a>
+        <a href="#RaAccountsPanel" id="RaAccountsNavLink">账号</a>
+        <button id="RaLogoutButton" class="RaNavButton" type="button">退出</button>
       </nav>
     </header>
 
-    <section class="login-screen" id="loginScreen">
-      <div class="login-panel">
-        <div class="section-heading">
-          <p class="eyebrow">Admin Login</p>
-          <h1>管理员登录</h1>
-        </div>
-        <p class="hint">
-          使用管理员账号和密码登录后台。密码由后端验证，浏览器不会保存 GitHub 写入凭据。
-        </p>
-        <div class="form-grid">
-          <label>
-            管理员账号
-            <input id="loginUserInput" autocomplete="username" placeholder="Galphrui" />
-          </label>
-          <label>
-            管理员密码
-            <input
-              id="loginTokenInput"
-              type="password"
-              autocomplete="current-password"
-              placeholder="请输入后台密码"
-            />
-          </label>
-          <label class="wide">
-            确认密码
-            <input
-              id="registerPasswordInput"
-              type="password"
-              autocomplete="new-password"
-              placeholder="注册新账号时填写"
-            />
-          </label>
-        </div>
-        <div class="actions-row">
-          <button id="loginButton" type="button">登录后台</button>
-          <button id="registerButton" class="secondary-button" type="button">注册账号</button>
-          <a id="loginTokenLink" class="link-button" href="./README.md" target="_blank" rel="noreferrer">本地后台说明</a>
-        </div>
-        <p class="status" id="loginStatus" role="status"></p>
-      </div>
-    </section>
-
-    <main class="admin-shell" id="adminShell" hidden>
-      <section class="admin-panel" id="settings">
-        <div class="section-heading">
-          <p class="eyebrow">Repository</p>
+    <main class="RaAdminShell" id="RaAdminShell" hidden>
+      <section class="RaPanel" id="RaSettingsPanel">
+        <div class="RaSectionHeading">
+          <p class="RaEyebrow">Repository</p>
           <h1>仓库连接</h1>
         </div>
-        <div class="quick-connect">
-          <label>
+        <div class="RaQuickConnect">
+          <label class="RaField">
             GitHub 仓库地址
-            <input id="repoUrlInput" placeholder="https://github.com/Galphrui/ralphrong" />
+            <input id="RaRepoUrlInput" placeholder="https://github.com/Galphrui/ralphrong" />
           </label>
-          <div class="quick-actions">
-            <button id="applyRepoUrlButton" type="button">应用仓库地址</button>
-            <button id="detectRepoButton" class="secondary-button" type="button">从当前网址识别</button>
-            <a id="openDataLink" class="link-button" href="#" target="_blank" rel="noreferrer">打开数据文件</a>
-            <a id="openTokenLink" class="link-button" href="#" target="_blank" rel="noreferrer">创建 Token</a>
+          <div class="RaActions">
+            <button id="RaApplyRepoUrlButton" type="button">应用仓库地址</button>
+            <button id="RaDetectRepoButton" class="RaSecondaryButton" type="button">从当前网址识别</button>
+            <a id="RaOpenDataLink" class="RaLinkButton" href="#" target="_blank" rel="noreferrer">打开数据文件</a>
           </div>
-          <p class="hint" id="repoHint">填写仓库地址后，后台会自动生成 owner、repo、branch 和数据路径。</p>
+          <p class="RaHint" id="RaRepoHint">填写仓库地址后，后台会自动生成 owner、repo、branch 和数据路径。</p>
         </div>
-        <div class="form-grid">
-          <label>
+        <div class="RaFormGrid">
+          <label class="RaField">
             GitHub 用户名或组织
-            <input id="ownerInput" autocomplete="username" placeholder="your-github-name" />
+            <input id="RaOwnerInput" autocomplete="username" placeholder="your-github-name" />
           </label>
-          <label>
+          <label class="RaField">
             仓库名
-            <input id="repoInput" placeholder="your-blog-repo" />
+            <input id="RaRepoInput" placeholder="your-blog-repo" />
           </label>
-          <label>
+          <label class="RaField">
             分支
-            <input id="branchInput" placeholder="main" />
+            <input id="RaBranchInput" placeholder="main" />
           </label>
-          <label>
+          <label class="RaField">
             数据文件路径
-            <input id="pathInput" placeholder="data/posts.json" />
-          </label>
-          <label class="wide">
-            GitHub Token
-            <input
-              id="tokenInput"
-              type="password"
-              autocomplete="off"
-              placeholder="fine-grained token with Contents read/write"
-            />
+            <input id="RaPathInput" placeholder="data/posts.json" />
           </label>
         </div>
-        <p class="hint">
-          本地后台服务负责验证账号密码并写入数据文件。GitHub 只保存加盐哈希后的账号数据，不保存明文密码。
-        </p>
-        <div class="actions-row">
-          <button id="saveSettingsButton" type="button">保存设置</button>
-          <button id="loadRemoteButton" class="secondary-button" type="button">从 GitHub 读取</button>
-          <button id="checkAccessButton" class="secondary-button" type="button">检查权限</button>
-          <button id="openRepoButton" class="secondary-button" type="button">打开仓库</button>
-          <button id="downloadButton" class="secondary-button" type="button">导出 JSON</button>
-          <label class="file-button">
+        <div class="RaActions">
+          <button id="RaSaveSettingsButton" type="button">保存设置</button>
+          <button id="RaLoadRemoteButton" class="RaSecondaryButton" type="button">读取数据</button>
+          <button id="RaOpenRepoButton" class="RaSecondaryButton" type="button">打开仓库</button>
+          <button id="RaDownloadButton" class="RaSecondaryButton" type="button">导出 JSON</button>
+          <label class="RaFileButton">
             导入 JSON
-            <input id="importInput" type="file" accept="application/json" />
+            <input id="RaImportInput" type="file" accept="application/json" />
           </label>
         </div>
-        <p class="hint">
-          后台管理请在本地运行；公开站点只展示博客内容。
-        </p>
+        <p class="RaHint">账号注册和账号控制只在本地后台开放；外网后台只允许已注册账号登录和编辑内容。</p>
       </section>
 
-      <section class="admin-grid">
-        <aside class="admin-panel">
-          <div class="section-heading">
-            <p class="eyebrow">Posts</p>
+      <section class="RaAdminGrid">
+        <aside class="RaPanel">
+          <div class="RaSectionHeading">
+            <p class="RaEyebrow">Posts</p>
             <h2>文章列表</h2>
           </div>
-          <button id="newPostButton" type="button">新建文章</button>
-          <div class="admin-list" id="adminPostList"></div>
+          <button id="RaNewPostButton" type="button">新建文章</button>
+          <div class="RaList" id="RaAdminPostList"></div>
         </aside>
 
-        <section class="admin-panel" id="editor">
-          <div class="section-heading">
-            <p class="eyebrow">Editor</p>
+        <section class="RaPanel" id="RaEditorPanel">
+          <div class="RaSectionHeading">
+            <p class="RaEyebrow">Editor</p>
             <h2>内容编辑</h2>
           </div>
-          <form id="postForm">
-            <div class="form-grid">
-              <label>
+          <form id="RaPostForm">
+            <div class="RaFormGrid">
+              <label class="RaField">
                 标题
-                <input id="titleInput" required />
+                <input id="RaTitleInput" required />
               </label>
-              <label>
+              <label class="RaField">
                 Slug
-                <input id="slugInput" required />
+                <input id="RaSlugInput" required />
               </label>
-              <label>
+              <label class="RaField">
                 发布日期
-                <input id="dateInput" type="date" required />
+                <input id="RaDateInput" type="date" required />
               </label>
-              <label>
+              <label class="RaField">
                 标签，逗号分隔
-                <input id="tagsInput" placeholder="JavaScript, 架构" />
+                <input id="RaTagsInput" placeholder="JavaScript, 架构" />
               </label>
-              <label class="wide">
+              <label class="RaField RaWide">
                 摘要
-                <textarea id="summaryInput" rows="3"></textarea>
+                <textarea id="RaSummaryInput" rows="3"></textarea>
               </label>
-              <label class="wide">
+              <label class="RaField RaWide">
                 正文 Markdown
-                <textarea id="contentInput" rows="14"></textarea>
+                <textarea id="RaContentInput" rows="14"></textarea>
               </label>
             </div>
-            <div class="actions-row">
-              <button type="submit">保存到本地数据</button>
-              <button id="deletePostButton" class="danger-button" type="button">删除文章</button>
-              <button id="publishButton" class="publish-button" type="button">发布到 GitHub</button>
+            <div class="RaActions">
+              <button type="submit">保存到数据</button>
+              <button id="RaDeletePostButton" class="RaDangerButton" type="button">删除文章</button>
+              <button id="RaPublishButton" class="RaPublishButton" type="button">发布</button>
             </div>
           </form>
-          <p class="status" id="statusText" role="status"></p>
+          <p class="RaStatus" id="RaStatusText" role="status"></p>
         </section>
       </section>
 
-      <section class="admin-panel">
-        <div class="section-heading">
-          <p class="eyebrow">Site</p>
+      <section class="RaPanel">
+        <div class="RaSectionHeading">
+          <p class="RaEyebrow">Site</p>
           <h2>站点信息</h2>
         </div>
-        <div class="form-grid">
-          <label>
+        <div class="RaFormGrid">
+          <label class="RaField">
             站点标题
-            <input id="siteTitleInput" />
+            <input id="RaSiteTitleInput" />
           </label>
-          <label>
+          <label class="RaField">
             副标题
-            <input id="siteSubtitleInput" />
+            <input id="RaSiteSubtitleInput" />
           </label>
-          <label>
+          <label class="RaField">
             作者
-            <input id="authorInput" />
+            <input id="RaAuthorInput" />
           </label>
-          <label class="wide">
+          <label class="RaField RaWide">
             作者简介
-            <textarea id="bioInput" rows="3"></textarea>
+            <textarea id="RaBioInput" rows="3"></textarea>
           </label>
         </div>
-        <div class="actions-row">
-          <button id="saveSiteButton" type="button">保存站点信息</button>
+        <div class="RaActions">
+          <button id="RaSaveSiteButton" type="button">保存站点信息</button>
         </div>
       </section>
 
-      <section class="admin-panel" id="accounts">
-        <div class="section-heading">
-          <p class="eyebrow">Accounts</p>
+      <section class="RaPanel" id="RaAccountsPanel">
+        <div class="RaSectionHeading">
+          <p class="RaEyebrow">Accounts</p>
           <h2>账号管理</h2>
         </div>
-        <p class="hint">
-          账号管理只在本地后台服务中可用。保存后请提交并推送 `data/admin-users.json`，外网后台会读取这些哈希数据登录。
+        <p class="RaHint">
+          账号管理只在本地后台服务中可用。保存后提交并推送 `data/admin-users.json`，外网后台会读取这些哈希数据登录。
         </p>
-        <div class="admin-list" id="accountList"></div>
-        <div class="form-grid">
-          <label>
+        <div class="RaList" id="RaAccountList"></div>
+        <div class="RaFormGrid">
+          <label class="RaField">
             账号
-            <input id="accountUserInput" placeholder="new-admin" />
+            <input id="RaAccountUserInput" placeholder="new-admin" />
           </label>
-          <label>
+          <label class="RaField">
             新密码
-            <input id="accountPasswordInput" type="password" autocomplete="new-password" />
+            <input id="RaAccountPasswordInput" type="password" autocomplete="new-password" />
           </label>
         </div>
-        <div class="actions-row">
-          <button id="createAccountButton" type="button">新增账号</button>
-          <button id="resetPasswordButton" class="secondary-button" type="button">重置密码</button>
-          <button id="deleteAccountButton" class="danger-button" type="button">删除账号</button>
-          <button id="refreshAccountsButton" class="secondary-button" type="button">刷新账号</button>
+        <div class="RaActions">
+          <button id="RaCreateAccountButton" type="button">新增账号</button>
+          <button id="RaResetPasswordButton" class="RaSecondaryButton" type="button">重置密码</button>
+          <button id="RaDeleteAccountButton" class="RaDangerButton" type="button">删除账号</button>
+          <button id="RaRefreshAccountsButton" class="RaSecondaryButton" type="button">刷新账号</button>
         </div>
-        <p class="status" id="accountStatus" role="status"></p>
+        <p class="RaStatus" id="RaAccountStatus" role="status"></p>
       </section>
     </main>
 

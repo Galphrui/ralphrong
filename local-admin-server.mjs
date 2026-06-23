@@ -34,7 +34,7 @@ createServer(async (request, response) => {
     sendJson(response, error.status || 500, { ok: false, error: error.message || "Server error" });
   }
 }).listen(port, () => {
-  console.log(`Local blog admin running at http://localhost:${port}/admin.html`);
+  console.log(`Local blog admin running at http://localhost:${port}/login.html`);
 });
 
 async function handleApi(request, response) {

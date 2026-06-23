@@ -551,3 +551,284 @@ textarea {
     position: static;
   }
 }
+
+.RaPage {
+  --RaBg: #f5f7fb;
+  --RaPanel: #ffffff;
+  --RaText: #182230;
+  --RaMuted: #667085;
+  --RaLine: #d6deea;
+  --RaPrimary: #0b7a75;
+  --RaPrimaryStrong: #075e5a;
+  --RaInk: #111827;
+  --RaDanger: #b42318;
+  --RaSoft: #eef4f7;
+  --RaShadow: 0 22px 60px rgba(24, 34, 48, 0.1);
+  background:
+    linear-gradient(180deg, rgba(11, 122, 117, 0.06), transparent 280px),
+    var(--RaBg);
+  color: var(--RaText);
+}
+
+.RaTopbar {
+  align-items: center;
+  background: rgba(245, 247, 251, 0.94);
+  border-bottom: 1px solid var(--RaLine);
+  display: flex;
+  justify-content: space-between;
+  min-height: 72px;
+  padding: 14px clamp(18px, 4vw, 56px);
+  position: sticky;
+  top: 0;
+  backdrop-filter: blur(12px);
+  z-index: 20;
+}
+
+.RaBrand {
+  align-items: center;
+  display: inline-flex;
+  gap: 12px;
+}
+
+.RaBrandMark {
+  align-items: center;
+  background: var(--RaInk);
+  border-radius: 8px;
+  color: #fff;
+  display: inline-flex;
+  font-weight: 900;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+
+.RaBrand small {
+  color: var(--RaMuted);
+  display: block;
+  font-size: 12px;
+  margin-top: -4px;
+}
+
+.RaNav {
+  align-items: center;
+  color: var(--RaMuted);
+  display: flex;
+  gap: 18px;
+  font-weight: 800;
+}
+
+.RaNav a:hover,
+.RaNavButton:hover {
+  color: var(--RaInk);
+}
+
+.RaNavButton {
+  background: transparent;
+  color: var(--RaMuted);
+  min-height: auto;
+  padding: 0;
+}
+
+.RaNavButton:hover {
+  background: transparent;
+}
+
+.RaLoginShell {
+  align-items: center;
+  display: flex;
+  min-height: calc(100vh - 72px);
+  padding: 40px clamp(18px, 4vw, 56px);
+}
+
+.RaLoginPanel,
+.RaPanel {
+  background: var(--RaPanel);
+  border: 1px solid var(--RaLine);
+  border-radius: 8px;
+  box-shadow: var(--RaShadow);
+}
+
+.RaLoginPanel {
+  margin: 0 auto;
+  max-width: 720px;
+  padding: clamp(22px, 4vw, 34px);
+  width: 100%;
+}
+
+.RaAdminShell {
+  margin: 0 auto;
+  max-width: 1280px;
+  padding: 40px clamp(18px, 4vw, 56px);
+}
+
+.RaPanel {
+  padding: 22px;
+}
+
+.RaPanel + .RaPanel,
+.RaAdminGrid + .RaPanel {
+  margin-top: 22px;
+}
+
+.RaSectionHeading {
+  margin-bottom: 18px;
+}
+
+.RaSectionHeading h1,
+.RaSectionHeading h2 {
+  color: var(--RaInk);
+  line-height: 1.15;
+  margin: 4px 0 0;
+}
+
+.RaEyebrow {
+  color: var(--RaPrimary);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.RaHint,
+.RaStatus {
+  color: var(--RaMuted);
+}
+
+.RaQuickConnect {
+  background: #f8fafc;
+  border: 1px solid var(--RaLine);
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 16px;
+}
+
+.RaFormGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.RaField {
+  color: var(--RaMuted);
+  display: grid;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 8px;
+}
+
+.RaWide {
+  grid-column: 1 / -1;
+}
+
+.RaActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.RaPage button,
+.RaFileButton,
+.RaLinkButton {
+  align-items: center;
+  background: var(--RaPrimary);
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+}
+
+.RaPage button:hover,
+.RaFileButton:hover,
+.RaLinkButton:hover {
+  background: var(--RaPrimaryStrong);
+}
+
+.RaSecondaryButton,
+.RaLinkButton {
+  background: #e8eef5;
+  color: var(--RaInk);
+}
+
+.RaSecondaryButton:hover,
+.RaLinkButton:hover {
+  background: #dce4ef;
+}
+
+.RaDangerButton {
+  background: #fee4e2;
+  color: var(--RaDanger);
+}
+
+.RaDangerButton:hover {
+  background: #fecdca;
+}
+
+.RaPublishButton {
+  background: #1d4ed8;
+}
+
+.RaPublishButton:hover {
+  background: #1e40af;
+}
+
+.RaFileButton input {
+  display: none;
+}
+
+.RaAdminGrid {
+  align-items: start;
+  display: grid;
+  gap: 22px;
+  grid-template-columns: 330px minmax(0, 1fr);
+  margin-top: 22px;
+}
+
+.RaList {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.RaItem {
+  background: #f8fafc;
+  border: 1px solid var(--RaLine);
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 12px;
+}
+
+.RaItem.RaActive {
+  background: #ecfdf3;
+  border-color: #86efac;
+}
+
+.RaItem strong {
+  color: var(--RaInk);
+  display: block;
+}
+
+.RaItem small {
+  color: var(--RaMuted);
+}
+
+@media (max-width: 860px) {
+  .RaTopbar,
+  .RaNav {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .RaFormGrid,
+  .RaAdminGrid {
+    grid-template-columns: 1fr;
+  }
+}

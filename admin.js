@@ -1,220 +1,182 @@
-const STORAGE_KEY = "tech-blog-admin-settings";
-const LOCAL_DATA_KEY = "tech-blog-local-data";
-const LOCAL_ADMIN_API_BASE =
+const RA_STORAGE_KEY = "RaBlogAdminSettings";
+const RA_LOCAL_DATA_KEY = "RaBlogLocalData";
+const RA_LOCAL_API_BASE =
   location.hostname === "localhost" || location.hostname === "127.0.0.1" ? location.origin : "";
-const ADMIN_API_BASE = (window.BLOG_ADMIN_API_BASE || LOCAL_ADMIN_API_BASE || "").replace(/\/$/, "");
-const IS_LOCAL_ADMIN = Boolean(LOCAL_ADMIN_API_BASE);
+const RA_API_BASE = (window.BLOG_ADMIN_API_BASE || RA_LOCAL_API_BASE || "").replace(/\/$/, "");
+const RA_IS_LOCAL_ADMIN = Boolean(RA_LOCAL_API_BASE);
 
-let data = getDefaultData();
-let selectedSlug = "";
-let remoteSha = "";
+let RaData = getDefaultData();
+let RaSelectedSlug = "";
+let RaRemoteSha = "";
 
-const els = {
-  adminShell: document.querySelector("#adminShell"),
-  loginScreen: document.querySelector("#loginScreen"),
-  loginUser: document.querySelector("#loginUserInput"),
-  loginToken: document.querySelector("#loginTokenInput"),
-  registerPassword: document.querySelector("#registerPasswordInput"),
-  loginButton: document.querySelector("#loginButton"),
-  registerButton: document.querySelector("#registerButton"),
-  loginTokenLink: document.querySelector("#loginTokenLink"),
-  loginStatus: document.querySelector("#loginStatus"),
-  logout: document.querySelector("#logoutButton"),
-  accountsNavLink: document.querySelector("#accountsNavLink"),
-  accountsPanel: document.querySelector("#accounts"),
-  accountList: document.querySelector("#accountList"),
-  accountUser: document.querySelector("#accountUserInput"),
-  accountPassword: document.querySelector("#accountPasswordInput"),
-  createAccount: document.querySelector("#createAccountButton"),
-  resetPassword: document.querySelector("#resetPasswordButton"),
-  deleteAccount: document.querySelector("#deleteAccountButton"),
-  refreshAccounts: document.querySelector("#refreshAccountsButton"),
-  accountStatus: document.querySelector("#accountStatus"),
-  repoUrl: document.querySelector("#repoUrlInput"),
-  applyRepoUrl: document.querySelector("#applyRepoUrlButton"),
-  detectRepo: document.querySelector("#detectRepoButton"),
-  openDataLink: document.querySelector("#openDataLink"),
-  openTokenLink: document.querySelector("#openTokenLink"),
-  repoHint: document.querySelector("#repoHint"),
-  owner: document.querySelector("#ownerInput"),
-  repo: document.querySelector("#repoInput"),
-  branch: document.querySelector("#branchInput"),
-  path: document.querySelector("#pathInput"),
-  token: document.querySelector("#tokenInput"),
-  saveSettings: document.querySelector("#saveSettingsButton"),
-  loadRemote: document.querySelector("#loadRemoteButton"),
-  checkAccess: document.querySelector("#checkAccessButton"),
-  openRepo: document.querySelector("#openRepoButton"),
-  download: document.querySelector("#downloadButton"),
-  importInput: document.querySelector("#importInput"),
-  adminPostList: document.querySelector("#adminPostList"),
-  newPost: document.querySelector("#newPostButton"),
-  form: document.querySelector("#postForm"),
-  title: document.querySelector("#titleInput"),
-  slug: document.querySelector("#slugInput"),
-  date: document.querySelector("#dateInput"),
-  tags: document.querySelector("#tagsInput"),
-  summary: document.querySelector("#summaryInput"),
-  content: document.querySelector("#contentInput"),
-  deletePost: document.querySelector("#deletePostButton"),
-  publish: document.querySelector("#publishButton"),
-  status: document.querySelector("#statusText"),
-  siteTitle: document.querySelector("#siteTitleInput"),
-  siteSubtitle: document.querySelector("#siteSubtitleInput"),
-  author: document.querySelector("#authorInput"),
-  bio: document.querySelector("#bioInput"),
-  saveSite: document.querySelector("#saveSiteButton"),
+const RaEls = {
+  adminShell: document.querySelector("#RaAdminShell"),
+  logout: document.querySelector("#RaLogoutButton"),
+  accountsNavLink: document.querySelector("#RaAccountsNavLink"),
+  accountsPanel: document.querySelector("#RaAccountsPanel"),
+  accountList: document.querySelector("#RaAccountList"),
+  accountUser: document.querySelector("#RaAccountUserInput"),
+  accountPassword: document.querySelector("#RaAccountPasswordInput"),
+  createAccount: document.querySelector("#RaCreateAccountButton"),
+  resetPassword: document.querySelector("#RaResetPasswordButton"),
+  deleteAccount: document.querySelector("#RaDeleteAccountButton"),
+  refreshAccounts: document.querySelector("#RaRefreshAccountsButton"),
+  accountStatus: document.querySelector("#RaAccountStatus"),
+  repoUrl: document.querySelector("#RaRepoUrlInput"),
+  applyRepoUrl: document.querySelector("#RaApplyRepoUrlButton"),
+  detectRepo: document.querySelector("#RaDetectRepoButton"),
+  openDataLink: document.querySelector("#RaOpenDataLink"),
+  repoHint: document.querySelector("#RaRepoHint"),
+  owner: document.querySelector("#RaOwnerInput"),
+  repo: document.querySelector("#RaRepoInput"),
+  branch: document.querySelector("#RaBranchInput"),
+  path: document.querySelector("#RaPathInput"),
+  saveSettings: document.querySelector("#RaSaveSettingsButton"),
+  loadRemote: document.querySelector("#RaLoadRemoteButton"),
+  openRepo: document.querySelector("#RaOpenRepoButton"),
+  download: document.querySelector("#RaDownloadButton"),
+  importInput: document.querySelector("#RaImportInput"),
+  adminPostList: document.querySelector("#RaAdminPostList"),
+  newPost: document.querySelector("#RaNewPostButton"),
+  form: document.querySelector("#RaPostForm"),
+  title: document.querySelector("#RaTitleInput"),
+  slug: document.querySelector("#RaSlugInput"),
+  date: document.querySelector("#RaDateInput"),
+  tags: document.querySelector("#RaTagsInput"),
+  summary: document.querySelector("#RaSummaryInput"),
+  content: document.querySelector("#RaContentInput"),
+  deletePost: document.querySelector("#RaDeletePostButton"),
+  publish: document.querySelector("#RaPublishButton"),
+  status: document.querySelector("#RaStatusText"),
+  siteTitle: document.querySelector("#RaSiteTitleInput"),
+  siteSubtitle: document.querySelector("#RaSiteSubtitleInput"),
+  author: document.querySelector("#RaAuthorInput"),
+  bio: document.querySelector("#RaBioInput"),
+  saveSite: document.querySelector("#RaSaveSiteButton"),
 };
 
-init();
+initRaAdmin();
 
-async function init() {
+async function initRaAdmin() {
   loadSettings();
   detectRepositoryFromPage();
   updateGitHubLinks();
-  await restoreServerSession();
-  updateAuthView();
+
+  const user = await restoreSession();
+  if (!user) {
+    location.href = `./login.html?next=${encodeURIComponent("admin.html")}`;
+    return;
+  }
+
+  RaEls.adminShell.hidden = false;
+  RaEls.accountsNavLink.hidden = !RA_IS_LOCAL_ADMIN;
+  RaEls.accountsPanel.hidden = !RA_IS_LOCAL_ADMIN;
+
   await loadInitialData();
   renderSiteForm();
   renderPostList();
-  selectPost(data.posts[0]?.slug || "");
-  if (IS_LOCAL_ADMIN && els.token.value) loadAccounts();
+  selectPost(RaData.posts[0]?.slug || "");
+  await loadRemoteData();
+  if (RA_IS_LOCAL_ADMIN) await loadAccounts();
 }
 
 function loadSettings() {
-  const settings = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-  els.repoUrl.value = settings.repoUrl || "";
-  els.owner.value = settings.owner || "";
-  els.repo.value = settings.repo || "";
-  els.branch.value = settings.branch || "main";
-  els.path.value = settings.path || "data/posts.json";
-  els.token.value = "";
-  els.loginUser.value = settings.loginUser || settings.owner || "";
+  const settings = JSON.parse(localStorage.getItem(RA_STORAGE_KEY) || "{}");
+  RaEls.repoUrl.value = settings.repoUrl || "";
+  RaEls.owner.value = settings.owner || "";
+  RaEls.repo.value = settings.repo || "";
+  RaEls.branch.value = settings.branch || "main";
+  RaEls.path.value = settings.path || "data/posts.json";
 }
 
 function saveSettings() {
   localStorage.setItem(
-    STORAGE_KEY,
+    RA_STORAGE_KEY,
     JSON.stringify({
-      owner: els.owner.value.trim(),
-      repo: els.repo.value.trim(),
-      branch: els.branch.value.trim() || "main",
-      path: els.path.value.trim() || "data/posts.json",
-      token: "",
-      repoUrl: els.repoUrl.value.trim(),
-      loginUser: els.loginUser.value.trim(),
+      owner: RaEls.owner.value.trim(),
+      repo: RaEls.repo.value.trim(),
+      branch: RaEls.branch.value.trim() || "main",
+      path: RaEls.path.value.trim() || "data/posts.json",
+      repoUrl: RaEls.repoUrl.value.trim(),
     }),
   );
   updateGitHubLinks();
   setStatus("仓库设置已保存。");
 }
 
-async function restoreServerSession() {
-  if (!ADMIN_API_BASE) return;
+async function restoreSession() {
+  if (!RA_API_BASE) return "";
   try {
-    const session = await adminApi("/api/session");
-    els.loginUser.value = session.user;
-    els.token.value = "__server_session__";
+    const session = await raApi("/api/session");
+    return session.user;
   } catch (error) {
-    els.token.value = "";
+    return "";
   }
 }
 
-async function loginAdmin() {
+async function logoutAdmin() {
+  if (RA_API_BASE) {
+    await raApi("/api/logout", { method: "POST" }).catch(() => {});
+  }
+  location.href = "./login.html";
+}
+
+async function loadInitialData() {
+  const cached = localStorage.getItem(RA_LOCAL_DATA_KEY);
+  if (cached) {
+    RaData = normalizeData(JSON.parse(cached));
+    return;
+  }
+
+  try {
+    const response = await fetch(`./data/posts.json?t=${Date.now()}`);
+    if (!response.ok) throw new Error("Cannot load local posts");
+    RaData = normalizeData(await response.json());
+    saveLocalData();
+  } catch (error) {
+    RaData = getDefaultData();
+  }
+}
+
+function saveLocalData() {
+  RaData.posts = sortPosts(RaData.posts);
+  localStorage.setItem(RA_LOCAL_DATA_KEY, JSON.stringify(RaData, null, 2));
+  renderPostList();
+}
+
+async function loadRemoteData() {
   try {
     applyRepositoryUrl(false);
-    const password = els.loginToken.value;
-    if (!password) throw new Error("请填写管理员密码。");
-
-    if (ADMIN_API_BASE) {
-      const result = await adminApi("/api/login", {
-        method: "POST",
-        body: JSON.stringify({
-          username: els.loginUser.value.trim(),
-          password,
-        }),
-      });
-      els.loginUser.value = result.user;
-      els.token.value = "__server_session__";
-      saveSettings();
-      els.loginToken.value = "";
-      setLoginStatus(`登录成功：${result.user}`);
-      updateAuthView();
-      await loadRemoteData();
-      if (IS_LOCAL_ADMIN) await loadAccounts();
-      return;
-    }
-
-    throw new Error("后台管理需要本地运行：node local-admin-server.mjs");
+    saveSettings();
+    const remote = await raApi("/api/posts");
+    RaRemoteSha = remote.sha || "";
+    RaData = normalizeData(remote.data);
+    saveLocalData();
+    renderSiteForm();
+    selectPost(RaData.posts[0]?.slug || "");
+    setStatus(RA_IS_LOCAL_ADMIN ? "已从本地后台读取数据。" : "已从外网后台读取 GitHub 数据。");
   } catch (error) {
-    setLoginStatus(`登录失败：${error.message}`);
+    setStatus(`读取失败：${error.message}`);
   }
 }
 
-async function registerAdmin() {
+async function publishData() {
   try {
-    if (!ADMIN_API_BASE) {
-      throw new Error("注册账号需要先在本地运行：node local-admin-server.mjs");
-    }
-
-    const username = els.loginUser.value.trim();
-    const password = els.loginToken.value;
-    const confirmPassword = els.registerPassword.value;
-    if (!username || !password) throw new Error("请填写账号和密码。");
-    if (password !== confirmPassword) throw new Error("两次输入的密码不一致。");
-
-    const result = await adminApi("/api/register", {
-      method: "POST",
-      body: JSON.stringify({ username, password }),
+    saveSettings();
+    await raApi("/api/posts", {
+      method: "PUT",
+      body: JSON.stringify({ data: RaData }),
     });
-    els.loginUser.value = result.user;
-    els.token.value = "__server_session__";
-    els.loginToken.value = "";
-    els.registerPassword.value = "";
-    setLoginStatus(`注册并登录成功：${result.user}`);
-    updateAuthView();
-    await loadRemoteData();
-    await loadAccounts();
+    setStatus(RA_IS_LOCAL_ADMIN ? "已写入本地 data/posts.json。推送后外网博客会更新。" : "发布成功，GitHub Pages 稍后更新。");
   } catch (error) {
-    setLoginStatus(`注册失败：${error.message}`);
+    setStatus(`发布失败：${error.message}`);
   }
-}
-
-function logoutAdmin() {
-  const settings = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-  settings.token = "";
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  if (ADMIN_API_BASE) {
-    adminApi("/api/logout", { method: "POST" }).catch(() => {});
-  }
-  els.token.value = "";
-  els.loginToken.value = "";
-  remoteSha = "";
-  updateAuthView();
-  setLoginStatus("已退出后台。");
-}
-
-function updateAuthView() {
-  const isLoggedIn = Boolean(els.token.value.trim());
-  els.adminShell.hidden = !isLoggedIn;
-  els.loginScreen.hidden = isLoggedIn;
-  els.logout.hidden = !isLoggedIn;
-  if (!isLoggedIn) {
-    els.loginTokenLink.href = "./README.md";
-  }
-  els.registerButton.hidden = !IS_LOCAL_ADMIN;
-  els.registerPassword.closest("label").hidden = !IS_LOCAL_ADMIN;
-  els.accountsNavLink.hidden = !IS_LOCAL_ADMIN || !isLoggedIn;
-  els.accountsPanel.hidden = !IS_LOCAL_ADMIN || !isLoggedIn;
-  els.token.closest("label").hidden = true;
-  els.checkAccess.hidden = true;
-  els.openTokenLink.hidden = true;
 }
 
 async function loadAccounts() {
-  if (!IS_LOCAL_ADMIN) return;
+  if (!RA_IS_LOCAL_ADMIN) return;
   try {
-    const result = await adminApi("/api/users");
+    const result = await raApi("/api/users");
     renderAccounts(result.users || []);
     setAccountStatus("账号列表已刷新。");
   } catch (error) {
@@ -223,10 +185,10 @@ async function loadAccounts() {
 }
 
 function renderAccounts(users) {
-  els.accountList.innerHTML = users
+  RaEls.accountList.innerHTML = users
     .map(
       (user) => `
-        <div class="admin-item" data-account="${escapeAttr(user.username)}">
+        <div class="RaItem" data-RaAccount="${escapeAttr(user.username)}">
           <strong>${escapeHtml(user.username)}</strong>
           <small>创建：${escapeHtml(user.createdAt || "-")}${user.updatedAt ? ` · 更新：${escapeHtml(user.updatedAt)}` : ""}</small>
         </div>
@@ -237,14 +199,14 @@ function renderAccounts(users) {
 
 async function createAccount() {
   try {
-    const username = els.accountUser.value.trim();
-    const password = els.accountPassword.value;
+    const username = RaEls.accountUser.value.trim();
+    const password = RaEls.accountPassword.value;
     if (!username || !password) throw new Error("请填写账号和密码。");
-    await adminApi("/api/users", {
+    await raApi("/api/users", {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
-    els.accountPassword.value = "";
+    RaEls.accountPassword.value = "";
     await loadAccounts();
     setAccountStatus("账号已新增。记得提交并推送 data/admin-users.json。");
   } catch (error) {
@@ -254,14 +216,14 @@ async function createAccount() {
 
 async function resetAccountPassword() {
   try {
-    const username = els.accountUser.value.trim();
-    const password = els.accountPassword.value;
+    const username = RaEls.accountUser.value.trim();
+    const password = RaEls.accountPassword.value;
     if (!username || !password) throw new Error("请填写账号和新密码。");
-    await adminApi("/api/users/password", {
+    await raApi("/api/users/password", {
       method: "PUT",
       body: JSON.stringify({ username, password }),
     });
-    els.accountPassword.value = "";
+    RaEls.accountPassword.value = "";
     await loadAccounts();
     setAccountStatus("密码已重置。记得提交并推送 data/admin-users.json。");
   } catch (error) {
@@ -271,14 +233,14 @@ async function resetAccountPassword() {
 
 async function deleteAccount() {
   try {
-    const username = els.accountUser.value.trim();
+    const username = RaEls.accountUser.value.trim();
     if (!username) throw new Error("请先选择或填写账号。");
     if (!confirm(`确认删除账号 ${username}？`)) return;
-    await adminApi("/api/users", {
+    await raApi("/api/users", {
       method: "DELETE",
       body: JSON.stringify({ username }),
     });
-    els.accountUser.value = "";
+    RaEls.accountUser.value = "";
     await loadAccounts();
     setAccountStatus("账号已删除。记得提交并推送 data/admin-users.json。");
   } catch (error) {
@@ -286,258 +248,138 @@ async function deleteAccount() {
   }
 }
 
-async function loadInitialData() {
-  const cached = localStorage.getItem(LOCAL_DATA_KEY);
-  if (cached) {
-    data = normalizeData(JSON.parse(cached));
-    return;
-  }
-
-  try {
-    const response = await fetch(`./data/posts.json?t=${Date.now()}`);
-    if (!response.ok) throw new Error("Cannot load local posts");
-    data = normalizeData(await response.json());
-    saveLocalData();
-  } catch (error) {
-    data = getDefaultData();
-  }
+function renderPostList() {
+  RaEls.adminPostList.innerHTML = RaData.posts
+    .map(
+      (post) => `
+        <div class="RaItem ${post.slug === RaSelectedSlug ? "RaActive" : ""}" data-RaSlug="${escapeAttr(post.slug)}">
+          <strong>${escapeHtml(post.title)}</strong>
+          <small>${escapeHtml(post.date)} · ${escapeHtml(post.tags.join(", "))}</small>
+        </div>
+      `,
+    )
+    .join("");
 }
 
-function saveLocalData() {
-  data.posts = sortPosts(data.posts);
-  localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(data, null, 2));
+function renderSiteForm() {
+  RaEls.siteTitle.value = RaData.site.title || "";
+  RaEls.siteSubtitle.value = RaData.site.subtitle || "";
+  RaEls.author.value = RaData.site.author?.name || "";
+  RaEls.bio.value = RaData.site.author?.bio || "";
+}
+
+function selectPost(slug) {
+  RaSelectedSlug = slug;
+  const post = RaData.posts.find((item) => item.slug === slug) || createEmptyPost();
+  RaEls.title.value = post.title;
+  RaEls.slug.value = post.slug;
+  RaEls.date.value = post.date;
+  RaEls.tags.value = post.tags.join(", ");
+  RaEls.summary.value = post.summary;
+  RaEls.content.value = post.content;
   renderPostList();
 }
 
-async function loadRemoteData() {
-  try {
-    applyRepositoryUrl(false);
-    saveSettings();
-    if (ADMIN_API_BASE) {
-      const remote = await adminApi("/api/posts");
-      remoteSha = remote.sha || "";
-      data = normalizeData(remote.data);
-      saveLocalData();
-      renderSiteForm();
-      selectPost(data.posts[0]?.slug || "");
-      setStatus("已通过后台服务读取 GitHub 数据。");
-      return;
-    }
+function saveCurrentPost(event) {
+  event.preventDefault();
+  const post = {
+    title: RaEls.title.value.trim(),
+    slug: slugify(RaEls.slug.value || RaEls.title.value),
+    date: RaEls.date.value || new Date().toISOString().slice(0, 10),
+    tags: RaEls.tags.value
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+    summary: RaEls.summary.value.trim(),
+    content: RaEls.content.value.trim(),
+    readingMinutes: estimateReadingMinutes(RaEls.content.value),
+  };
 
-    const settings = getSettings();
-    let remote;
-    if (settings.token) {
-      remote = await githubRequest("GET");
-      remoteSha = remote.sha;
-      data = normalizeData(JSON.parse(fromBase64(remote.content)));
-    } else {
-      remote = await fetchPublicData();
-      remoteSha = "";
-      data = normalizeData(remote);
-    }
+  if (!post.title || !post.slug) {
+    setStatus("标题和 Slug 必填。");
+    return;
+  }
+
+  const index = RaData.posts.findIndex((item) => item.slug === RaSelectedSlug);
+  if (index >= 0) {
+    RaData.posts[index] = post;
+  } else {
+    RaData.posts.push(post);
+  }
+
+  RaSelectedSlug = post.slug;
+  saveLocalData();
+  selectPost(post.slug);
+  setStatus("已保存到当前数据，点击发布写入后端。");
+}
+
+function deleteSelectedPost() {
+  if (!RaSelectedSlug) return;
+  const post = RaData.posts.find((item) => item.slug === RaSelectedSlug);
+  if (!post || !confirm(`确认删除《${post.title}》？`)) return;
+  RaData.posts = RaData.posts.filter((item) => item.slug !== RaSelectedSlug);
+  saveLocalData();
+  selectPost(RaData.posts[0]?.slug || "");
+  setStatus("文章已删除，点击发布写入后端。");
+}
+
+function createNewPost() {
+  RaSelectedSlug = "";
+  selectPost("");
+  RaEls.title.focus();
+}
+
+function saveSiteInfo() {
+  RaData.site = {
+    ...RaData.site,
+    title: RaEls.siteTitle.value.trim() || "Tech Notes",
+    subtitle: RaEls.siteSubtitle.value.trim() || "个人技术博客",
+    author: {
+      ...(RaData.site.author || {}),
+      name: RaEls.author.value.trim() || "作者名",
+      bio: RaEls.bio.value.trim(),
+      links: RaData.site.author?.links || [{ label: "GitHub", url: "https://github.com/" }],
+    },
+  };
+  saveLocalData();
+  setStatus("站点信息已保存到当前数据，点击发布写入后端。");
+}
+
+function exportJson() {
+  const blob = new Blob([JSON.stringify(RaData, null, 2) + "\n"], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "posts.json";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function importJson(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    RaData = normalizeData(JSON.parse(reader.result));
     saveLocalData();
     renderSiteForm();
-    selectPost(data.posts[0]?.slug || "");
-    setStatus(settings.token ? "已通过 GitHub API 读取最新数据。" : "已从 GitHub 公开数据文件读取最新数据。");
-  } catch (error) {
-    setStatus(`读取失败：${error.message}`);
-  }
-}
-
-async function publishData() {
-  try {
-    saveSettings();
-    if (ADMIN_API_BASE) {
-      await adminApi("/api/posts", {
-        method: "PUT",
-        body: JSON.stringify({ data }),
-      });
-      setStatus("已写入本地 data/posts.json。执行 git add、commit、push 后，GitHub Pages 会展示新内容。");
-      return;
-    }
-
-    const settings = getSettings();
-    validatePublishSettings(settings);
-
-    const remote = await githubRequest("GET");
-    remoteSha = remote.sha;
-
-    const payload = {
-      message: `chore: update blog data ${new Date().toISOString()}`,
-      content: toBase64(JSON.stringify(data, null, 2) + "\n"),
-      branch: settings.branch,
-    };
-    payload.sha = remoteSha;
-
-    const result = await githubRequest("PUT", payload);
-    remoteSha = result.content.sha;
-    setStatus("发布成功，GitHub Pages 稍后会展示新内容。");
-  } catch (error) {
-    setStatus(`发布失败：${error.message}`);
-  }
-}
-
-async function checkGitHubAccess() {
-  try {
-    applyRepositoryUrl(false);
-    saveSettings();
-    if (ADMIN_API_BASE) {
-      const session = await adminApi("/api/session");
-      await adminApi("/api/posts");
-      setStatus(`权限检查通过：后端会话属于 ${session.user}，可以读取和发布博客数据。`);
-      return;
-    }
-
-    const settings = getSettings();
-    validatePublishSettings(settings);
-    const user = await githubMetaRequest("/user", settings);
-    await githubMetaRequest(`/repos/${settings.owner}/${settings.repo}`, settings);
-    const remote = await githubRequest("GET");
-    remoteSha = remote.sha;
-    setStatus(`权限检查通过：token 属于 ${user.login}，可以访问仓库并读取数据文件，发布时会写回同一个文件。`);
-  } catch (error) {
-    setStatus(`权限检查失败：${error.message}`);
-  }
-}
-
-async function githubRequest(method, body) {
-  const settings = getSettings();
-  if (!settings.owner || !settings.repo || !settings.token) {
-    throw new Error("请填写 owner、repo 和 token");
-  }
-
-  const ref = method === "GET" ? `?ref=${encodeURIComponent(settings.branch)}` : "";
-  const url = `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${settings.path}${ref}`;
-  const response = await fetch(url, {
-    method,
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${settings.token}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(formatGitHubError(response.status, result, method, settings));
-  }
-  return result;
-}
-
-async function githubMetaRequest(endpoint, settings) {
-  const response = await fetch(`https://api.github.com${endpoint}`, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${settings.token}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-  });
-
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(formatGitHubError(response.status, result, "GET_META", settings));
-  }
-  return result;
-}
-
-async function adminApi(path, options = {}) {
-  const response = await fetch(`${ADMIN_API_BASE}${path}`, {
-    method: options.method || "GET",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    body: options.body,
-  });
-
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok || result.ok === false) {
-    throw new Error(result.error || `后台服务请求失败：${response.status}`);
-  }
-  return result;
-}
-
-function validatePublishSettings(settings) {
-  if (!settings.owner || !settings.repo) {
-    throw new Error("请先填写 GitHub 仓库地址，或点击“从当前网址识别”。");
-  }
-  if (!settings.token) {
-    throw new Error("发布写回必须填写 GitHub token。浏览器已登录 GitHub 不能替代 API token。");
-  }
-  if (!settings.path) {
-    throw new Error("请填写数据文件路径，默认是 data/posts.json。");
-  }
-}
-
-function formatGitHubError(status, result, method, settings) {
-  const message = result.message || `GitHub API ${status}`;
-  const detail = Array.isArray(result.errors)
-    ? result.errors.map((item) => item.message || item.code).filter(Boolean).join("；")
-    : "";
-  const suffix = detail ? ` GitHub 详情：${detail}` : "";
-
-  if (status === 401) {
-    return "token 无效或已过期，请重新创建 fine-grained token。";
-  }
-  if (status === 403) {
-    return `token 权限不足。请确认 token 选择了 ${settings.owner}/${settings.repo}，并授予 Contents: Read and write。`;
-  }
-  if (status === 404) {
-    if (method === "GET_META") {
-      return `token 无法访问 ${settings.owner}/${settings.repo}。请重新创建 fine-grained token，并在 Repository access 中选择该仓库。`;
-    }
-    return `token 可以连接 GitHub，但无法读取 ${settings.path}。请确认 token 允许访问 ${settings.owner}/${settings.repo}，并确认该文件存在。`;
-  }
-  if (status === 409) {
-    return "远端文件刚被更新过，请先点击“从 GitHub 读取”，再重新发布。";
-  }
-  if (status === 422 && method === "PUT") {
-    return `GitHub 拒绝写入。常见原因是 token 没有 Contents 写权限，或目标分支/文件状态不匹配。${suffix}`;
-  }
-  return `${message}${suffix}`;
-}
-
-async function fetchPublicData() {
-  const settings = getSettings();
-  if (!settings.owner || !settings.repo) {
-    throw new Error("请填写仓库地址，或让后台从当前网址识别仓库");
-  }
-
-  const url = getRawDataUrl(settings);
-  const response = await fetch(`${url}?t=${Date.now()}`);
-  if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error("公开数据文件读取失败：仓库可能是私有仓库，或 data/posts.json 尚未存在。请填写 token 后读取，或将仓库公开。");
-    }
-    throw new Error(`公开数据文件读取失败：${response.status}`);
-  }
-  return response.json();
-}
-
-function getSettings() {
-  return {
-    owner: els.owner.value.trim(),
-    repo: els.repo.value.trim(),
-    branch: els.branch.value.trim() || "main",
-    path: els.path.value.trim() || "data/posts.json",
-    token: els.token.value.trim(),
-    repoUrl: els.repoUrl.value.trim(),
+    selectPost(RaData.posts[0]?.slug || "");
+    setStatus("JSON 已导入当前数据，点击发布写入后端。");
   };
+  reader.readAsText(file);
 }
 
 function applyRepositoryUrl(showStatus = true) {
-  const parsed = parseGitHubRepository(els.repoUrl.value);
+  const parsed = parseGitHubRepository(RaEls.repoUrl.value);
   if (!parsed) {
     if (showStatus) setStatus("请输入有效的 GitHub 仓库地址，例如 https://github.com/Galphrui/ralphrong。");
     return false;
   }
 
-  els.owner.value = parsed.owner;
-  els.repo.value = parsed.repo;
-  els.branch.value = parsed.branch || els.branch.value || "main";
-  els.path.value = parsed.path || els.path.value || "data/posts.json";
+  RaEls.owner.value = parsed.owner;
+  RaEls.repo.value = parsed.repo;
+  RaEls.branch.value = parsed.branch || RaEls.branch.value || "main";
+  RaEls.path.value = parsed.path || RaEls.path.value || "data/posts.json";
   updateGitHubLinks();
   if (showStatus) setStatus("已从仓库地址自动填充连接信息。");
   return true;
@@ -549,17 +391,17 @@ function detectRepositoryFromPage() {
 
   const detected = getRepositoryFromLocation();
   if (!detected) {
-    if (!els.repoUrl.value) els.repoUrl.value = "https://github.com/Galphrui/ralphrong";
+    if (!RaEls.repoUrl.value) RaEls.repoUrl.value = "https://github.com/Galphrui/ralphrong";
     applyRepositoryUrl(false);
     return;
   }
 
-  els.owner.value = detected.owner;
-  els.repo.value = detected.repo;
-  els.branch.value = settings.branch || "main";
-  els.path.value = settings.path || "data/posts.json";
-  els.repoUrl.value = `https://github.com/${detected.owner}/${detected.repo}`;
-  els.repoHint.textContent = "已从当前 GitHub Pages 网址识别仓库。";
+  RaEls.owner.value = detected.owner;
+  RaEls.repo.value = detected.repo;
+  RaEls.branch.value = settings.branch || "main";
+  RaEls.path.value = settings.path || "data/posts.json";
+  RaEls.repoUrl.value = `https://github.com/${detected.owner}/${detected.repo}`;
+  RaEls.repoHint.textContent = "已从当前 GitHub Pages 网址识别仓库。";
 }
 
 function getRepositoryFromLocation() {
@@ -569,7 +411,7 @@ function getRepositoryFromLocation() {
   if (!ownerFromPages) return null;
 
   const repoFromPath = parts[0];
-  if (repoFromPath && repoFromPath !== "admin.html") {
+  if (repoFromPath && !repoFromPath.endsWith(".html")) {
     return { owner: ownerFromPages, repo: repoFromPath };
   }
 
@@ -607,30 +449,10 @@ function updateGitHubLinks() {
     settings.owner && settings.repo
       ? `${repoUrl}/blob/${encodeURIComponent(settings.branch)}/${settings.path}`
       : "#";
-  const tokenUrl = buildTokenUrl(settings);
 
-  els.openDataLink.href = dataUrl;
-  els.openDataLink.toggleAttribute("aria-disabled", dataUrl === "#");
-  els.openTokenLink.href = tokenUrl;
-  els.loginTokenLink.href = tokenUrl;
-  els.openRepo.disabled = repoUrl === "#";
-}
-
-function buildTokenUrl(settings) {
-  const repoName = settings.owner && settings.repo ? `${settings.owner}/${settings.repo}` : "";
-  const params = new URLSearchParams({
-    name: "Tech Blog Admin",
-    description: "Allow the blog admin page to update data/posts.json",
-    target_name: settings.owner || "",
-    contents: "write",
-    metadata: "read",
-  });
-  if (repoName) params.set("repositories", repoName);
-  return `https://github.com/settings/personal-access-tokens/new?${params.toString()}`;
-}
-
-function getRawDataUrl(settings) {
-  return `https://raw.githubusercontent.com/${settings.owner}/${settings.repo}/${settings.branch}/${settings.path}`;
+  RaEls.openDataLink.href = dataUrl;
+  RaEls.openDataLink.toggleAttribute("aria-disabled", dataUrl === "#");
+  RaEls.openRepo.disabled = repoUrl === "#";
 }
 
 function openRepository() {
@@ -642,125 +464,33 @@ function openRepository() {
   window.open(`https://github.com/${settings.owner}/${settings.repo}`, "_blank", "noreferrer");
 }
 
-function renderPostList() {
-  els.adminPostList.innerHTML = data.posts
-    .map(
-      (post) => `
-        <div class="admin-item ${post.slug === selectedSlug ? "active" : ""}" data-slug="${escapeAttr(post.slug)}">
-          <strong>${escapeHtml(post.title)}</strong>
-          <small>${escapeHtml(post.date)} · ${escapeHtml(post.tags.join(", "))}</small>
-        </div>
-      `,
-    )
-    .join("");
-}
-
-function renderSiteForm() {
-  els.siteTitle.value = data.site.title || "";
-  els.siteSubtitle.value = data.site.subtitle || "";
-  els.author.value = data.site.author?.name || "";
-  els.bio.value = data.site.author?.bio || "";
-}
-
-function selectPost(slug) {
-  selectedSlug = slug;
-  const post = data.posts.find((item) => item.slug === slug) || createEmptyPost();
-  els.title.value = post.title;
-  els.slug.value = post.slug;
-  els.date.value = post.date;
-  els.tags.value = post.tags.join(", ");
-  els.summary.value = post.summary;
-  els.content.value = post.content;
-  renderPostList();
-}
-
-function saveCurrentPost(event) {
-  event.preventDefault();
-  const post = {
-    title: els.title.value.trim(),
-    slug: slugify(els.slug.value || els.title.value),
-    date: els.date.value || new Date().toISOString().slice(0, 10),
-    tags: els.tags.value
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean),
-    summary: els.summary.value.trim(),
-    content: els.content.value.trim(),
-    readingMinutes: estimateReadingMinutes(els.content.value),
+function getSettings() {
+  return {
+    owner: RaEls.owner.value.trim(),
+    repo: RaEls.repo.value.trim(),
+    branch: RaEls.branch.value.trim() || "main",
+    path: RaEls.path.value.trim() || "data/posts.json",
+    repoUrl: RaEls.repoUrl.value.trim(),
   };
-
-  if (!post.title || !post.slug) {
-    setStatus("标题和 Slug 必填。");
-    return;
-  }
-
-  const index = data.posts.findIndex((item) => item.slug === selectedSlug);
-  if (index >= 0) {
-    data.posts[index] = post;
-  } else {
-    data.posts.push(post);
-  }
-
-  selectedSlug = post.slug;
-  saveLocalData();
-  selectPost(post.slug);
-  setStatus("已保存到浏览器本地数据，点击发布可写回 GitHub。");
 }
 
-function deleteSelectedPost() {
-  if (!selectedSlug) return;
-  const post = data.posts.find((item) => item.slug === selectedSlug);
-  if (!post || !confirm(`确认删除《${post.title}》？`)) return;
-  data.posts = data.posts.filter((item) => item.slug !== selectedSlug);
-  saveLocalData();
-  selectPost(data.posts[0]?.slug || "");
-  setStatus("文章已从本地数据删除。");
-}
-
-function createNewPost() {
-  selectedSlug = "";
-  selectPost("");
-  els.title.focus();
-}
-
-function saveSiteInfo() {
-  data.site = {
-    ...data.site,
-    title: els.siteTitle.value.trim() || "Tech Notes",
-    subtitle: els.siteSubtitle.value.trim() || "个人技术博客",
-    author: {
-      ...(data.site.author || {}),
-      name: els.author.value.trim() || "作者名",
-      bio: els.bio.value.trim(),
-      links: data.site.author?.links || [{ label: "GitHub", url: "https://github.com/" }],
+async function raApi(path, options = {}) {
+  if (!RA_API_BASE) throw new Error("后台 API 未配置。");
+  const response = await fetch(`${RA_API_BASE}${path}`, {
+    method: options.method || "GET",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
     },
-  };
-  saveLocalData();
-  setStatus("站点信息已保存到本地数据。");
-}
+    body: options.body,
+  });
 
-function exportJson() {
-  const blob = new Blob([JSON.stringify(data, null, 2) + "\n"], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "posts.json";
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function importJson(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    data = normalizeData(JSON.parse(reader.result));
-    saveLocalData();
-    renderSiteForm();
-    selectPost(data.posts[0]?.slug || "");
-    setStatus("JSON 已导入本地数据。");
-  };
-  reader.readAsText(file);
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.ok === false) {
+    throw new Error(result.error || `后台服务请求失败：${response.status}`);
+  }
+  return result;
 }
 
 function createEmptyPost() {
@@ -811,18 +541,7 @@ function getDefaultData() {
         links: [{ label: "GitHub", url: "https://github.com/" }],
       },
     },
-    posts: [
-      {
-        title: "用 GitHub Pages 搭建可维护的个人技术博客",
-        slug: "github-pages-tech-blog",
-        date: "2026-06-22",
-        tags: ["GitHub Pages", "前端", "博客"],
-        summary: "一个无需传统服务器的博客方案：静态页面负责展示，GitHub 仓库负责持久化数据。",
-        content:
-          "## 核心思路\n\nGitHub Pages 只托管静态资源，但我们可以把 `data/posts.json` 当成数据源。前台页面读取 JSON 渲染文章，管理后台通过 GitHub API 把更新后的 JSON 提交回仓库。\n\n## 使用流程\n\n- 创建 GitHub 仓库并开启 Pages\n- 创建 fine-grained token，授予该仓库 Contents 读写权限\n- 在管理后台填写仓库信息并读取远程数据\n- 编辑文章后点击发布到 GitHub\n\n## 优点\n\n这个方案没有数据库和服务器运维成本，所有内容都有 Git 提交历史，适合个人博客、项目日志和作品集。",
-        readingMinutes: 3,
-      },
-    ],
+    posts: [],
   };
 }
 
@@ -845,24 +564,12 @@ function estimateReadingMinutes(content) {
   return Math.max(1, Math.ceil(length / 500));
 }
 
-function toBase64(value) {
-  return btoa(unescape(encodeURIComponent(value)));
-}
-
-function fromBase64(value) {
-  return decodeURIComponent(escape(atob(value.replace(/\n/g, ""))));
-}
-
 function setStatus(message) {
-  els.status.textContent = message;
-}
-
-function setLoginStatus(message) {
-  els.loginStatus.textContent = message;
+  RaEls.status.textContent = message;
 }
 
 function setAccountStatus(message) {
-  els.accountStatus.textContent = message;
+  RaEls.accountStatus.textContent = message;
 }
 
 function escapeHtml(value) {
@@ -878,57 +585,44 @@ function escapeAttr(value) {
   return escapeHtml(value);
 }
 
-els.saveSettings.addEventListener("click", saveSettings);
-els.loginButton.addEventListener("click", loginAdmin);
-els.registerButton.addEventListener("click", registerAdmin);
-els.createAccount.addEventListener("click", createAccount);
-els.resetPassword.addEventListener("click", resetAccountPassword);
-els.deleteAccount.addEventListener("click", deleteAccount);
-els.refreshAccounts.addEventListener("click", loadAccounts);
-els.accountList.addEventListener("click", (event) => {
-  const item = event.target.closest("[data-account]");
-  if (!item) return;
-  els.accountUser.value = item.dataset.account;
-});
-els.loginToken.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") loginAdmin();
-});
-els.logout.addEventListener("click", logoutAdmin);
-els.applyRepoUrl.addEventListener("click", () => {
+RaEls.saveSettings.addEventListener("click", saveSettings);
+RaEls.applyRepoUrl.addEventListener("click", () => {
   applyRepositoryUrl(true);
   saveSettings();
 });
-els.detectRepo.addEventListener("click", () => {
+RaEls.detectRepo.addEventListener("click", () => {
   const detected = getRepositoryFromLocation();
   if (!detected) {
     setStatus("当前不是 GitHub Pages 地址，无法自动识别；请粘贴 GitHub 仓库地址。");
     return;
   }
-  els.repoUrl.value = `https://github.com/${detected.owner}/${detected.repo}`;
+  RaEls.repoUrl.value = `https://github.com/${detected.owner}/${detected.repo}`;
   applyRepositoryUrl(true);
   saveSettings();
 });
-els.loadRemote.addEventListener("click", loadRemoteData);
-els.checkAccess.addEventListener("click", checkGitHubAccess);
-els.openRepo.addEventListener("click", openRepository);
-els.publish.addEventListener("click", publishData);
-els.download.addEventListener("click", exportJson);
-els.importInput.addEventListener("change", importJson);
-els.adminPostList.addEventListener("click", (event) => {
-  const item = event.target.closest("[data-slug]");
-  if (item) selectPost(item.dataset.slug);
+RaEls.loadRemote.addEventListener("click", loadRemoteData);
+RaEls.openRepo.addEventListener("click", openRepository);
+RaEls.publish.addEventListener("click", publishData);
+RaEls.download.addEventListener("click", exportJson);
+RaEls.importInput.addEventListener("change", importJson);
+RaEls.adminPostList.addEventListener("click", (event) => {
+  const item = event.target.closest("[data-RaSlug]");
+  if (item) selectPost(item.dataset.raslug);
 });
-els.newPost.addEventListener("click", createNewPost);
-els.form.addEventListener("submit", saveCurrentPost);
-els.deletePost.addEventListener("click", deleteSelectedPost);
-els.saveSite.addEventListener("click", saveSiteInfo);
-els.title.addEventListener("input", () => {
-  if (!selectedSlug) els.slug.value = slugify(els.title.value);
+RaEls.newPost.addEventListener("click", createNewPost);
+RaEls.form.addEventListener("submit", saveCurrentPost);
+RaEls.deletePost.addEventListener("click", deleteSelectedPost);
+RaEls.saveSite.addEventListener("click", saveSiteInfo);
+RaEls.title.addEventListener("input", () => {
+  if (!RaSelectedSlug) RaEls.slug.value = slugify(RaEls.title.value);
 });
-els.repoUrl.addEventListener("change", () => {
-  applyRepositoryUrl(false);
-  saveSettings();
+RaEls.createAccount.addEventListener("click", createAccount);
+RaEls.resetPassword.addEventListener("click", resetAccountPassword);
+RaEls.deleteAccount.addEventListener("click", deleteAccount);
+RaEls.refreshAccounts.addEventListener("click", loadAccounts);
+RaEls.accountList.addEventListener("click", (event) => {
+  const item = event.target.closest("[data-RaAccount]");
+  if (!item) return;
+  RaEls.accountUser.value = item.dataset.raaccount;
 });
-[els.owner, els.repo, els.branch, els.path].forEach((input) => {
-  input.addEventListener("input", updateGitHubLinks);
-});
+RaEls.logout.addEventListener("click", logoutAdmin);
