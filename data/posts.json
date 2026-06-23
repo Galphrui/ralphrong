@@ -1,17 +1,191 @@
 {
   "site": {
-    "title": "Tech Notes",
-    "subtitle": "个人技术博客",
+    "title": "Ra Ralph Android Notes",
+    "subtitle": "Android 工程实践、调试记录与开发效率手册",
     "author": {
-      "name": "作者名",
-      "bio": "专注构建可靠、清晰、可维护的软件系统。这里记录从问题到方案的完整思考。",
+      "name": "Ralph Rong",
+      "bio": "记录 Android 开发、系统调试、工程化构建与工具链实践。这里把零散问题整理成可复用的方法论。",
       "links": [
         {
           "label": "GitHub",
-          "url": "https://github.com/"
+          "url": "https://github.com/Galphrui"
+        },
+        {
+          "label": "Blog",
+          "url": "https://galphrui.github.io/ralphrong/"
         }
       ]
     }
   },
-  "posts": []
+  "posts": [
+    {
+      "slug": "android-context-core",
+      "title": "Android Context：理解组件运行环境的入口",
+      "date": "2026-06-23",
+      "tags": [
+        "Android",
+        "Framework",
+        "Context"
+      ],
+      "summary": "Context 不是普通工具类，而是 Android 组件访问资源、系统服务、存储和组件启动能力的运行环境入口。",
+      "readingMinutes": 7,
+      "content": "## Context 的本质\nContext 可以理解为 Android Framework 交给组件的一把环境钥匙。Activity、Service、Application 都不是凭空拥有系统能力，它们背后都包装着真正工作的 ContextImpl。\n\n常见继承关系可以这样记：Activity 带主题能力，Service 和 Application 更偏运行环境包装。因此在 Activity 里把 `this` 传给 Toast、资源读取或页面跳转通常可行，因为 Activity 本身就是一种 Context。\n\n## 它解决什么问题\n- 确认当前代码属于哪个应用包，从而正确解析 `R.string`、`R.drawable`、`R.color` 等资源。\n- 获取系统服务，例如 `AlarmManager`、`NotificationManager`、`PowerManager`、`UserManager`。\n- 访问应用私有文件、数据库、SharedPreferences 和缓存目录。\n- 启动 Activity、Service，发送或注册 BroadcastReceiver。\n\n```java\nString name = context.getString(R.string.app_name);\nAlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);\nSharedPreferences sp = context.getSharedPreferences(\"config\", Context.MODE_PRIVATE);\n```\n\n## Activity Context 与 Application Context\nActivity Context 绑定页面生命周期，并且包含主题信息。适合创建 Dialog、加载与主题有关的视图、启动需要页面上下文的流程。\n\nApplication Context 生命周期跟随整个进程，适合单例、工具类、长期缓存，但不要拿它创建依赖 Activity 窗口的 UI，否则容易出现主题缺失或窗口异常。\n\n## 启动组件时的坑\n如果 Context 不是 Activity，例如来自 Application、Service 或 BroadcastReceiver，启动 Activity 时通常需要加 `FLAG_ACTIVITY_NEW_TASK`。\n\n```java\nIntent intent = new Intent(context, MainActivity.class);\nintent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);\ncontext.startActivity(intent);\n```\n\n## 广播注册要配合生命周期\n动态注册 Receiver 后要在合适时机注销。Activity 中常见做法是 `onStart` 注册、`onStop` 注销，或者 `onResume` / `onPause` 成对处理。泄漏问题通常不是广播本身造成的，而是 Context 生命周期和注册周期没有对齐。\n\n## 实战判断\n遇到“资源找不到、Dialog 报错、启动页面失败、文件路径不对”这类问题，先问自己：当前传入的是哪一种 Context？它属于哪个组件？它的生命周期是否比被创建对象更长？这三个问题通常能快速定位方向。"
+    },
+    {
+      "slug": "android-ce-de-direct-boot",
+      "title": "Android CE 与 DE：Direct Boot 场景下的数据放在哪里",
+      "date": "2026-06-22",
+      "tags": [
+        "Android",
+        "存储",
+        "系统安全"
+      ],
+      "summary": "Android 7.0 之后的文件级加密把应用数据分为 CE 和 DE，两者决定了开机未解锁阶段能否访问数据。",
+      "readingMinutes": 6,
+      "content": "## 为什么要区分 CE 和 DE\nAndroid 7.0 引入 File-Based Encryption 后，不同文件可以用不同密钥保护。Direct Boot 能在用户还没有第一次解锁设备时运行一部分功能，例如闹钟、来电、关键系统服务。\n\n这就带来一个核心问题：某些数据必须在未解锁阶段可读，而大部分隐私数据只能在解锁后可读。\n\n## CE：Credential Encrypted\nCE 是默认存储区域，密钥与用户锁屏凭据相关。普通应用默认的 SharedPreferences、SQLite、filesDir 基本都在 CE。\n\n它适合存放用户隐私、业务数据、登录态、普通配置。缺点是设备刚开机且用户未解锁时不可用。\n\n## DE：Device Encrypted\nDE 与设备密钥相关，Direct Boot 阶段即可访问。适合存放开机前必须工作的最小数据，例如闹钟触发时间、必要的系统配置、可恢复任务标记。\n\n```java\nContext deContext = context.createDeviceProtectedStorageContext();\nSharedPreferences sp = deContext.getSharedPreferences(\"boot_config\", Context.MODE_PRIVATE);\n```\n\n## 迁移数据\n如果历史数据默认写在 CE，但现在需要 Direct Boot 阶段读取，可以在用户解锁后执行迁移，把必要数据移到 DE。\n\n```java\nContext deContext = context.createDeviceProtectedStorageContext();\ndeContext.moveSharedPreferencesFrom(context, \"alarm_prefs\");\n```\n\n## 设计原则\n- 默认数据放 CE，安全性更合适。\n- 只有开机未解锁前必须使用的数据才放 DE。\n- DE 中不要放登录凭据、个人隐私和可被滥用的业务数据。\n- Direct Boot 逻辑要尽量小，避免依赖用户解锁后的完整应用状态。\n\n## 排查思路\n如果开机后闹钟、服务或广播没有按预期工作，先确认代码运行时设备是否已解锁，再检查访问的是 CE 还是 DE。很多“偶现读取不到配置”的问题，其实是存储区域选错了。"
+    },
+    {
+      "slug": "android-storage-sharedpreferences-contentprovider-cursor",
+      "title": "Android 数据存储：SharedPreferences、ContentProvider 与 Cursor 的边界",
+      "date": "2026-06-21",
+      "tags": [
+        "Android",
+        "数据存储",
+        "ContentProvider"
+      ],
+      "summary": "把轻量配置、结构化数据和跨应用共享拆开看，才能避免把所有数据都塞进同一种存储方案。",
+      "readingMinutes": 8,
+      "content": "## 轻量配置用 SharedPreferences\nSharedPreferences 适合保存开关、简单状态和少量配置。封装时建议把文件名、key、默认值集中管理，避免字符串散落在页面里。\n\n```java\nSharedPreferences sp = context.getSharedPreferences(\"ra_config\", Context.MODE_PRIVATE);\nsp.edit().putBoolean(\"first_open\", false).apply();\nboolean firstOpen = sp.getBoolean(\"first_open\", true);\n```\n\n`apply()` 异步提交，适合大多数 UI 操作；`commit()` 同步返回结果，适合必须确认写入成功的场景。\n\n## 结构化数据用 SQLite 或 Room\n当数据具有列表、查询条件、排序、更新和删除关系时，不要继续堆 SharedPreferences。表结构能表达数据关系，后续排查也更清晰。\n\n## ContentProvider 的价值\nContentProvider 是统一的数据访问入口，尤其适合跨应用共享数据。它通过 URI 暴露资源，再由 ContentResolver 执行 query、insert、update、delete。\n\n典型结构包括数据库帮助类、Provider 实现、Manifest 注册和调用方。\n\n```java\nUri uri = Uri.parse(\"content://com.example.provider/user\");\nCursor cursor = getContentResolver().query(uri, null, null, null, null);\n```\n\n## Cursor 使用注意\nCursor 是查询结果的游标，不是普通集合。使用时必须判断非空并关闭。\n\n```java\ntry (Cursor cursor = resolver.query(uri, null, null, null, null)) {\n    if (cursor != null && cursor.moveToFirst()) {\n        String name = cursor.getString(cursor.getColumnIndexOrThrow(\"name\"));\n    }\n}\n```\n\n## Provider 的安全边界\n跨应用共享前要认真设计权限。能不导出就不导出；必须导出时，要使用权限、签名权限或明确的调用方校验，避免把内部数据库变成公开接口。\n\n## 我的实践分层\n- 页面状态：优先 ViewModel 或内存状态。\n- 简单持久化：SharedPreferences。\n- 可查询业务数据：SQLite / Room。\n- 跨应用数据交换：ContentProvider。\n- 文件共享：FileProvider，不直接暴露真实路径。\n\n这样的分层能减少后期维护成本，也能让问题定位更快。"
+    },
+    {
+      "slug": "android-activity-navigation-result",
+      "title": "Activity 跳转、返回结果与启动模式排查",
+      "date": "2026-06-20",
+      "tags": [
+        "Android",
+        "Activity",
+        "页面跳转"
+      ],
+      "summary": "页面跳转后数据被清空，很多时候不是存储失败，而是 requestCode、返回处理或启动模式设计出了问题。",
+      "readingMinutes": 5,
+      "content": "## 先区分两类问题\n页面返回后数据消失，常见原因分为两类：一类是返回结果覆盖了已有字段，另一类是 Activity 被重新创建或启动栈不符合预期。\n\nPDF 笔记里提到的 requestCode 重复就是第一类问题。多个选择页使用同一个 code，返回时就可能把 A 字段的结果写到 B 字段，或者清空原本的数据。\n\n```java\nprivate static final int REQUEST_CODE_BLOODTYPE_PICKER = 1004;\nprivate static final int REQUEST_CODE_PREGNANT_PICKER = 1005;\nprivate static final int REQUEST_CODE_ALLERGY_PICKER = 1006;\n```\n\n## 返回结果要唯一、可读\n每一个业务入口都应该有独立 requestCode，并且命名要能看出用途。不要使用魔法数字散落在代码里。\n\n如果项目允许，优先使用 Activity Result API，把注册和回调绑定在一起，减少全局 `onActivityResult` 里的分支膨胀。\n\n## 启动模式影响返回路径\n`standard` 每次创建新实例；`singleTop` 栈顶复用；`singleTask` 会复用已有任务栈里的实例并清理其上的页面。页面状态异常时，要检查 Manifest 里的 launchMode，也要检查 Intent flags。\n\n## 从非 Activity Context 启动页面\n从 Application 或 Service 启动 Activity 时要添加新任务标记。\n\n```java\nintent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);\ncontext.startActivity(intent);\n```\n\n## 排查清单\n- requestCode 是否重复。\n- 返回数据 key 是否重复。\n- `onActivityResult` 或 Activity Result 回调是否覆盖了错误字段。\n- Activity 是否因旋转、内存回收或启动模式被重建。\n- Intent flags 是否改变了栈行为。\n- 需要保存的页面状态是否进入了 ViewModel、Bundle 或持久化层。\n\n页面跳转问题最怕只看“存储成功没有”。正确做法是把数据流从发起跳转、返回结果、字段写入、页面重建四段串起来看。"
+    },
+    {
+      "slug": "android-ui-recyclerview-theme-screen",
+      "title": "Android UI 实战：RecyclerView、主题、屏幕尺寸与弹窗",
+      "date": "2026-06-19",
+      "tags": [
+        "Android",
+        "UI",
+        "适配"
+      ],
+      "summary": "把列表、主题、屏幕尺寸和弹窗放在一起整理，形成日常 UI 问题的快速排查手册。",
+      "readingMinutes": 7,
+      "content": "## RecyclerView 纵向列表\nRecyclerView 的关键是三件事：LayoutManager 决定排列方式，Adapter 负责数据绑定，ViewHolder 降低重复查找视图的成本。\n\n```java\nrecyclerView.setLayoutManager(new LinearLayoutManager(context));\nrecyclerView.setAdapter(adapter);\n```\n\n列表滑动异常时，先看外层是否还有 ScrollView，item 高度是否稳定，Adapter 是否频繁全量刷新。\n\n## 自定义悬浮滚动条\n悬浮滚动条本质上是把滚动比例映射为指示器位置。核心数据包括 RecyclerView 的可滚动总高度、当前偏移量、可视区域高度。\n\n```java\nint offset = recyclerView.computeVerticalScrollOffset();\nint range = recyclerView.computeVerticalScrollRange();\nint extent = recyclerView.computeVerticalScrollExtent();\n```\n\n用这三个值计算比例，比手动估算 item 数更可靠。\n\n## 主题与全屏\n主题问题经常表现为状态栏颜色、ActionBar、背景色或 Dialog 样式不一致。全屏主题可以通过 NoActionBar、windowFullscreen、statusBarColor 等配置组合实现。\n\n```xml\n<style name=\"AppTheme\" parent=\"Theme.AppCompat.Light.NoActionBar\">\n    <item name=\"android:windowFullscreen\">true</item>\n    <item name=\"android:windowContentOverlay\">@null</item>\n</style>\n```\n\n## 获取屏幕尺寸\n需要区分真实屏幕尺寸和应用窗口尺寸。刘海屏、导航栏、圆屏设备都会影响结果。\n\n```java\nWindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);\nPoint point = new Point();\nwm.getDefaultDisplay().getRealSize(point);\n```\n\n## 弹窗设计\n弹窗要确认 Context 是否来自 Activity，避免用 Application Context 创建窗口。弹窗内容要保持短路径，复杂表单更适合独立页面。\n\n## 我的 UI 排查顺序\n- 先确认布局层级是否过深或嵌套滚动冲突。\n- 再看主题是否应用到正确 Activity。\n- 然后检查尺寸计算使用的是窗口尺寸还是真实屏幕尺寸。\n- 最后检查数据刷新方式是否导致 UI 抖动。\n\n这套顺序能覆盖大多数“看起来像样式问题，实际是环境或刷新问题”的场景。"
+    },
+    {
+      "slug": "android-animation-unicode-resource",
+      "title": "动画、Unicode 与资源引用：小问题也要可复用",
+      "date": "2026-06-18",
+      "tags": [
+        "Android",
+        "动画",
+        "Java"
+      ],
+      "summary": "把指针旋转动画、Unicode 编解码和文字资源引用整理成可复用的小工具思路。",
+      "readingMinutes": 6,
+      "content": "## 指针顺序旋转动画\n时针、分针、秒针依次旋转时，不要把同一个 RotateAnimation 对象复用给多个 View。每个指针创建独立动画，然后用监听器串联。\n\n```java\nprivate RotateAnimation createRotateAnimation() {\n    RotateAnimation rotate = new RotateAnimation(\n        0.0F, 360.0F,\n        Animation.RELATIVE_TO_SELF, 0.5F,\n        Animation.RELATIVE_TO_SELF, 0.5F\n    );\n    rotate.setDuration(1000L);\n    rotate.setFillAfter(true);\n    return rotate;\n}\n```\n\n```java\nhourAnim.setAnimationListener(new Animation.AnimationListener() {\n    public void onAnimationStart(Animation animation) {}\n    public void onAnimationEnd(Animation animation) {\n        minuteView.startAnimation(minuteAnim);\n    }\n    public void onAnimationRepeat(Animation animation) {}\n});\n```\n\n要点是使用 `startAnimation()` 触发动画，`setFillAfter(true)` 保持结束状态。\n\n## 插值器怎么选\n插值器决定动画速度曲线。线性适合匀速，Decelerate 适合自然停下，AccelerateDecelerate 适合强调过程。UI 动画不要只看“能不能动”，还要看用户感知是否自然。\n\n## Unicode 编码与解码\n当日志、配置或接口里出现 Unicode 转义序列时，可以封装工具方法统一处理。\n\n```java\nString encoded = String.format(\"\\u%04x\", (int) c);\nPattern pattern = Pattern.compile(\"\\\\u([0-9a-fA-F]{4})\");\n```\n\n注意 Java 字符串里的反斜杠需要转义，正则里的反斜杠还要再转义一层。\n\n## 引用文字资源\n固定文案不要散落在代码中，放入 `strings.xml` 便于统一管理、多语言和后续修改。\n\n```java\ntextView.setText(context.getString(R.string.ra_confirm));\n```\n\n这些小工具看似零散，但统一封装后能明显减少重复代码，也让项目风格更稳定。"
+    },
+    {
+      "slug": "android-build-sign-package",
+      "title": "Android 构建与发布：重签名、打包命名和混淆定位",
+      "date": "2026-06-17",
+      "tags": [
+        "Android",
+        "构建",
+        "发布"
+      ],
+      "summary": "把 APK 重签名、打包重命名、ProGuard 反混淆和 Android Studio 配置整理成发布前检查流程。",
+      "readingMinutes": 7,
+      "content": "## APK 重新签名\n重签名常用于系统集成、渠道包验证或拿到未签名 APK 后重新发布。流程通常包括移除旧签名、对齐、签名和验证。\n\n```bash\nzipalign -p -f 4 app-unsigned.apk app-aligned.apk\napksigner sign --ks release.jks --out app-release.apk app-aligned.apk\napksigner verify --verbose app-release.apk\n```\n\n签名文件要妥善保存，不要提交到公开仓库。\n\n## 打包重命名\n产物命名最好包含应用名、版本号、构建类型和时间，方便测试、回滚和归档。\n\n```gradle\nandroid.applicationVariants.all { variant ->\n    variant.outputs.all {\n        outputFileName = \"RaApp-${variant.versionName}-${variant.buildType.name}.apk\"\n    }\n}\n```\n\n## 反混淆定位崩溃\n线上 crash 如果经过混淆，需要 mapping 文件和原始 crash 日志配合还原。\n\n```bash\nretrace mapping.txt crash.log > output.log\n```\n\n注意日志格式要尽量保持标准堆栈形式，否则还原结果会不完整。\n\n## Android Studio 代理与版本\n构建异常时不要只看 Gradle 报错，也要检查 Android Studio 代理、JDK 版本、Gradle 插件版本和 SDK 路径。代理残留会导致依赖下载失败，JDK 版本不匹配会导致编译期异常。\n\n## 发布前检查\n- APK 是否使用正确签名。\n- versionCode 是否递增。\n- 产物命名是否能追踪版本。\n- mapping 文件是否归档。\n- 是否保留对应 commit 和构建参数。\n\n构建发布不是最后一步的“点按钮”，而是一套可追溯流程。只要把命名、签名、mapping 和环境固定下来，后续排查会轻松很多。"
+    },
+    {
+      "slug": "android-debug-adb-log-thread",
+      "title": "Android 调试手册：ADB、日志、包名与子线程",
+      "date": "2026-06-16",
+      "tags": [
+        "Android",
+        "ADB",
+        "调试"
+      ],
+      "summary": "日常排查离不开 ADB、日志、包名 Activity 查询和线程判断，这篇整理成直接可用的命令清单。",
+      "readingMinutes": 6,
+      "content": "## ADB 常用命令\n查看屏幕尺寸和 DPI：\n\n```bash\nadb shell wm size\nadb shell wm density\n```\n\n清除应用数据：\n\n```bash\nadb shell pm clear com.android.deskclock\n```\n\n查看当前前台包名和 Activity：\n\n```bash\nadb shell dumpsys window | findstr mCurrentFocus\nadb shell dumpsys window windows | findstr mCurrentFocus\n```\n\n启动指定 Activity：\n\n```bash\nadb shell am start -n com.sgtc.wechat2/com.sgtc.wechat.ui.activities.MainActivity\n```\n\n截图并拉取到电脑：\n\n```bash\nadb shell screencap -p /sdcard/01.png\nadb pull /sdcard/01.png F:\\Photo\n```\n\n## 日志策略\n日志要能回答三个问题：发生在哪里、输入是什么、结果是什么。Tag 命名要稳定，关键路径要保留业务 ID 或状态值，但不要打印密码、token 和个人隐私。\n\n## 子线程处理耗时任务\n网络、数据库、大文件读写不要放主线程。主线程卡顿的排查思路是看耗时任务是否进入后台线程，以及结果回 UI 时是否切回主线程。\n\n```java\nnew Thread(() -> {\n    // long task\n    runOnUiThread(() -> updateUi());\n}).start();\n```\n\n项目中更推荐使用线程池、Coroutine、RxJava 或 WorkManager，而不是无限创建裸线程。\n\n## 查 LCD 与系统参数\n系统定制项目里，有些信息来自设备路径或 SystemProperties。读取前要考虑权限、设备差异和异常兜底。\n\n## 排查建议\n先用 ADB 确认设备状态，再看日志链路，最后回到代码判断线程和生命周期。命令行给的是现场，代码给的是原因，两边一起看才快。"
+    },
+    {
+      "slug": "android-broadcast-reflection-systemproperties",
+      "title": "广播、反射与 SystemProperties：系统能力调用的边界感",
+      "date": "2026-06-15",
+      "tags": [
+        "Android",
+        "广播",
+        "反射"
+      ],
+      "summary": "Android 系统能力可以通过广播、反射和 SystemProperties 触达，但越接近系统层越需要边界和兜底。",
+      "readingMinutes": 6,
+      "content": "## 广播的两种使用方式\n静态广播注册在 Manifest 中，适合系统事件或明确的外部事件；动态广播跟随组件生命周期，适合页面或服务运行期间监听。\n\n动态注册要成对注销，否则容易泄漏 Context。\n\n```java\nIntentFilter filter = new IntentFilter(Intent.ACTION_TIME_CHANGED);\ncontext.registerReceiver(receiver, filter);\ncontext.unregisterReceiver(receiver);\n```\n\n## 发送广播要控制范围\n能指定包名时尽量指定，避免无意义广播扩散。\n\n```java\nIntent intent = new Intent(\"com.ra.ACTION_REFRESH\");\nintent.setPackage(context.getPackageName());\ncontext.sendBroadcast(intent);\n```\n\n## 反射调用\n反射能访问编译期不可直接引用的类或方法，比如一些系统属性读取场景。但反射会牺牲类型安全，也可能因为系统版本、权限或隐藏 API 限制而失败。\n\n```java\nClass<?> properties = Class.forName(\"android.os.SystemProperties\");\nMethod method = properties.getDeclaredMethod(\"get\", String.class, String.class);\nString value = (String) method.invoke(null, key, defaultValue);\n```\n\n## SystemProperties 封装原则\n- 所有异常都要兜底，不能让属性读取导致业务崩溃。\n- 默认值必须有明确含义。\n- 调用点不要散落，集中在工具类中。\n- 对系统定制属性要写清楚来源和设备范围。\n\n## 什么时候不用反射\n如果有公开 API，优先使用公开 API。反射适合系统定制、兼容旧版本或读取特定 ROM 信息，不适合成为普通业务逻辑的默认方案。\n\n系统能力很有用，但每靠近一层底层，就要多加一层异常处理和版本判断。"
+    },
+    {
+      "slug": "git-linux-efficiency-notes",
+      "title": "Git 与 Linux 开发效率笔记：stash、批量拉取和空间排查",
+      "date": "2026-06-14",
+      "tags": [
+        "Git",
+        "Linux",
+        "效率"
+      ],
+      "summary": "把 Git stash、日志查看、批量拉代码和 Linux 空间查看整理成日常开发可查的速记。",
+      "readingMinutes": 6,
+      "content": "## Git stash 的基本用途\nstash 用来临时保存当前工作区和暂存区修改，适合临时切分支、拉取远端更新或处理紧急问题。\n\n```bash\ngit stash push -m \"正在开发的功能A\"\ngit stash list\ngit stash show -p\ngit stash pop\n```\n\n`apply` 会恢复但保留 stash，`pop` 会恢复并删除 stash。处理重要修改时，可以先 `apply`，确认无误后再 `drop`。\n\n## 包含未跟踪文件\n默认 stash 不保存未跟踪文件，需要显式加参数。\n\n```bash\ngit stash -u\ngit stash --include-untracked\n```\n\n`git stash -a` 会包含 ignored 文件，使用前要确认不会把构建产物也收进去。\n\n## 从 stash 创建分支\n当临时修改逐渐变成完整需求，可以直接从 stash 新建分支。\n\n```bash\ngit stash branch feature-ra-notes stash@{0}\n```\n\n## 查看提交影响文件\n排查某次修改涉及哪些文件：\n\n```bash\ngit log --name-status\n```\n\n## Linux 空间排查\n查看磁盘空间：\n\n```bash\ndf -h\n```\n\n如果空间不足，再结合 `du -sh` 定位目录体积。\n\n## 批量拉取代码\n多仓库环境下，批量拉取脚本能节省时间，但要在脚本里打印当前仓库名和失败原因。不要让脚本静默失败，否则后续构建问题很难追。\n\n效率工具的价值不在“命令多”，而在把重复动作变成稳定流程。"
+    },
+    {
+      "slug": "android-studio-shortcuts-workflow",
+      "title": "Android Studio 快捷键与日常工作流整理",
+      "date": "2026-06-13",
+      "tags": [
+        "Android Studio",
+        "效率",
+        "IDE"
+      ],
+      "summary": "把常用快捷键和使用场景配对记录，比单纯背快捷键更容易形成开发肌肉记忆。",
+      "readingMinutes": 4,
+      "content": "## 常用快捷键\n格式化代码：\n\n```text\nCtrl + Alt + L\n```\n\n快速复制当前行：\n\n```text\nCtrl + D\n```\n\n查看参数提示：\n\n```text\nCtrl + P\n```\n\n自动补全或快速修复：\n\n```text\nAlt + Enter\n```\n\n补全语句到行尾：\n\n```text\nCtrl + Shift + Enter\n```\n\n全局搜索：\n\n```text\nShift + Shift\nCtrl + Shift + R\n```\n\n大小写切换：\n\n```text\nCtrl + Shift + U\n```\n\n重写方法：\n\n```text\nCtrl + O\n```\n\n## 使用场景\n快捷键不要孤立记。比如写 Adapter 时，常用 `Ctrl + O` 重写方法，写完后 `Ctrl + Alt + L` 统一格式；改常量命名时用大小写切换；看方法参数时用 `Ctrl + P`。\n\n## IDE 配置排查\nAndroid Studio 异常时，先检查代理、JDK、Gradle、SDK 路径和缓存。快捷键提升速度，环境稳定保证速度不会被构建问题吃掉。\n\n## 我的习惯\n每次遇到重复鼠标操作，就停一下找快捷键。一天只新增一个快捷键，连续用三天，比一次背十个更有效。"
+    },
+    {
+      "slug": "xml-resource-batch-processing",
+      "title": "XML、资源文本与批处理：降低重复修改成本",
+      "date": "2026-06-12",
+      "tags": [
+        "Android",
+        "XML",
+        "工程化"
+      ],
+      "summary": "资源文本、XML 字符替换和布局一致性问题，适合用规范和批处理工具一起解决。",
+      "readingMinutes": 5,
+      "content": "## 文字资源集中管理\nAndroid 项目里，固定文案应该进入 `strings.xml`。这不仅是为了多语言，也方便统一搜索、替换和审查。\n\n```xml\n<string name=\"ra_save_success\">保存成功</string>\n```\n\n代码里通过资源引用，不直接写死：\n\n```java\ntextView.setText(R.string.ra_save_success);\n```\n\n## XML 批量替换\n当需要批量替换布局属性、颜色名或资源前缀时，优先使用 IDE 的全局替换或脚本处理，并在替换前确认范围。替换 XML 字符时要注意转义，例如 `&`、`<`、`>` 不能随意直接写入文本节点。\n\n## 布局高度一致\n多个模块需要统一高度时，不要每个 XML 单独写一份数字。更好的做法是抽出 dimens。\n\n```xml\n<dimen name=\"ra_item_height\">48dp</dimen>\n```\n\n然后在布局中引用：\n\n```xml\nandroid:layout_height=\"@dimen/ra_item_height\"\n```\n\n## 主题和样式复用\n样式应该表达一类组件的共同特征，例如按钮、标题、卡片，而不是为每个页面复制一套属性。\n\n## 工程化原则\n- 能放资源文件的，不散落在代码里。\n- 能抽 dimens/style 的，不重复写魔法值。\n- 能批量处理的，先备份或提交，再执行替换。\n- 替换后跑一次构建或至少检查关键页面。\n\n这些习惯会让项目越改越整齐，而不是越改越散。"
+    },
+    {
+      "slug": "android-problem-checklist",
+      "title": "Android 问题排查清单：从现象到定位的固定路线",
+      "date": "2026-06-11",
+      "tags": [
+        "Android",
+        "排查",
+        "方法论"
+      ],
+      "summary": "把 PDF 里的零散问题沉淀成一条排查路线：环境、权限、生命周期、数据流、构建产物。",
+      "readingMinutes": 7,
+      "content": "## 第一步：确认运行环境\n先确认设备、系统版本、屏幕尺寸、DPI、包名、前台 Activity 和权限状态。很多问题不是代码逻辑错，而是设备环境不一致。\n\n```bash\nadb shell wm size\nadb shell wm density\nadb shell dumpsys window | findstr mCurrentFocus\n```\n\n## 第二步：确认 Context 和生命周期\nUI 弹窗、资源读取、广播注册、页面跳转都和 Context 有关。先判断当前 Context 是 Activity、Service 还是 Application，再检查注册和注销是否成对。\n\n## 第三步：确认数据位置\n数据读不到时，先区分内存状态、SharedPreferences、SQLite、文件、ContentProvider，以及 CE/DE 存储区域。Direct Boot 相关问题尤其要关注设备是否已解锁。\n\n## 第四步：确认线程\n卡顿、ANR、加载慢，先看耗时任务是否跑在主线程。UI 更新必须回主线程，后台任务要有取消和异常处理。\n\n## 第五步：确认构建产物\n线上问题要检查签名、版本号、mapping、构建环境和代码提交。反混淆日志必须配套 mapping 文件，否则定位会很被动。\n\n## 第六步：复现与记录\n每次排查至少记录：设备信息、触发步骤、日志片段、原因、修复方式。技术博客的价值就来自这些记录，因为它能把一次问题变成下一次的捷径。\n\n## 我的固定模板\n- 现象：用户或测试看到什么。\n- 范围：哪些设备、版本、场景出现。\n- 证据：日志、截图、命令输出。\n- 原因：直接原因和根因。\n- 修复：代码修改、配置修改或流程修改。\n- 验证：如何证明问题解决。\n\n按这个模板写笔记，博客会越来越像真正的工程知识库。"
+    }
+  ]
 }
