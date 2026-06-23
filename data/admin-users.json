@@ -9,10 +9,18 @@
   "users": [
     {
       "username": "Galphrui",
-      "passwordHash": "79b0b383a95d01a88ff70bbfadd95d374688b1a7f117284f100b74730e585785",
-      "salt": "30a830b9992b14bd858f0f17bea1f3fb",
+      "passwordHash": "778d3bfdb187d8f1976970f72d49701d99077ca67b99325993f75b96a74a20e7",
+      "salt": "0d4ecc7f233426cad5e492e4d5b5be51",
       "iterations": 210000,
-      "createdAt": "2026-06-23T09:51:55.380Z"
+      "createdAt": "2026-06-23T09:51:55.380Z",
+      "updatedAt": "2026-06-23T16:31:06.904Z"
+    },
+    {
+      "username": "Galph",
+      "passwordHash": "99fbcd27a92b1af6fb025ed92a774484995fcf40d77ee48ca26cd7efa2176e73",
+      "salt": "1a9701b7341ee1dd6d3ae7f52a8969b2",
+      "iterations": 210000,
+      "createdAt": "2026-06-23T16:34:02.437Z"
     }
   ]
 }
