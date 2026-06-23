@@ -1,0 +1,19 @@
+{
+  "buildCommand": "npm run build:backend || echo 'No backend build'",
+  "outputDirectory": "backend",
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "functions": {
+    "backend/app.js": {
+      "memory": 1024,
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/backend/app.js"
+    }
+  ]
+}

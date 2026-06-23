@@ -1,0 +1,33 @@
+{
+  "name": "my-blog-v2",
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:backend": "echo 'Backend ready for Vercel'",
+    "preview": "vite preview",
+    "backend": "node backend/app.js"
+  },
+  "dependencies": {
+    "@tanstack/react-virtual": "^3.5.1",
+    "axios": "^1.6.0",
+    "clsx": "^2.1.0",
+    "cors": "^2.8.6",
+    "express": "^4.22.2",
+    "framer-motion": "^11.0.0",
+    "pdfjs-dist": "^4.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@emotion/react": "^11.11.0",
+    "@emotion/styled": "^11.11.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "vite": "^5.0.0"
+  }
+}
