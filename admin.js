@@ -1,5 +1,6 @@
 const STORAGE_KEY = "tech-blog-admin-settings";
 const LOCAL_DATA_KEY = "tech-blog-local-data";
+const ADMIN_API_BASE = (window.BLOG_ADMIN_API_BASE || "").replace(/\/$/, "");
 
 let data = getDefaultData();
 let selectedSlug = "";
@@ -56,6 +57,7 @@ async function init() {
   loadSettings();
   detectRepositoryFromPage();
   updateGitHubLinks();
+  await restoreServerSession();
   updateAuthView();
   await loadInitialData();
   renderSiteForm();
@@ -70,7 +72,7 @@ function loadSettings() {
   els.repo.value = settings.repo || "";
   els.branch.value = settings.branch || "main";
   els.path.value = settings.path || "data/posts.json";
-  els.token.value = settings.token || "";
+  els.token.value = ADMIN_API_BASE ? "" : settings.token || "";
   els.loginUser.value = settings.loginUser || settings.owner || "";
 }
 
@@ -82,7 +84,7 @@ function saveSettings() {
       repo: els.repo.value.trim(),
       branch: els.branch.value.trim() || "main",
       path: els.path.value.trim() || "data/posts.json",
-      token: els.token.value.trim(),
+      token: ADMIN_API_BASE ? "" : els.token.value.trim(),
       repoUrl: els.repoUrl.value.trim(),
       loginUser: els.loginUser.value.trim(),
     }),
@@ -91,11 +93,42 @@ function saveSettings() {
   setStatus("仓库设置已保存。");
 }
 
+async function restoreServerSession() {
+  if (!ADMIN_API_BASE) return;
+  try {
+    const session = await adminApi("/api/session");
+    els.loginUser.value = session.user;
+    els.token.value = "__server_session__";
+  } catch (error) {
+    els.token.value = "";
+  }
+}
+
 async function loginAdmin() {
   try {
     applyRepositoryUrl(false);
-    const token = els.loginToken.value.trim();
-    if (!token) throw new Error("请填写 GitHub token。");
+    const password = els.loginToken.value;
+    if (!password) throw new Error("请填写管理员密码。");
+
+    if (ADMIN_API_BASE) {
+      const result = await adminApi("/api/login", {
+        method: "POST",
+        body: JSON.stringify({
+          username: els.loginUser.value.trim(),
+          password,
+        }),
+      });
+      els.loginUser.value = result.user;
+      els.token.value = "__server_session__";
+      saveSettings();
+      els.loginToken.value = "";
+      setLoginStatus(`登录成功：${result.user}`);
+      updateAuthView();
+      await loadRemoteData();
+      return;
+    }
+
+    const token = password.trim();
 
     const settings = {
       ...getSettings(),
@@ -131,6 +164,9 @@ function logoutAdmin() {
   const settings = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
   settings.token = "";
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  if (ADMIN_API_BASE) {
+    adminApi("/api/logout", { method: "POST" }).catch(() => {});
+  }
   els.token.value = "";
   els.loginToken.value = "";
   remoteSha = "";
@@ -144,8 +180,11 @@ function updateAuthView() {
   els.loginScreen.hidden = isLoggedIn;
   els.logout.hidden = !isLoggedIn;
   if (!isLoggedIn) {
-    els.loginTokenLink.href = buildTokenUrl(getSettings());
+    els.loginTokenLink.href = ADMIN_API_BASE ? "./README.md" : buildTokenUrl(getSettings());
   }
+  els.token.closest("label").hidden = Boolean(ADMIN_API_BASE);
+  els.checkAccess.hidden = Boolean(ADMIN_API_BASE);
+  els.openTokenLink.hidden = Boolean(ADMIN_API_BASE);
 }
 
 async function loadInitialData() {
@@ -175,6 +214,17 @@ async function loadRemoteData() {
   try {
     applyRepositoryUrl(false);
     saveSettings();
+    if (ADMIN_API_BASE) {
+      const remote = await adminApi("/api/posts");
+      remoteSha = remote.sha || "";
+      data = normalizeData(remote.data);
+      saveLocalData();
+      renderSiteForm();
+      selectPost(data.posts[0]?.slug || "");
+      setStatus("已通过后台服务读取 GitHub 数据。");
+      return;
+    }
+
     const settings = getSettings();
     let remote;
     if (settings.token) {
@@ -198,6 +248,15 @@ async function loadRemoteData() {
 async function publishData() {
   try {
     saveSettings();
+    if (ADMIN_API_BASE) {
+      await adminApi("/api/posts", {
+        method: "PUT",
+        body: JSON.stringify({ data }),
+      });
+      setStatus("发布成功，GitHub Pages 稍后会展示新内容。");
+      return;
+    }
+
     const settings = getSettings();
     validatePublishSettings(settings);
 
@@ -223,6 +282,13 @@ async function checkGitHubAccess() {
   try {
     applyRepositoryUrl(false);
     saveSettings();
+    if (ADMIN_API_BASE) {
+      const session = await adminApi("/api/session");
+      await adminApi("/api/posts");
+      setStatus(`权限检查通过：后端会话属于 ${session.user}，可以读取和发布博客数据。`);
+      return;
+    }
+
     const settings = getSettings();
     validatePublishSettings(settings);
     const user = await githubMetaRequest("/user", settings);
@@ -272,6 +338,24 @@ async function githubMetaRequest(endpoint, settings) {
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(formatGitHubError(response.status, result, "GET_META", settings));
+  }
+  return result;
+}
+
+async function adminApi(path, options = {}) {
+  const response = await fetch(`${ADMIN_API_BASE}${path}`, {
+    method: options.method || "GET",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    body: options.body,
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.ok === false) {
+    throw new Error(result.error || `后台服务请求失败：${response.status}`);
   }
   return result;
 }

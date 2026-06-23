@@ -1,0 +1,11 @@
+name = "ralphrong-blog-admin"
+main = "worker/admin-worker.js"
+compatibility_date = "2026-06-23"
+
+[vars]
+ADMIN_USERNAME = "Galphrui"
+ADMIN_ORIGIN = "https://galphrui.github.io"
+GITHUB_OWNER = "Galphrui"
+GITHUB_REPO = "ralphrong"
+GITHUB_BRANCH = "main"
+GITHUB_DATA_PATH = "data/posts.json"

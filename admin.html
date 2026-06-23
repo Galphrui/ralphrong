@@ -31,26 +31,26 @@
           <h1>管理员登录</h1>
         </div>
         <p class="hint">
-          使用 GitHub 账号名和 fine-grained token 登录后台。Token 只保存在当前浏览器，不会写入仓库。
+          使用管理员账号和密码登录后台。密码由后端验证，浏览器不会保存 GitHub 写入凭据。
         </p>
         <div class="form-grid">
           <label>
-            GitHub 用户名
+            管理员账号
             <input id="loginUserInput" autocomplete="username" placeholder="Galphrui" />
           </label>
           <label>
-            GitHub Token
+            管理员密码
             <input
               id="loginTokenInput"
               type="password"
               autocomplete="current-password"
-              placeholder="github_pat_..."
+              placeholder="请输入后台密码"
             />
           </label>
         </div>
         <div class="actions-row">
           <button id="loginButton" type="button">登录后台</button>
-          <a id="loginTokenLink" class="link-button" href="#" target="_blank" rel="noreferrer">创建 Token</a>
+          <a id="loginTokenLink" class="link-button" href="#" target="_blank" rel="noreferrer">配置后端</a>
         </div>
         <p class="status" id="loginStatus" role="status"></p>
       </div>
@@ -103,8 +103,8 @@
           </label>
         </div>
         <p class="hint">
-          私有仓库发布必须使用 fine-grained token：Resource owner 选择仓库所有者，Repository access 选择当前仓库，
-          Permissions 中将 Contents 设置为 Read and write。
+          已配置后端 API 时，GitHub Token 保存在 Worker Secret 中，这里无需填写。只有本地直连 GitHub API
+          调试时才需要填写 token。
         </p>
         <div class="actions-row">
           <button id="saveSettingsButton" type="button">保存设置</button>
@@ -118,7 +118,7 @@
           </label>
         </div>
         <p class="hint">
-          Token 只保存在当前浏览器。部署到 GitHub Pages 后，前台公开读取 JSON，后台登录你的 Token 后写回仓库。
+          外网后台使用服务端账号密码登录；GitHub 写入凭据保存在 Worker Secret 中，不会暴露给浏览器。
         </p>
       </section>
 
@@ -203,6 +203,7 @@
       </section>
     </main>
 
+    <script src="./admin-config.js"></script>
     <script src="./admin.js"></script>
   </body>
 </html>
