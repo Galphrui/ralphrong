@@ -1,11 +1,11 @@
 # Ralph Rong 个人技术博客
 
-这是一个可部署到 GitHub Pages 的个人技术博客。前台是静态页面，文章数据保存在 `data/posts.json`；管理后台通过 GitHub Contents API 将数据写回仓库，实现无传统服务器的数据持久化。
+这是一个可部署到 GitHub Pages 的个人技术博客。前台是静态页面，文章数据保存在 `data/posts.json`；后台管理只在本地运行，账号密码以加盐哈希形式保存在 `data/admin-users.json`。
 
 ## 本地预览
 
 ```bash
-python3 -m http.server 8080
+node local-admin-server.mjs
 ```
 
 访问：
@@ -13,85 +13,73 @@ python3 -m http.server 8080
 - 前台：`http://localhost:8080/`
 - 后台：`http://localhost:8080/admin.html`
 
+## 后台账号密码
+
+后台管理在本地进行，公开站点只展示博客。这样可以避免把后台登录逻辑和写入权限暴露到公网。
+
+启动本地后台：
+
+```bash
+node local-admin-server.mjs
+```
+
+访问：
+
+```text
+http://localhost:8080/admin.html
+```
+
+首次使用点击“注册账号”。账号数据会写入：
+
+```text
+data/admin-users.json
+```
+
+这个文件只保存 PBKDF2 加盐哈希，不保存明文密码。提交到 GitHub 后，仓库里看到的也是加密后的账号数据。
+
+编辑文章后点击“发布到 GitHub”，本地后台会把内容写入 `data/posts.json`。然后执行：
+
+```bash
+git add data/posts.json data/admin-users.json
+git commit -m "update blog content"
+git push
+```
+
+GitHub Pages 会自动更新公开博客。
+
+## 外网访问
+
+公开博客地址：
+
+```text
+https://galphrui.github.io/ralphrong/
+```
+
+GitHub Pages 是纯静态托管，不能安全地直接保存账号密码。如果未来需要公网后台登录和远程发布，需要部署一个真正的后端。本项目保留了 Cloudflare Worker 示例：
+
+```text
+worker/admin-worker.js
+```
+
+但默认推荐使用本地后台模式。
+
 ## GitHub Pages 部署
 
-1. 新建 GitHub 仓库并推送这些文件。
+1. 将仓库设为 public。
 2. 进入仓库 `Settings` -> `Pages`。
 3. Source 选择 `Deploy from a branch`。
 4. Branch 选择 `main`，目录选择 `/root`。
 5. 保存后等待 GitHub Pages 生成访问地址。
 
-## 外网后台登录
+## 数据文件
 
-外网后台地址是：
+- `data/posts.json`：公开博客文章数据，前台会直接读取。
+- `data/admin-users.json`：本地后台账号数据，只保存加盐哈希。
 
-```text
-https://galphrui.github.io/ralphrong/admin.html
-```
-
-GitHub Pages 是纯静态托管，不能安全地直接保存账号密码。安全的账号密码登录需要一个服务端来校验密码和保管 GitHub 写入凭据。本项目提供了 Cloudflare Worker 后端：
-
-- 前端只输入管理员账号和密码。
-- 密码在 Worker 中用 PBKDF2 哈希校验，明文密码不会写入仓库。
-- GitHub token 保存在 Worker Secret 中，不暴露给浏览器。
-- 登录后使用 HttpOnly Cookie 维持会话。
-
-### 生成密码哈希
+## 本地开发
 
 ```bash
-node worker/hash-password.mjs "你的后台密码"
+node local-admin-server.mjs
 ```
 
-复制输出的：
-
-- `ADMIN_PASSWORD_SALT`
-- `PBKDF2_ITERATIONS`
-- `ADMIN_PASSWORD_HASH`
-
-### 部署 Cloudflare Worker
-
-安装并登录 Wrangler：
-
-```bash
-npm install -g wrangler
-wrangler login
-```
-
-设置 secrets：
-
-```bash
-wrangler secret put ADMIN_PASSWORD_SALT
-wrangler secret put ADMIN_PASSWORD_HASH
-wrangler secret put SESSION_SECRET
-wrangler secret put GITHUB_TOKEN
-```
-
-其中：
-
-- `SESSION_SECRET` 可以用 `openssl rand -hex 32` 生成。
-- `GITHUB_TOKEN` 使用 fine-grained token，Repository access 选择 `Galphrui/ralphrong`，Contents 设置为 `Read and write`。
-
-部署：
-
-```bash
-wrangler deploy
-```
-
-部署成功后，把 Worker 地址写入 `admin-config.js`：
-
-```text
-window.BLOG_ADMIN_API_BASE = "https://你的-worker地址";
-```
-
-然后提交并推送到 GitHub，外网后台就会切换为账号密码登录。
-
-## 后台发布配置
-
-后台可以通过仓库地址自动生成连接信息。部署到 GitHub Pages 后，后台也会尝试从当前网址识别 owner 和 repo。
-
-如果没有配置 Worker API，后台会回退到本地调试模式，需要手动填写 GitHub token。正式外网后台建议始终使用 Worker 模式。
-
-读取数据有两种方式：
-
-- 公开仓库：前台和未登录状态可以直接读取 `data/posts.json`。
-- 后台管理：登录后通过 Worker 读取和发布，GitHub 写入凭据不会暴露给浏览器。
+同一个服务会同时提供前台页面、后台页面和本地 API。

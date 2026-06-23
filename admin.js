@@ -1,6 +1,8 @@
 const STORAGE_KEY = "tech-blog-admin-settings";
 const LOCAL_DATA_KEY = "tech-blog-local-data";
-const ADMIN_API_BASE = (window.BLOG_ADMIN_API_BASE || "").replace(/\/$/, "");
+const LOCAL_ADMIN_API_BASE =
+  location.hostname === "localhost" || location.hostname === "127.0.0.1" ? location.origin : "";
+const ADMIN_API_BASE = (window.BLOG_ADMIN_API_BASE || LOCAL_ADMIN_API_BASE || "").replace(/\/$/, "");
 
 let data = getDefaultData();
 let selectedSlug = "";
@@ -11,7 +13,9 @@ const els = {
   loginScreen: document.querySelector("#loginScreen"),
   loginUser: document.querySelector("#loginUserInput"),
   loginToken: document.querySelector("#loginTokenInput"),
+  registerPassword: document.querySelector("#registerPasswordInput"),
   loginButton: document.querySelector("#loginButton"),
+  registerButton: document.querySelector("#registerButton"),
   loginTokenLink: document.querySelector("#loginTokenLink"),
   loginStatus: document.querySelector("#loginStatus"),
   logout: document.querySelector("#logoutButton"),
@@ -72,7 +76,7 @@ function loadSettings() {
   els.repo.value = settings.repo || "";
   els.branch.value = settings.branch || "main";
   els.path.value = settings.path || "data/posts.json";
-  els.token.value = ADMIN_API_BASE ? "" : settings.token || "";
+  els.token.value = "";
   els.loginUser.value = settings.loginUser || settings.owner || "";
 }
 
@@ -84,7 +88,7 @@ function saveSettings() {
       repo: els.repo.value.trim(),
       branch: els.branch.value.trim() || "main",
       path: els.path.value.trim() || "data/posts.json",
-      token: ADMIN_API_BASE ? "" : els.token.value.trim(),
+      token: "",
       repoUrl: els.repoUrl.value.trim(),
       loginUser: els.loginUser.value.trim(),
     }),
@@ -128,35 +132,37 @@ async function loginAdmin() {
       return;
     }
 
-    const token = password.trim();
-
-    const settings = {
-      ...getSettings(),
-      token,
-    };
-    if (!settings.owner || !settings.repo) {
-      throw new Error("请先填写或自动识别 GitHub 仓库。");
-    }
-    const user = await githubMetaRequest("/user", settings);
-    await githubMetaRequest(`/repos/${settings.owner}/${settings.repo}`, settings);
-    await githubMetaRequest(
-      `/repos/${settings.owner}/${settings.repo}/contents/${settings.path}?ref=${encodeURIComponent(settings.branch)}`,
-      settings,
-    );
-    const expectedUser = els.loginUser.value.trim();
-    if (expectedUser && user.login.toLowerCase() !== expectedUser.toLowerCase()) {
-      throw new Error(`当前 token 属于 ${user.login}，不是 ${expectedUser}。`);
-    }
-
-    els.loginUser.value = user.login;
-    els.token.value = token;
-    if (!els.owner.value.trim()) els.owner.value = user.login;
-    saveSettings();
-    els.loginToken.value = "";
-    setLoginStatus(`登录成功：${user.login}`);
-    updateAuthView();
+    throw new Error("后台管理需要本地运行：node local-admin-server.mjs");
   } catch (error) {
     setLoginStatus(`登录失败：${error.message}`);
+  }
+}
+
+async function registerAdmin() {
+  try {
+    if (!ADMIN_API_BASE) {
+      throw new Error("注册账号需要先在本地运行：node local-admin-server.mjs");
+    }
+
+    const username = els.loginUser.value.trim();
+    const password = els.loginToken.value;
+    const confirmPassword = els.registerPassword.value;
+    if (!username || !password) throw new Error("请填写账号和密码。");
+    if (password !== confirmPassword) throw new Error("两次输入的密码不一致。");
+
+    const result = await adminApi("/api/register", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+    els.loginUser.value = result.user;
+    els.token.value = "__server_session__";
+    els.loginToken.value = "";
+    els.registerPassword.value = "";
+    setLoginStatus(`注册并登录成功：${result.user}`);
+    updateAuthView();
+    await loadRemoteData();
+  } catch (error) {
+    setLoginStatus(`注册失败：${error.message}`);
   }
 }
 
@@ -180,11 +186,13 @@ function updateAuthView() {
   els.loginScreen.hidden = isLoggedIn;
   els.logout.hidden = !isLoggedIn;
   if (!isLoggedIn) {
-    els.loginTokenLink.href = ADMIN_API_BASE ? "./README.md" : buildTokenUrl(getSettings());
+    els.loginTokenLink.href = "./README.md";
   }
-  els.token.closest("label").hidden = Boolean(ADMIN_API_BASE);
-  els.checkAccess.hidden = Boolean(ADMIN_API_BASE);
-  els.openTokenLink.hidden = Boolean(ADMIN_API_BASE);
+  els.registerButton.hidden = !ADMIN_API_BASE;
+  els.registerPassword.closest("label").hidden = !ADMIN_API_BASE;
+  els.token.closest("label").hidden = true;
+  els.checkAccess.hidden = true;
+  els.openTokenLink.hidden = true;
 }
 
 async function loadInitialData() {
@@ -253,7 +261,7 @@ async function publishData() {
         method: "PUT",
         body: JSON.stringify({ data }),
       });
-      setStatus("发布成功，GitHub Pages 稍后会展示新内容。");
+      setStatus("已写入本地 data/posts.json。执行 git add、commit、push 后，GitHub Pages 会展示新内容。");
       return;
     }
 
@@ -777,6 +785,7 @@ function escapeAttr(value) {
 
 els.saveSettings.addEventListener("click", saveSettings);
 els.loginButton.addEventListener("click", loginAdmin);
+els.registerButton.addEventListener("click", registerAdmin);
 els.loginToken.addEventListener("keydown", (event) => {
   if (event.key === "Enter") loginAdmin();
 });
