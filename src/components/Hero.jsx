@@ -1,9 +1,6 @@
 import { motion } from 'framer-motion'
-import { useBlogStore } from '../store/useStore'
 
 export default function Hero() {
-  const { posts, totalPosts, allTags } = useBlogStore()
-
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -23,14 +20,6 @@ export default function Hero() {
       transition: { duration: 0.8, ease: 'easeOut' },
     },
   }
-
-  const latestPostDate = posts[0]?.date?.replaceAll('-', '.')
-
-  const stats = [
-    { label: '篇文章', value: totalPosts },
-    { label: '个标签', value: allTags.length },
-    { label: '最近更新', value: latestPostDate || '-' },
-  ]
 
   return (
     <section className="relative overflow-hidden border border-slate-200 bg-hero-panel px-6 py-14 shadow-soft sm:px-10 lg:px-12">
@@ -53,23 +42,6 @@ export default function Hero() {
           <p className="max-w-3xl text-lg leading-8 text-slate-600">
             记录 Framework、调试、构建发布与系统适配中的真实问题，把零散经验整理成下次能直接拿来用的排查路径。
           </p>
-          <div className="mt-6 inline-flex border border-primary-100 bg-white/80 px-4 py-2 text-sm font-bold text-primary-700 shadow-sm">
-            Ralph Rong / Ra
-          </div>
-        </motion.div>
-
-        {/* Stats cards */}
-        <motion.div variants={itemVariants} className="mt-12 grid gap-4 sm:grid-cols-3">
-          {stats.map((stat, idx) => (
-            <motion.div
-              key={idx}
-              className="border border-slate-200 bg-white/85 p-5 shadow-sm"
-              whileHover={{ y: -4 }}
-            >
-              <div className="mb-2 text-3xl font-black text-primary-700 sm:text-4xl">{stat.value}</div>
-              <div className="text-sm font-medium text-slate-500">{stat.label}</div>
-            </motion.div>
-          ))}
         </motion.div>
       </motion.div>
     </section>

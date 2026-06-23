@@ -28,7 +28,7 @@ export default function Navigation() {
         <nav className="flex gap-5 sm:gap-8">
           {[
             { label: '文章', href: '#posts' },
-            { label: '关于', href: '#about' },
+            { label: '个人', href: '#profile' },
             { label: '管理', href: './admin.html' },
           ].map((link) => (
             <motion.a

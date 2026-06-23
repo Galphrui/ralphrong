@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
     <title>Ra 后台管理</title>
-    <link rel="stylesheet" href="./styles.css?v=ra-20260623-2" />
+    <link rel="stylesheet" href="./styles.css?v=ra-20260623-3" />
   </head>
   <body class="RaPage RaAdminPage RaAuthPending">
     <header class="RaTopbar">
@@ -20,6 +20,7 @@
         <a href="./index.html">前台</a>
         <a href="#RaSettingsPanel">设置</a>
         <a href="#RaEditorPanel">编辑</a>
+        <a href="#RaProfilePanel">简历</a>
         <a href="#RaAccountsPanel" id="RaAccountsNavLink">账号</a>
         <button id="RaLogoutButton" class="RaNavButton" type="button">退出</button>
       </nav>
@@ -154,6 +155,63 @@
         </div>
       </section>
 
+      <section class="RaPanel" id="RaProfilePanel">
+        <div class="RaSectionHeading">
+          <p class="RaEyebrow">Profile</p>
+          <h2>Ra 个人简历</h2>
+        </div>
+        <div class="RaFormGrid">
+          <label class="RaField">
+            姓名 / 署名
+            <input id="RaProfileNameInput" />
+          </label>
+          <label class="RaField">
+            标题
+            <input id="RaProfileHeadlineInput" />
+          </label>
+          <label class="RaField RaWide">
+            联系信息（每行一条）
+            <textarea id="RaProfileContactsInput" rows="3"></textarea>
+          </label>
+          <label class="RaField RaWide">
+            求职意向
+            <textarea id="RaProfileIntentInput" rows="2"></textarea>
+          </label>
+          <label class="RaField RaWide">
+            简介
+            <textarea id="RaProfileSummaryInput" rows="3"></textarea>
+          </label>
+          <label class="RaField RaWide">
+            个人优势（每行一条）
+            <textarea id="RaProfileAdvantagesInput" rows="6"></textarea>
+          </label>
+          <label class="RaField RaWide">
+            核心技能 JSON
+            <textarea id="RaProfileSkillsInput" rows="10"></textarea>
+          </label>
+          <label class="RaField RaWide">
+            工作经历 JSON
+            <textarea id="RaProfileWorkInput" rows="10"></textarea>
+          </label>
+          <label class="RaField RaWide">
+            项目经历 JSON
+            <textarea id="RaProfileProjectsInput" rows="14"></textarea>
+          </label>
+          <label class="RaField RaWide">
+            教育经历 JSON
+            <textarea id="RaProfileEducationInput" rows="6"></textarea>
+          </label>
+          <label class="RaField RaWide">
+            个人评价（每行一条）
+            <textarea id="RaProfileReviewInput" rows="5"></textarea>
+          </label>
+        </div>
+        <div class="RaActions">
+          <button id="RaSaveProfileButton" type="button">保存简历</button>
+          <button id="RaFormatProfileButton" class="RaSecondaryButton" type="button">格式化 JSON</button>
+        </div>
+      </section>
+
       <section class="RaPanel" id="RaAccountsPanel">
         <div class="RaSectionHeading">
           <p class="RaEyebrow">Accounts</p>
@@ -183,7 +241,7 @@
       </section>
     </main>
 
-    <script src="./admin-config.js?v=ra-20260623-2"></script>
-    <script src="./admin.js?v=ra-20260623-2"></script>
+    <script src="./admin-config.js?v=ra-20260623-3"></script>
+    <script src="./admin.js?v=ra-20260623-3"></script>
   </body>
 </html>

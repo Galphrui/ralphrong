@@ -6,19 +6,32 @@ const DATA_PATH = 'data/posts.json'
 
 // GitHub raw content URL
 const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${DATA_PATH}`
+const DATA_URL = import.meta.env.DEV ? `/${DATA_PATH}` : GITHUB_RAW_URL
+
+export const fetchSiteData = async () => {
+  const response = await fetch(DATA_URL, {
+    headers: {
+      'Accept': 'application/vnd.github.v3.raw',
+    },
+  })
+
+  if (!response.ok) throw new Error('Failed to fetch site data')
+
+  const data = await response.json()
+  const posts = [...(data.posts || [])].sort((a, b) => new Date(b.date) - new Date(a.date))
+
+  return {
+    site: data.site || {},
+    profile: data.profile || null,
+    posts,
+    total: posts.length,
+  }
+}
 
 export const fetchPosts = async (page = 1, limit = 20, filters = {}) => {
   try {
-    const response = await fetch(GITHUB_RAW_URL, {
-      headers: {
-        'Accept': 'application/vnd.github.v3.raw',
-      },
-    })
-
-    if (!response.ok) throw new Error('Failed to fetch posts')
-
-    const data = await response.json()
-    let posts = data.posts || []
+    const data = await fetchSiteData()
+    let posts = data.posts
 
     // Apply filters
     if (filters.tag && filters.tag !== '全部') {
@@ -76,7 +89,7 @@ export const extractPdf = async (file) => {
 
 export const fetchTags = async () => {
   try {
-    const response = await fetch(GITHUB_RAW_URL)
+    const response = await fetch(DATA_URL)
     const data = await response.json()
     const tags = [...new Set(data.posts?.flatMap((p) => p.tags) || [])].sort()
     return tags
@@ -88,10 +101,10 @@ export const fetchTags = async () => {
 
 export default {
   fetchPosts,
+  fetchSiteData,
   createPost,
   updatePost,
   deletePost,
   extractPdf,
   fetchTags,
 }
-

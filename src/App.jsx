@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import Navigation from './components/Navigation'
-import Hero from './components/Hero'
-import PostList from './components/PostList'
 import PostDetail from './components/PostDetail'
+import HomePage from './components/HomePage'
+import ProfilePage from './components/ProfilePage'
 import { useBlogStore } from './store/useStore'
-import { fetchPosts } from './utils/api'
+import { fetchSiteData } from './utils/api'
 
 function getRoute() {
   const hash = window.location.hash.replace(/^#\/?/, '')
   if (hash.startsWith('post/')) {
     return { name: 'post', slug: decodeURIComponent(hash.slice(5)) }
+  }
+  if (hash === 'profile' || hash === 'about') {
+    return { name: 'profile' }
   }
   return { name: 'home' }
 }
@@ -19,6 +22,7 @@ export default function App() {
     posts,
     setPosts,
     setTotalPosts,
+    setProfile,
     setAllTags,
     setIsLoading,
     setError,
@@ -37,9 +41,10 @@ export default function App() {
       setIsLoading(true)
       setError(null)
       try {
-        const data = await fetchPosts(1, 100)
+        const data = await fetchSiteData()
         setPosts(data.posts)
         setTotalPosts(data.total)
+        setProfile(data.profile)
         const allTags = [...new Set(data.posts.flatMap((p) => p.tags || []))].sort()
         setAllTags(allTags)
       } catch (error) {
@@ -62,13 +67,12 @@ export default function App() {
     <div className="min-h-screen bg-gradient-hero text-slate-900">
       <Navigation />
       <main className="mx-auto max-w-6xl px-4 py-8">
-        {route.name === 'post' ? (
+        {route.name === 'profile' ? (
+          <ProfilePage />
+        ) : route.name === 'post' ? (
           <PostDetail post={selectedPost} />
         ) : (
-          <>
-            <Hero />
-            <PostList />
-          </>
+          <HomePage />
         )}
       </main>
     </div>

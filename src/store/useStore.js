@@ -6,6 +6,7 @@ export const useBlogStore = create((set) => ({
   totalPosts: 0,
   currentPage: 1,
   postsPerPage: 20,
+  profile: null,
 
   // Search and filter
   searchQuery: '',
@@ -19,6 +20,7 @@ export const useBlogStore = create((set) => ({
   // Actions
   setPosts: (posts) => set({ posts }),
   setTotalPosts: (total) => set({ totalPosts: total }),
+  setProfile: (profile) => set({ profile }),
   setCurrentPage: (page) => set({ currentPage: page }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSelectedTag: (tag) => set({ selectedTag: tag }),

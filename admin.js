@@ -53,6 +53,19 @@ const RaEls = {
   author: document.querySelector("#RaAuthorInput"),
   bio: document.querySelector("#RaBioInput"),
   saveSite: document.querySelector("#RaSaveSiteButton"),
+  profileName: document.querySelector("#RaProfileNameInput"),
+  profileHeadline: document.querySelector("#RaProfileHeadlineInput"),
+  profileContacts: document.querySelector("#RaProfileContactsInput"),
+  profileIntent: document.querySelector("#RaProfileIntentInput"),
+  profileSummary: document.querySelector("#RaProfileSummaryInput"),
+  profileAdvantages: document.querySelector("#RaProfileAdvantagesInput"),
+  profileSkills: document.querySelector("#RaProfileSkillsInput"),
+  profileWork: document.querySelector("#RaProfileWorkInput"),
+  profileProjects: document.querySelector("#RaProfileProjectsInput"),
+  profileEducation: document.querySelector("#RaProfileEducationInput"),
+  profileReview: document.querySelector("#RaProfileReviewInput"),
+  saveProfile: document.querySelector("#RaSaveProfileButton"),
+  formatProfile: document.querySelector("#RaFormatProfileButton"),
 };
 
 initRaAdmin();
@@ -75,6 +88,7 @@ async function initRaAdmin() {
 
   await loadInitialData();
   renderSiteForm();
+  renderProfileForm();
   renderPostList();
   selectPost(RaData.posts[0]?.slug || "");
   await loadRemoteData();
@@ -154,6 +168,7 @@ async function loadRemoteData() {
     RaData = normalizeData(remote.data);
     saveLocalData();
     renderSiteForm();
+    renderProfileForm();
     selectPost(RaData.posts[0]?.slug || "");
     setStatus(RA_IS_LOCAL_ADMIN ? "已从本地后台读取数据。" : "已从外网后台读取 GitHub 数据。");
   } catch (error) {
@@ -269,6 +284,21 @@ function renderSiteForm() {
   RaEls.bio.value = RaData.site.author?.bio || "";
 }
 
+function renderProfileForm() {
+  const profile = RaData.profile || getDefaultProfile();
+  RaEls.profileName.value = profile.name || "";
+  RaEls.profileHeadline.value = profile.headline || "";
+  RaEls.profileContacts.value = (profile.contacts || []).join("\n");
+  RaEls.profileIntent.value = profile.intent || "";
+  RaEls.profileSummary.value = profile.summary || "";
+  RaEls.profileAdvantages.value = (profile.advantages || []).join("\n");
+  RaEls.profileSkills.value = JSON.stringify(profile.skills || [], null, 2);
+  RaEls.profileWork.value = JSON.stringify(profile.workExperience || [], null, 2);
+  RaEls.profileProjects.value = JSON.stringify(profile.projects || [], null, 2);
+  RaEls.profileEducation.value = JSON.stringify(profile.education || [], null, 2);
+  RaEls.profileReview.value = (profile.selfReview || []).join("\n");
+}
+
 function selectPost(slug) {
   RaSelectedSlug = slug;
   const post = RaData.posts.find((item) => item.slug === slug) || createEmptyPost();
@@ -346,6 +376,57 @@ function saveSiteInfo() {
   setStatus("站点信息已保存到当前数据，点击发布写入后端。");
 }
 
+function lines(value) {
+  return String(value || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function parseJsonField(value, fallback, label) {
+  try {
+    const parsed = JSON.parse(value || "null");
+    return parsed || fallback;
+  } catch (error) {
+    throw new Error(`${label} JSON 格式不正确：${error.message}`);
+  }
+}
+
+function saveProfileInfo() {
+  try {
+    RaData.profile = {
+      name: RaEls.profileName.value.trim() || "Ralph Rong / Ra",
+      headline: RaEls.profileHeadline.value.trim(),
+      contacts: lines(RaEls.profileContacts.value),
+      intent: RaEls.profileIntent.value.trim(),
+      summary: RaEls.profileSummary.value.trim(),
+      advantages: lines(RaEls.profileAdvantages.value),
+      skills: parseJsonField(RaEls.profileSkills.value, [], "核心技能"),
+      workExperience: parseJsonField(RaEls.profileWork.value, [], "工作经历"),
+      projects: parseJsonField(RaEls.profileProjects.value, [], "项目经历"),
+      education: parseJsonField(RaEls.profileEducation.value, [], "教育经历"),
+      selfReview: lines(RaEls.profileReview.value),
+    };
+    saveLocalData();
+    renderProfileForm();
+    setStatus("Ra 简历已保存到当前数据，点击发布写入后端。");
+  } catch (error) {
+    setStatus(`简历保存失败：${error.message}`);
+  }
+}
+
+function formatProfileJson() {
+  try {
+    RaEls.profileSkills.value = JSON.stringify(parseJsonField(RaEls.profileSkills.value, [], "核心技能"), null, 2);
+    RaEls.profileWork.value = JSON.stringify(parseJsonField(RaEls.profileWork.value, [], "工作经历"), null, 2);
+    RaEls.profileProjects.value = JSON.stringify(parseJsonField(RaEls.profileProjects.value, [], "项目经历"), null, 2);
+    RaEls.profileEducation.value = JSON.stringify(parseJsonField(RaEls.profileEducation.value, [], "教育经历"), null, 2);
+    setStatus("简历 JSON 已格式化。");
+  } catch (error) {
+    setStatus(`格式化失败：${error.message}`);
+  }
+}
+
 function exportJson() {
   const blob = new Blob([JSON.stringify(RaData, null, 2) + "\n"], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -364,6 +445,7 @@ function importJson(event) {
     RaData = normalizeData(JSON.parse(reader.result));
     saveLocalData();
     renderSiteForm();
+    renderProfileForm();
     selectPost(RaData.posts[0]?.slug || "");
     setStatus("JSON 已导入当前数据，点击发布写入后端。");
   };
@@ -528,6 +610,7 @@ function normalizeData(input) {
         readingMinutes: post.readingMinutes || estimateReadingMinutes(post.content || ""),
       })),
     ),
+    profile: normalizeProfile(input.profile),
   };
 }
 
@@ -543,6 +626,40 @@ function getDefaultData() {
       },
     },
     posts: [],
+    profile: getDefaultProfile(),
+  };
+}
+
+function normalizeProfile(profile = {}) {
+  const fallback = getDefaultProfile();
+  return {
+    name: profile.name || fallback.name,
+    headline: profile.headline || fallback.headline,
+    contacts: Array.isArray(profile.contacts) ? profile.contacts : fallback.contacts,
+    intent: profile.intent || fallback.intent,
+    summary: profile.summary || fallback.summary,
+    advantages: Array.isArray(profile.advantages) ? profile.advantages : fallback.advantages,
+    skills: Array.isArray(profile.skills) ? profile.skills : fallback.skills,
+    workExperience: Array.isArray(profile.workExperience) ? profile.workExperience : fallback.workExperience,
+    projects: Array.isArray(profile.projects) ? profile.projects : fallback.projects,
+    education: Array.isArray(profile.education) ? profile.education : fallback.education,
+    selfReview: Array.isArray(profile.selfReview) ? profile.selfReview : fallback.selfReview,
+  };
+}
+
+function getDefaultProfile() {
+  return {
+    name: "Ralph Rong / Ra",
+    headline: "Android 系统工程师｜智能穿戴 / 安卓系统",
+    contacts: ["手机：【待补充】", "邮箱：【待补充】", "城市：【待补充】"],
+    intent: "Android 系统工程师 / Android Framework 工程师 / 智能穿戴系统工程师",
+    summary: "记录 Android 系统开发、智能穿戴项目、系统调试和版本问题闭环。",
+    advantages: [],
+    skills: [],
+    workExperience: [],
+    projects: [],
+    education: [],
+    selfReview: [],
   };
 }
 
@@ -614,6 +731,8 @@ RaEls.newPost.addEventListener("click", createNewPost);
 RaEls.form.addEventListener("submit", saveCurrentPost);
 RaEls.deletePost.addEventListener("click", deleteSelectedPost);
 RaEls.saveSite.addEventListener("click", saveSiteInfo);
+RaEls.saveProfile.addEventListener("click", saveProfileInfo);
+RaEls.formatProfile.addEventListener("click", formatProfileJson);
 RaEls.title.addEventListener("input", () => {
   if (!RaSelectedSlug) RaEls.slug.value = slugify(RaEls.title.value);
 });
