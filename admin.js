@@ -155,10 +155,13 @@ async function checkGitHubAccess() {
   try {
     applyRepositoryUrl(false);
     saveSettings();
-    validatePublishSettings(getSettings());
+    const settings = getSettings();
+    validatePublishSettings(settings);
+    const user = await githubMetaRequest("/user", settings);
+    await githubMetaRequest(`/repos/${settings.owner}/${settings.repo}`, settings);
     const remote = await githubRequest("GET");
     remoteSha = remote.sha;
-    setStatus("权限检查通过：token 可以读取数据文件，发布时会写回同一个文件。");
+    setStatus(`权限检查通过：token 属于 ${user.login}，可以访问仓库并读取数据文件，发布时会写回同一个文件。`);
   } catch (error) {
     setStatus(`权限检查失败：${error.message}`);
   }
@@ -189,6 +192,22 @@ async function githubRequest(method, body) {
   return result;
 }
 
+async function githubMetaRequest(endpoint, settings) {
+  const response = await fetch(`https://api.github.com${endpoint}`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${settings.token}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(formatGitHubError(response.status, result, "GET_META", settings));
+  }
+  return result;
+}
+
 function validatePublishSettings(settings) {
   if (!settings.owner || !settings.repo) {
     throw new Error("请先填写 GitHub 仓库地址，或点击“从当前网址识别”。");
@@ -212,10 +231,13 @@ function formatGitHubError(status, result, method, settings) {
     return "token 无效或已过期，请重新创建 fine-grained token。";
   }
   if (status === 403) {
-    return "token 没有写入权限。请确认 token 选择了 Galphrui/ralphrong，并授予 Contents: Read and write。";
+    return `token 权限不足。请确认 token 选择了 ${settings.owner}/${settings.repo}，并授予 Contents: Read and write。`;
   }
   if (status === 404) {
-    return `找不到仓库或数据文件。私有仓库需要 token 允许访问 ${settings.owner}/${settings.repo}，并确认 ${settings.path} 已存在。`;
+    if (method === "GET_META") {
+      return `token 无法访问 ${settings.owner}/${settings.repo}。请重新创建 fine-grained token，并在 Repository access 中选择该仓库。`;
+    }
+    return `token 可以连接 GitHub，但无法读取 ${settings.path}。请确认 token 允许访问 ${settings.owner}/${settings.repo}，并确认该文件存在。`;
   }
   if (status === 409) {
     return "远端文件刚被更新过，请先点击“从 GitHub 读取”，再重新发布。";
