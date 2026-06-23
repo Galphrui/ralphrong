@@ -121,7 +121,7 @@ wrangler deploy
 部署 Worker 后，将 Worker 地址写入 `admin-config.js`：
 
 ```js
-window.BLOG_ADMIN_API_BASE = "https://你的-worker地址";
+window.BLOG_ADMIN_API_BASE = "https://ralphrong-blog-admin.ralphrong.workers.dev";
 ```
 
 然后提交并推送。外网后台就能用本地注册过的账号登录和编辑文章。

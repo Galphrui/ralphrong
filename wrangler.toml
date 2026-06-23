@@ -1,6 +1,8 @@
 name = "ralphrong-blog-admin"
 main = "worker/admin-worker.js"
 compatibility_date = "2026-06-23"
+workers_dev = true
+preview_urls = false
 
 [vars]
 ADMIN_ORIGIN = "https://galphrui.github.io"

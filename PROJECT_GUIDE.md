@@ -133,7 +133,7 @@
 外网后台 API 地址配置。部署 Cloudflare Worker 后，把 Worker 地址写到：
 
 ```js
-window.BLOG_ADMIN_API_BASE = "https://你的-worker地址";
+window.BLOG_ADMIN_API_BASE = "https://ralphrong-blog-admin.ralphrong.workers.dev";
 ```
 
 `local-admin-server.mjs`
