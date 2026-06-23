@@ -160,6 +160,8 @@ worker/admin-worker.js
 
 不要把 Pages 配成 `Deploy from a branch` 的 `main / root`。当前前台入口是 React + Vite 源码，必须先构建成 `dist` 后再部署；直接托管仓库根目录会导致浏览器加载未编译的 `/src/main.jsx`，页面可能一片空白。
 
+`vite.config.js` 会在构建结束时把 `admin.html`、`login.html`、后台脚本、样式和数据文件复制到 `dist`。如果外网访问 `/admin.html` 出现 404，优先检查这一步是否在最新构建里执行。
+
 ## 数据文件
 
 - `data/posts.json`：公开博客文章数据，前台会直接读取。

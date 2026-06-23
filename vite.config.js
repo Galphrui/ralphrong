@@ -1,11 +1,39 @@
 import react from '@vitejs/plugin-react'
+import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const adminStaticFiles = [
+  'admin.html',
+  'login.html',
+  'admin.js',
+  'login.js',
+  'admin-config.js',
+  'styles.css',
+  'README.md',
+  'PROJECT_GUIDE.md',
+  'data/posts.json',
+  'data/admin-users.json',
+]
+
+function copyAdminStaticFiles() {
+  return {
+    name: 'copy-admin-static-files',
+    closeBundle() {
+      adminStaticFiles.forEach((file) => {
+        const source = path.resolve(__dirname, file)
+        const target = path.resolve(__dirname, 'dist', file)
+        if (!fs.existsSync(source)) return
+        fs.mkdirSync(path.dirname(target), { recursive: true })
+        fs.copyFileSync(source, target)
+      })
+    },
+  }
+}
 
 export default ({ command }) => ({
-  plugins: [react()],
+  plugins: [react(), copyAdminStaticFiles()],
   base: process.env.VITE_BASE || (command === 'build' ? '/ralphrong/' : '/'),
   resolve: {
     alias: {
