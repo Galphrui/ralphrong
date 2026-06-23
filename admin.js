@@ -68,6 +68,7 @@ async function initRaAdmin() {
     return;
   }
 
+  document.body.classList.remove("RaAuthPending");
   RaEls.adminShell.hidden = false;
   RaEls.accountsNavLink.hidden = !RA_IS_LOCAL_ADMIN;
   RaEls.accountsPanel.hidden = !RA_IS_LOCAL_ADMIN;

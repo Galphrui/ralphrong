@@ -570,6 +570,21 @@ textarea {
   color: var(--RaText);
 }
 
+.RaAuthPending .RaTopbar,
+.RaAuthPending .RaAdminShell {
+  visibility: hidden;
+}
+
+.RaAuthPending::before {
+  align-items: center;
+  color: var(--RaMuted);
+  content: "Ra 正在验证后台会话...";
+  display: flex;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 100vh;
+}
+
 .RaTopbar {
   align-items: center;
   background: rgba(245, 247, 251, 0.94);

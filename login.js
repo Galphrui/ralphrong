@@ -18,6 +18,9 @@ initRaLogin();
 async function initRaLogin() {
   RaLoginEls.register.hidden = !RA_IS_LOCAL_ADMIN;
   RaLoginEls.registerPasswordField.hidden = !RA_IS_LOCAL_ADMIN;
+  if (!RA_API_BASE) {
+    setLoginStatus("外网后台 API 尚未配置。请部署 Worker 并在 admin-config.js 写入地址。");
+  }
 
   const session = await getSession().catch(() => null);
   if (session?.user) {
