@@ -136,8 +136,6 @@
 window.BLOG_ADMIN_API_BASE = "https://你的-worker地址";
 ```
 
-如果还没有把地址写进文件，也可以在外网登录页填写“后台 API 地址”并保存。该地址会保存在当前浏览器的 `localStorage` 中；登录后台后也可以在“设置”面板继续修改。
-
 `local-admin-server.mjs`
 
 本地后台服务。启动后会托管前台、后台和本地 API，用于本地注册账号、编辑文章和写入数据文件。

@@ -1,10 +1,9 @@
 const RA_STORAGE_KEY = "RaBlogAdminSettings";
 const RA_LOCAL_DATA_KEY = "RaBlogLocalData";
-const RA_API_BASE_KEY = "RaBlogAdminApiBase";
 const RA_LOCAL_API_BASE =
   location.hostname === "localhost" || location.hostname === "127.0.0.1" ? location.origin : "";
 const RA_IS_LOCAL_ADMIN = Boolean(RA_LOCAL_API_BASE);
-let RaApiBase = getConfiguredApiBase();
+const RA_API_BASE = (window.BLOG_ADMIN_API_BASE || RA_LOCAL_API_BASE || "").replace(/\/$/, "");
 
 let RaData = getDefaultData();
 let RaSelectedSlug = "";
@@ -26,7 +25,6 @@ const RaEls = {
   deleteAccount: document.querySelector("#RaDeleteAccountButton"),
   refreshAccounts: document.querySelector("#RaRefreshAccountsButton"),
   accountStatus: document.querySelector("#RaAccountStatus"),
-  apiBase: document.querySelector("#RaApiBaseInput"),
   repoUrl: document.querySelector("#RaRepoUrlInput"),
   applyRepoUrl: document.querySelector("#RaApplyRepoUrlButton"),
   detectRepo: document.querySelector("#RaDetectRepoButton"),
@@ -103,7 +101,6 @@ async function initRaAdmin() {
 
 function loadSettings() {
   const settings = JSON.parse(localStorage.getItem(RA_STORAGE_KEY) || "{}");
-  RaEls.apiBase.value = settings.apiBase || getSavedApiBase() || window.BLOG_ADMIN_API_BASE || "";
   RaEls.repoUrl.value = settings.repoUrl || "";
   RaEls.owner.value = settings.owner || "";
   RaEls.repo.value = settings.repo || "";
@@ -112,22 +109,9 @@ function loadSettings() {
 }
 
 function saveSettings() {
-  const apiBase = RaEls.apiBase.value.trim().replace(/\/$/, "");
-  if (apiBase && !/^https?:\/\//.test(apiBase)) {
-    setStatus("后台 API 地址需要以 http:// 或 https:// 开头。");
-    return;
-  }
-  if (apiBase) {
-    localStorage.setItem(RA_API_BASE_KEY, apiBase);
-  } else {
-    localStorage.removeItem(RA_API_BASE_KEY);
-  }
-  RaApiBase = getConfiguredApiBase();
-
   localStorage.setItem(
     RA_STORAGE_KEY,
     JSON.stringify({
-      apiBase,
       owner: RaEls.owner.value.trim(),
       repo: RaEls.repo.value.trim(),
       branch: RaEls.branch.value.trim() || "main",
@@ -136,11 +120,11 @@ function saveSettings() {
     }),
   );
   updateGitHubLinks();
-  setStatus("后台 API 和仓库设置已保存。");
+  setStatus("仓库设置已保存。后台 API 地址由 admin-config.js 固定配置。");
 }
 
 async function restoreSession() {
-  if (!RaApiBase) return "";
+  if (!RA_API_BASE) return "";
   try {
     const session = await raApi("/api/session");
     return session.user;
@@ -150,7 +134,7 @@ async function restoreSession() {
 }
 
 async function logoutAdmin() {
-  if (RaApiBase) {
+  if (RA_API_BASE) {
     await raApi("/api/logout", { method: "POST" }).catch(() => {});
   }
   location.href = "./login.html";
@@ -593,8 +577,8 @@ function getSettings() {
 }
 
 async function raApi(path, options = {}) {
-  if (!RaApiBase) throw new Error("后台 API 未配置。");
-  const response = await fetch(`${RaApiBase}${path}`, {
+  if (!RA_API_BASE) throw new Error("后台 API 未配置。");
+  const response = await fetch(`${RA_API_BASE}${path}`, {
     method: options.method || "GET",
     credentials: "include",
     headers: {
@@ -609,15 +593,6 @@ async function raApi(path, options = {}) {
     throw new Error(result.error || `后台服务请求失败：${response.status}`);
   }
   return result;
-}
-
-function getSavedApiBase() {
-  return (localStorage.getItem(RA_API_BASE_KEY) || "").trim().replace(/\/$/, "");
-}
-
-function getConfiguredApiBase() {
-  if (RA_LOCAL_API_BASE) return RA_LOCAL_API_BASE;
-  return (getSavedApiBase() || window.BLOG_ADMIN_API_BASE || "").trim().replace(/\/$/, "");
 }
 
 function createEmptyPost() {

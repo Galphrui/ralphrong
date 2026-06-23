@@ -1,12 +1,9 @@
-const RA_API_BASE_KEY = "RaBlogAdminApiBase";
 const RA_LOCAL_API_BASE =
   location.hostname === "localhost" || location.hostname === "127.0.0.1" ? location.origin : "";
 const RA_IS_LOCAL_ADMIN = Boolean(RA_LOCAL_API_BASE);
-let RaApiBase = getConfiguredApiBase();
+const RA_API_BASE = (window.BLOG_ADMIN_API_BASE || RA_LOCAL_API_BASE || "").replace(/\/$/, "");
 
 const RaLoginEls = {
-  apiBase: document.querySelector("#RaApiBaseInput"),
-  saveApiBase: document.querySelector("#RaSaveApiBaseButton"),
   user: document.querySelector("#RaLoginUserInput"),
   password: document.querySelector("#RaLoginPasswordInput"),
   registerPassword: document.querySelector("#RaRegisterPasswordInput"),
@@ -23,44 +20,15 @@ const RaLoginEls = {
 initRaLogin();
 
 async function initRaLogin() {
-  RaLoginEls.apiBase.value = getSavedApiBase() || window.BLOG_ADMIN_API_BASE || "";
-  RaLoginEls.apiBase.closest(".RaFormGrid").hidden = RA_IS_LOCAL_ADMIN;
-  RaLoginEls.saveApiBase.closest(".RaActions").hidden = RA_IS_LOCAL_ADMIN;
   RaLoginEls.register.hidden = !RA_IS_LOCAL_ADMIN;
-  if (!RaApiBase) {
-    setLoginStatus("外网后台 API 尚未配置。请先填写并保存 Worker API 地址。");
+  if (!RA_API_BASE) {
+    setLoginStatus("外网后台 API 尚未配置。请在 admin-config.js 写入 Worker 地址。");
   }
 
   const session = await getSession().catch(() => null);
   if (session?.user) {
     goAdmin();
   }
-}
-
-function getSavedApiBase() {
-  return (localStorage.getItem(RA_API_BASE_KEY) || "").trim().replace(/\/$/, "");
-}
-
-function getConfiguredApiBase() {
-  if (RA_LOCAL_API_BASE) return RA_LOCAL_API_BASE;
-  return (getSavedApiBase() || window.BLOG_ADMIN_API_BASE || "").trim().replace(/\/$/, "");
-}
-
-function saveApiBase() {
-  const value = RaLoginEls.apiBase.value.trim().replace(/\/$/, "");
-  if (!value) {
-    localStorage.removeItem(RA_API_BASE_KEY);
-    RaApiBase = getConfiguredApiBase();
-    setLoginStatus("已清空 API 地址。");
-    return;
-  }
-  if (!/^https?:\/\//.test(value)) {
-    setLoginStatus("API 地址需要以 http:// 或 https:// 开头。");
-    return;
-  }
-  localStorage.setItem(RA_API_BASE_KEY, value);
-  RaApiBase = getConfiguredApiBase();
-  setLoginStatus("API 地址已保存，可以继续登录。");
 }
 
 async function login() {
@@ -135,8 +103,8 @@ async function getSession() {
 }
 
 async function raApi(path, options = {}) {
-  if (!RaApiBase) throw new Error("后台 API 未配置。");
-  const response = await fetch(`${RaApiBase}${path}`, {
+  if (!RA_API_BASE) throw new Error("后台 API 未配置。");
+  const response = await fetch(`${RA_API_BASE}${path}`, {
     method: options.method || "GET",
     credentials: "include",
     headers: {
@@ -164,7 +132,6 @@ function setLoginStatus(message) {
 
 RaLoginEls.login.addEventListener("click", login);
 RaLoginEls.register.addEventListener("click", register);
-RaLoginEls.saveApiBase.addEventListener("click", saveApiBase);
 RaLoginEls.showReset.addEventListener("click", showResetPassword);
 RaLoginEls.resetPassword.addEventListener("click", resetPassword);
 RaLoginEls.password.addEventListener("keydown", (event) => {
