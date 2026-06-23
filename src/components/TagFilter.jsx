@@ -18,10 +18,10 @@ export default function TagFilter() {
         {/* All tag */}
         <motion.button
           onClick={() => setSelectedTag('全部')}
-          className={`px-4 py-2 rounded-full font-semibold transition-all ${
+          className={`px-4 py-2 text-sm font-bold transition-all ${
             selectedTag === '全部'
-              ? 'bg-gradient-brand text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              ? 'bg-gradient-brand text-white shadow-brand'
+              : 'border border-slate-200 bg-white text-slate-700 hover:border-primary-300 hover:text-primary-700'
           }`}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -35,10 +35,10 @@ export default function TagFilter() {
             <motion.button
               key={tag}
               onClick={() => setSelectedTag(tag)}
-              className={`px-4 py-2 rounded-full font-semibold transition-all ${
+              className={`px-4 py-2 text-sm font-bold transition-all ${
                 selectedTag === tag
-                  ? 'bg-primary-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-primary-700 text-white shadow-brand'
+                  : 'border border-slate-200 bg-white text-slate-700 hover:border-primary-300 hover:text-primary-700'
               }`}
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -55,7 +55,7 @@ export default function TagFilter() {
         {hasMore && (
           <motion.button
             onClick={() => setShowAll(!showAll)}
-            className="px-4 py-2 rounded-full font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all"
+            className="border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition-all hover:border-accent-400 hover:bg-accent-50 hover:text-accent-700"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >

@@ -2,7 +2,7 @@ import { motion } from 'framer-motion'
 import { useBlogStore } from '../store/useStore'
 
 export default function Hero() {
-  const { totalPosts, allTags } = useBlogStore()
+  const { posts, totalPosts, allTags } = useBlogStore()
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -24,20 +24,18 @@ export default function Hero() {
     },
   }
 
+  const latestPostDate = posts[0]?.date?.replaceAll('-', '.')
+
   const stats = [
     { label: '篇文章', value: totalPosts },
     { label: '个标签', value: allTags.length },
-    { label: '最近更新', value: '-' },
+    { label: '最近更新', value: latestPostDate || '-' },
   ]
 
   return (
-    <section className="py-16 relative overflow-hidden">
-      {/* Decorative elements */}
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute w-96 h-96 bg-primary-500 rounded-full blur-3xl top-10 -left-48" />
-        <div className="absolute w-96 h-96 bg-accent-400 rounded-full blur-3xl bottom-0 right-0" />
-      </div>
-
+    <section className="relative overflow-hidden border border-slate-200 bg-hero-panel px-6 py-14 shadow-soft sm:px-10 lg:px-12">
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-brand" />
+      <div className="absolute inset-0 bg-grid-pattern opacity-45" />
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -46,25 +44,27 @@ export default function Hero() {
       >
         {/* Main heading */}
         <motion.div variants={itemVariants} className="mb-8">
-          <p className="text-primary-600 font-bold text-sm uppercase tracking-wider mb-2">
-            Engineering Journal
+          <p className="mb-3 text-sm font-bold uppercase text-primary-600">
+            Android Engineering Notes
           </p>
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">
-            把技术思考沉淀成可复用的知识资产
+          <h1 className="mb-5 max-w-4xl text-4xl font-black leading-tight text-slate-950 sm:text-5xl">
+            拆解 Android 工程现场，沉淀可复现答案
           </h1>
-          <p className="text-xl text-gray-600">RA 个人技术总结与分享</p>
+          <p className="max-w-3xl text-lg leading-8 text-slate-600">
+            记录 Framework、调试、构建发布与系统适配中的真实问题，把零散经验整理成下次能直接拿来用的排查路径。
+          </p>
         </motion.div>
 
         {/* Stats cards */}
-        <motion.div variants={itemVariants} className="grid grid-cols-3 gap-4 mt-12">
+        <motion.div variants={itemVariants} className="mt-12 grid gap-4 sm:grid-cols-3">
           {stats.map((stat, idx) => (
             <motion.div
               key={idx}
-              className="glass-effect p-6 rounded-xl"
+              className="border border-slate-200 bg-white/85 p-5 shadow-sm"
               whileHover={{ y: -4 }}
             >
-              <div className="text-4xl font-bold gradient-text mb-2">{stat.value}</div>
-              <div className="text-gray-600 text-sm">{stat.label}</div>
+              <div className="mb-2 text-3xl font-black text-primary-700 sm:text-4xl">{stat.value}</div>
+              <div className="text-sm font-medium text-slate-500">{stat.label}</div>
             </motion.div>
           ))}
         </motion.div>

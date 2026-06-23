@@ -11,8 +11,8 @@ export default function PostList() {
     searchQuery,
     selectedTag,
     setSearchQuery,
-    setSelectedTag,
     setPosts,
+    setTotalPosts,
     setAllTags,
     setIsLoading,
   } = useBlogStore()
@@ -26,7 +26,8 @@ export default function PostList() {
       try {
         const data = await fetchPosts()
         setPosts(data.posts)
-        const allTags = [...new Set(data.posts.flatMap((p) => p.tags))].sort()
+        setTotalPosts(data.total)
+        const allTags = [...new Set(data.posts.flatMap((p) => p.tags || []))].sort()
         setAllTags(allTags)
       } catch (error) {
         console.error('Failed to load posts:', error)
@@ -43,7 +44,7 @@ export default function PostList() {
     let result = posts
 
     if (selectedTag !== '全部') {
-      result = result.filter((post) => post.tags.includes(selectedTag))
+      result = result.filter((post) => post.tags?.includes(selectedTag))
     }
 
     if (searchQuery) {
@@ -52,7 +53,7 @@ export default function PostList() {
         (post) =>
           post.title.toLowerCase().includes(query) ||
           post.summary.toLowerCase().includes(query) ||
-          post.tags.some((tag) => tag.toLowerCase().includes(query)),
+          post.tags?.some((tag) => tag.toLowerCase().includes(query)),
       )
     }
 
@@ -60,7 +61,7 @@ export default function PostList() {
   }, [posts, selectedTag, searchQuery])
 
   return (
-    <section className="py-12">
+    <section id="posts" className="py-12">
       {/* Search and filter */}
       <motion.div
         className="mb-8"
@@ -74,7 +75,7 @@ export default function PostList() {
             placeholder="搜索文章、标签..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 px-4 py-3 rounded-lg border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all"
+            className="flex-1 border border-slate-200 bg-white px-4 py-3 text-slate-800 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
           />
         </div>
 
@@ -84,7 +85,7 @@ export default function PostList() {
       {/* Posts grid */}
       <div>
         <div className="mb-6">
-          <h2 className="text-3xl font-bold text-gray-900">最新文章</h2>
+          <h2 className="text-3xl font-black text-slate-950">最新文章</h2>
         </div>
 
         {filteredPosts.length > 0 ? (
