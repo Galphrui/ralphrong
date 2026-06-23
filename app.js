@@ -199,11 +199,11 @@ function escapeAttr(value) {
 function getFallbackData() {
   return {
     site: {
-      title: "Tech Notes",
-      subtitle: "个人技术博客",
+      title: "Ra Android Notes",
+      subtitle: "Ra 工程实践与调试笔记",
       author: {
-        name: "作者名",
-        bio: "专注构建可靠、清晰、可维护的软件系统。",
+        name: "Ralph Rong",
+        bio: "记录 Android 开发、系统调试、工程化构建与工具链实践。",
         links: [{ label: "GitHub", url: "https://github.com/" }],
       },
     },

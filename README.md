@@ -1,6 +1,6 @@
-# Ralph Rong 个人技术博客
+# Ra Android Notes
 
-这是一个可部署到 GitHub Pages 的个人技术博客。前台是静态页面，文章数据保存在 `data/posts.json`；后台账号密码以 PBKDF2 加盐哈希形式保存在 `data/admin-users.json`。
+这是一个可部署到 GitHub Pages 的 Ra Android 工程笔记站。前台是静态页面，文章数据保存在 `data/posts.json`；后台账号密码以 PBKDF2 加盐哈希形式保存在 `data/admin-users.json`。
 
 ## 本地预览
 

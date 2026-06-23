@@ -333,11 +333,11 @@ function createNewPost() {
 function saveSiteInfo() {
   RaData.site = {
     ...RaData.site,
-    title: RaEls.siteTitle.value.trim() || "Tech Notes",
-    subtitle: RaEls.siteSubtitle.value.trim() || "个人技术博客",
+    title: RaEls.siteTitle.value.trim() || "Ra Android Notes",
+    subtitle: RaEls.siteSubtitle.value.trim() || "Ra 工程实践与调试笔记",
     author: {
       ...(RaData.site.author || {}),
-      name: RaEls.author.value.trim() || "作者名",
+      name: RaEls.author.value.trim() || "Ralph Rong",
       bio: RaEls.bio.value.trim(),
       links: RaData.site.author?.links || [{ label: "GitHub", url: "https://github.com/" }],
     },
@@ -509,10 +509,10 @@ function createEmptyPost() {
 function normalizeData(input) {
   return {
     site: {
-      title: input.site?.title || "Tech Notes",
-      subtitle: input.site?.subtitle || "个人技术博客",
+      title: input.site?.title || "Ra Android Notes",
+      subtitle: input.site?.subtitle || "Ra 工程实践与调试笔记",
       author: {
-        name: input.site?.author?.name || "作者名",
+        name: input.site?.author?.name || "Ralph Rong",
         bio: input.site?.author?.bio || "",
         links: input.site?.author?.links || [{ label: "GitHub", url: "https://github.com/" }],
       },
@@ -534,11 +534,11 @@ function normalizeData(input) {
 function getDefaultData() {
   return {
     site: {
-      title: "Tech Notes",
-      subtitle: "个人技术博客",
+      title: "Ra Android Notes",
+      subtitle: "Ra 工程实践与调试笔记",
       author: {
-        name: "作者名",
-        bio: "专注构建可靠、清晰、可维护的软件系统。这里记录从问题到方案的完整思考。",
+        name: "Ralph Rong",
+        bio: "记录 Android 开发、系统调试、工程化构建与工具链实践。这里记录从问题到方案的完整思考。",
         links: [{ label: "GitHub", url: "https://github.com/" }],
       },
     },
