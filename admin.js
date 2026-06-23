@@ -3,6 +3,7 @@ const LOCAL_DATA_KEY = "tech-blog-local-data";
 const LOCAL_ADMIN_API_BASE =
   location.hostname === "localhost" || location.hostname === "127.0.0.1" ? location.origin : "";
 const ADMIN_API_BASE = (window.BLOG_ADMIN_API_BASE || LOCAL_ADMIN_API_BASE || "").replace(/\/$/, "");
+const IS_LOCAL_ADMIN = Boolean(LOCAL_ADMIN_API_BASE);
 
 let data = getDefaultData();
 let selectedSlug = "";
@@ -19,6 +20,16 @@ const els = {
   loginTokenLink: document.querySelector("#loginTokenLink"),
   loginStatus: document.querySelector("#loginStatus"),
   logout: document.querySelector("#logoutButton"),
+  accountsNavLink: document.querySelector("#accountsNavLink"),
+  accountsPanel: document.querySelector("#accounts"),
+  accountList: document.querySelector("#accountList"),
+  accountUser: document.querySelector("#accountUserInput"),
+  accountPassword: document.querySelector("#accountPasswordInput"),
+  createAccount: document.querySelector("#createAccountButton"),
+  resetPassword: document.querySelector("#resetPasswordButton"),
+  deleteAccount: document.querySelector("#deleteAccountButton"),
+  refreshAccounts: document.querySelector("#refreshAccountsButton"),
+  accountStatus: document.querySelector("#accountStatus"),
   repoUrl: document.querySelector("#repoUrlInput"),
   applyRepoUrl: document.querySelector("#applyRepoUrlButton"),
   detectRepo: document.querySelector("#detectRepoButton"),
@@ -67,6 +78,7 @@ async function init() {
   renderSiteForm();
   renderPostList();
   selectPost(data.posts[0]?.slug || "");
+  if (IS_LOCAL_ADMIN && els.token.value) loadAccounts();
 }
 
 function loadSettings() {
@@ -129,6 +141,7 @@ async function loginAdmin() {
       setLoginStatus(`登录成功：${result.user}`);
       updateAuthView();
       await loadRemoteData();
+      if (IS_LOCAL_ADMIN) await loadAccounts();
       return;
     }
 
@@ -161,6 +174,7 @@ async function registerAdmin() {
     setLoginStatus(`注册并登录成功：${result.user}`);
     updateAuthView();
     await loadRemoteData();
+    await loadAccounts();
   } catch (error) {
     setLoginStatus(`注册失败：${error.message}`);
   }
@@ -188,11 +202,88 @@ function updateAuthView() {
   if (!isLoggedIn) {
     els.loginTokenLink.href = "./README.md";
   }
-  els.registerButton.hidden = !ADMIN_API_BASE;
-  els.registerPassword.closest("label").hidden = !ADMIN_API_BASE;
+  els.registerButton.hidden = !IS_LOCAL_ADMIN;
+  els.registerPassword.closest("label").hidden = !IS_LOCAL_ADMIN;
+  els.accountsNavLink.hidden = !IS_LOCAL_ADMIN || !isLoggedIn;
+  els.accountsPanel.hidden = !IS_LOCAL_ADMIN || !isLoggedIn;
   els.token.closest("label").hidden = true;
   els.checkAccess.hidden = true;
   els.openTokenLink.hidden = true;
+}
+
+async function loadAccounts() {
+  if (!IS_LOCAL_ADMIN) return;
+  try {
+    const result = await adminApi("/api/users");
+    renderAccounts(result.users || []);
+    setAccountStatus("账号列表已刷新。");
+  } catch (error) {
+    setAccountStatus(`读取账号失败：${error.message}`);
+  }
+}
+
+function renderAccounts(users) {
+  els.accountList.innerHTML = users
+    .map(
+      (user) => `
+        <div class="admin-item" data-account="${escapeAttr(user.username)}">
+          <strong>${escapeHtml(user.username)}</strong>
+          <small>创建：${escapeHtml(user.createdAt || "-")}${user.updatedAt ? ` · 更新：${escapeHtml(user.updatedAt)}` : ""}</small>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+async function createAccount() {
+  try {
+    const username = els.accountUser.value.trim();
+    const password = els.accountPassword.value;
+    if (!username || !password) throw new Error("请填写账号和密码。");
+    await adminApi("/api/users", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+    els.accountPassword.value = "";
+    await loadAccounts();
+    setAccountStatus("账号已新增。记得提交并推送 data/admin-users.json。");
+  } catch (error) {
+    setAccountStatus(`新增账号失败：${error.message}`);
+  }
+}
+
+async function resetAccountPassword() {
+  try {
+    const username = els.accountUser.value.trim();
+    const password = els.accountPassword.value;
+    if (!username || !password) throw new Error("请填写账号和新密码。");
+    await adminApi("/api/users/password", {
+      method: "PUT",
+      body: JSON.stringify({ username, password }),
+    });
+    els.accountPassword.value = "";
+    await loadAccounts();
+    setAccountStatus("密码已重置。记得提交并推送 data/admin-users.json。");
+  } catch (error) {
+    setAccountStatus(`重置密码失败：${error.message}`);
+  }
+}
+
+async function deleteAccount() {
+  try {
+    const username = els.accountUser.value.trim();
+    if (!username) throw new Error("请先选择或填写账号。");
+    if (!confirm(`确认删除账号 ${username}？`)) return;
+    await adminApi("/api/users", {
+      method: "DELETE",
+      body: JSON.stringify({ username }),
+    });
+    els.accountUser.value = "";
+    await loadAccounts();
+    setAccountStatus("账号已删除。记得提交并推送 data/admin-users.json。");
+  } catch (error) {
+    setAccountStatus(`删除账号失败：${error.message}`);
+  }
 }
 
 async function loadInitialData() {
@@ -770,6 +861,10 @@ function setLoginStatus(message) {
   els.loginStatus.textContent = message;
 }
 
+function setAccountStatus(message) {
+  els.accountStatus.textContent = message;
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -786,6 +881,15 @@ function escapeAttr(value) {
 els.saveSettings.addEventListener("click", saveSettings);
 els.loginButton.addEventListener("click", loginAdmin);
 els.registerButton.addEventListener("click", registerAdmin);
+els.createAccount.addEventListener("click", createAccount);
+els.resetPassword.addEventListener("click", resetAccountPassword);
+els.deleteAccount.addEventListener("click", deleteAccount);
+els.refreshAccounts.addEventListener("click", loadAccounts);
+els.accountList.addEventListener("click", (event) => {
+  const item = event.target.closest("[data-account]");
+  if (!item) return;
+  els.accountUser.value = item.dataset.account;
+});
 els.loginToken.addEventListener("keydown", (event) => {
   if (event.key === "Enter") loginAdmin();
 });

@@ -20,6 +20,7 @@
         <a href="./index.html">前台</a>
         <a href="#settings">设置</a>
         <a href="#editor">编辑</a>
+        <a href="#accounts" id="accountsNavLink">账号</a>
         <button id="logoutButton" class="nav-button" type="button">退出</button>
       </nav>
     </header>
@@ -209,6 +210,34 @@
         <div class="actions-row">
           <button id="saveSiteButton" type="button">保存站点信息</button>
         </div>
+      </section>
+
+      <section class="admin-panel" id="accounts">
+        <div class="section-heading">
+          <p class="eyebrow">Accounts</p>
+          <h2>账号管理</h2>
+        </div>
+        <p class="hint">
+          账号管理只在本地后台服务中可用。保存后请提交并推送 `data/admin-users.json`，外网后台会读取这些哈希数据登录。
+        </p>
+        <div class="admin-list" id="accountList"></div>
+        <div class="form-grid">
+          <label>
+            账号
+            <input id="accountUserInput" placeholder="new-admin" />
+          </label>
+          <label>
+            新密码
+            <input id="accountPasswordInput" type="password" autocomplete="new-password" />
+          </label>
+        </div>
+        <div class="actions-row">
+          <button id="createAccountButton" type="button">新增账号</button>
+          <button id="resetPasswordButton" class="secondary-button" type="button">重置密码</button>
+          <button id="deleteAccountButton" class="danger-button" type="button">删除账号</button>
+          <button id="refreshAccountsButton" class="secondary-button" type="button">刷新账号</button>
+        </div>
+        <p class="status" id="accountStatus" role="status"></p>
       </section>
     </main>
 

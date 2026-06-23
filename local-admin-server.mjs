@@ -48,6 +48,40 @@ async function handleApi(request, response) {
     return;
   }
 
+  if (url.pathname === "/api/users" && request.method === "GET") {
+    requireSession(request);
+    const store = await readUsers();
+    sendJson(response, 200, {
+      ok: true,
+      users: store.users.map(publicUser),
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/users" && request.method === "POST") {
+    requireSession(request);
+    const body = await readJson(request);
+    const result = await register(body.username, body.password);
+    sendJson(response, 200, { ok: true, user: publicUser(result.user) });
+    return;
+  }
+
+  if (url.pathname === "/api/users/password" && request.method === "PUT") {
+    requireSession(request);
+    const body = await readJson(request);
+    const result = await changePassword(body.username, body.password);
+    sendJson(response, 200, { ok: true, user: publicUser(result.user) });
+    return;
+  }
+
+  if (url.pathname === "/api/users" && request.method === "DELETE") {
+    requireSession(request);
+    const body = await readJson(request);
+    await deleteUser(body.username);
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
   if (url.pathname === "/api/login" && request.method === "POST") {
     const body = await readJson(request);
     const result = await login(body.username, body.password);
@@ -96,15 +130,43 @@ async function register(username, password) {
 
   const salt = randomBytes(16).toString("hex");
   const iterations = 210000;
-  store.users.push({
+  const user = {
     username: cleanUser,
     passwordHash: hashPassword(password, salt, iterations),
     salt,
     iterations,
     createdAt: new Date().toISOString(),
-  });
+  };
+  store.users.push(user);
   await writeUsers(store);
-  return { username: cleanUser };
+  return { username: cleanUser, user };
+}
+
+async function changePassword(username, password) {
+  const cleanUser = normalizeUsername(username);
+  validatePassword(password);
+  const store = await readUsers();
+  const user = store.users.find((item) => item.username.toLowerCase() === cleanUser.toLowerCase());
+  if (!user) throw httpError(404, "账号不存在。");
+
+  user.salt = randomBytes(16).toString("hex");
+  user.iterations = 210000;
+  user.passwordHash = hashPassword(password, user.salt, user.iterations);
+  user.updatedAt = new Date().toISOString();
+  await writeUsers(store);
+  return { user };
+}
+
+async function deleteUser(username) {
+  const cleanUser = normalizeUsername(username);
+  const store = await readUsers();
+  if (store.users.length <= 1) {
+    throw httpError(400, "至少需要保留一个后台账号。");
+  }
+  const nextUsers = store.users.filter((item) => item.username.toLowerCase() !== cleanUser.toLowerCase());
+  if (nextUsers.length === store.users.length) throw httpError(404, "账号不存在。");
+  store.users = nextUsers;
+  await writeUsers(store);
 }
 
 async function login(username, password) {
@@ -207,6 +269,14 @@ function validatePassword(password) {
 
 function hashPassword(password, salt, iterations) {
   return pbkdf2Sync(String(password), salt, iterations, 32, "sha256").toString("hex");
+}
+
+function publicUser(user) {
+  return {
+    username: user.username,
+    createdAt: user.createdAt || "",
+    updatedAt: user.updatedAt || "",
+  };
 }
 
 function fileSha(content) {

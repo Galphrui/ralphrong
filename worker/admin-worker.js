@@ -1,7 +1,7 @@
 const DEFAULT_BRANCH = "main";
 const DEFAULT_DATA_PATH = "data/posts.json";
+const DEFAULT_USERS_PATH = "data/admin-users.json";
 const DEFAULT_SESSION_SECONDS = 60 * 60 * 8;
-const DEFAULT_PBKDF2_ITERATIONS = 210000;
 
 export default {
   async fetch(request, env) {
@@ -45,21 +45,18 @@ async function login(request, env) {
   const body = await request.json();
   const username = String(body.username || "").trim();
   const password = String(body.password || "");
-  const expectedUser = required(env.ADMIN_USERNAME, "ADMIN_USERNAME");
+  const users = await readGitHubUsers(env);
+  const user = users.users.find((item) => item.username.toLowerCase() === username.toLowerCase());
 
-  if (username.toLowerCase() !== expectedUser.toLowerCase()) {
-    throw httpError(401, "账号或密码错误。");
-  }
-
-  const ok = await verifyPassword(password, env);
+  const ok = user ? await verifyUserPassword(password, user) : false;
   if (!ok) throw httpError(401, "账号或密码错误。");
 
   const sessionSeconds = Number(env.SESSION_SECONDS || DEFAULT_SESSION_SECONDS);
   const expiresAt = Math.floor(Date.now() / 1000) + sessionSeconds;
-  const cookie = await signSession({ sub: expectedUser, exp: expiresAt }, env);
+  const cookie = await signSession({ sub: user.username, exp: expiresAt }, env);
 
   return json(
-    { ok: true, user: expectedUser },
+    { ok: true, user: user.username },
     request,
     env,
     200,
@@ -91,9 +88,17 @@ async function requireSession(request, env) {
 }
 
 async function readGitHubData(env) {
+  return readGitHubJson(env, githubInfo(env).path);
+}
+
+async function readGitHubUsers(env) {
+  return readGitHubJson(env, env.GITHUB_USERS_PATH || DEFAULT_USERS_PATH).then((remote) => remote.data);
+}
+
+async function readGitHubJson(env, path) {
   const info = githubInfo(env);
   const response = await fetch(
-    `https://api.github.com/repos/${info.owner}/${info.repo}/contents/${info.path}?ref=${encodeURIComponent(info.branch)}`,
+    `https://api.github.com/repos/${info.owner}/${info.repo}/contents/${path}?ref=${encodeURIComponent(info.branch)}`,
     {
       headers: githubHeaders(env),
     },
@@ -147,21 +152,19 @@ function githubHeaders(env) {
   };
 }
 
-async function verifyPassword(password, env) {
-  const hash = await derivePasswordHash(password, env);
-  return timingSafeEqual(hash, required(env.ADMIN_PASSWORD_HASH, "ADMIN_PASSWORD_HASH"));
+async function verifyUserPassword(password, user) {
+  const hash = await derivePasswordHash(password, user.salt, user.iterations);
+  return timingSafeEqual(hash, user.passwordHash);
 }
 
-async function derivePasswordHash(password, env) {
-  const iterations = Number(env.PBKDF2_ITERATIONS || DEFAULT_PBKDF2_ITERATIONS);
-  const salt = required(env.ADMIN_PASSWORD_SALT, "ADMIN_PASSWORD_SALT");
+async function derivePasswordHash(password, salt, iterations) {
   const key = await crypto.subtle.importKey("raw", textBytes(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits(
     {
       name: "PBKDF2",
       hash: "SHA-256",
       salt: textBytes(salt),
-      iterations,
+      iterations: Number(iterations),
     },
     key,
     256,

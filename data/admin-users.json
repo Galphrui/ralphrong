@@ -1,4 +1,12 @@
 {
   "version": 1,
-  "users": []
+  "users": [
+    {
+      "username": "Galphrui",
+      "passwordHash": "79b0b383a95d01a88ff70bbfadd95d374688b1a7f117284f100b74730e585785",
+      "salt": "30a830b9992b14bd858f0f17bea1f3fb",
+      "iterations": 210000,
+      "createdAt": "2026-06-23T09:51:55.380Z"
+    }
+  ]
 }

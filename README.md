@@ -1,6 +1,6 @@
 # Ralph Rong 个人技术博客
 
-这是一个可部署到 GitHub Pages 的个人技术博客。前台是静态页面，文章数据保存在 `data/posts.json`；后台管理只在本地运行，账号密码以加盐哈希形式保存在 `data/admin-users.json`。
+这是一个可部署到 GitHub Pages 的个人技术博客。前台是静态页面，文章数据保存在 `data/posts.json`；后台账号密码以 PBKDF2 加盐哈希形式保存在 `data/admin-users.json`。
 
 ## 本地预览
 
@@ -13,11 +13,11 @@ node local-admin-server.mjs
 - 前台：`http://localhost:8080/`
 - 后台：`http://localhost:8080/admin.html`
 
-## 后台账号密码
+## 后台账号体系
 
-后台管理在本地进行，公开站点只展示博客。这样可以避免把后台登录逻辑和写入权限暴露到公网。
+账号控制只在本地进行，外网后台只允许已经注册过的账号登录和管理博客内容。
 
-启动本地后台：
+本地启动后台：
 
 ```bash
 node local-admin-server.mjs
@@ -29,18 +29,65 @@ node local-admin-server.mjs
 http://localhost:8080/admin.html
 ```
 
-首次使用点击“注册账号”。账号数据会写入：
+首次使用点击“注册账号”。本地后台还提供账号管理，可以新增账号、重置密码、删除账号。账号数据会写入：
 
 ```text
 data/admin-users.json
 ```
 
-这个文件只保存 PBKDF2 加盐哈希，不保存明文密码。提交到 GitHub 后，仓库里看到的也是加密后的账号数据。
+这个文件只保存 PBKDF2 加盐哈希，不保存明文密码。提交到 GitHub 后，仓库里看到的也是哈希后的账号数据。
 
-编辑文章后点击“发布到 GitHub”，本地后台会把内容写入 `data/posts.json`。然后执行：
+本地账号管理后执行：
 
 ```bash
-git add data/posts.json data/admin-users.json
+git add data/admin-users.json
+git commit -m "update admin accounts"
+git push
+```
+
+外网后台会读取 GitHub 上的 `data/admin-users.json` 来验证登录。
+
+## 外网后台管理
+
+外网后台地址：
+
+```text
+https://galphrui.github.io/ralphrong/admin.html
+```
+
+GitHub Pages 是纯静态托管，不能单独安全地完成登录和写入。因此外网后台需要部署 `worker/admin-worker.js` 作为 API：
+
+- 登录时 Worker 从 GitHub 读取 `data/admin-users.json`，用哈希验证账号密码。
+- Worker 不提供注册、删号、改密码接口。
+- Worker 使用 GitHub token secret 写入 `data/posts.json`，token 不暴露给浏览器。
+
+部署 Worker：
+
+```bash
+npm install -g wrangler
+wrangler login
+wrangler secret put SESSION_SECRET
+wrangler secret put GITHUB_TOKEN
+wrangler deploy
+```
+
+其中：
+
+- `SESSION_SECRET` 可以用 `openssl rand -hex 32` 生成。
+- `GITHUB_TOKEN` 使用 fine-grained token，Repository access 选择 `Galphrui/ralphrong`，Contents 设置为 `Read and write`。
+
+部署 Worker 后，将 Worker 地址写入 `admin-config.js`：
+
+```js
+window.BLOG_ADMIN_API_BASE = "https://你的-worker地址";
+```
+
+然后提交并推送。外网后台就能用本地注册过的账号登录和编辑文章。
+
+如果在本地后台编辑文章，点击发布会写入本地 `data/posts.json`。然后执行：
+
+```bash
+git add data/posts.json
 git commit -m "update blog content"
 git push
 ```
@@ -55,13 +102,13 @@ GitHub Pages 会自动更新公开博客。
 https://galphrui.github.io/ralphrong/
 ```
 
-GitHub Pages 是纯静态托管，不能安全地直接保存账号密码。如果未来需要公网后台登录和远程发布，需要部署一个真正的后端。本项目保留了 Cloudflare Worker 示例：
+Cloudflare Worker 示例：
 
 ```text
 worker/admin-worker.js
 ```
 
-但默认推荐使用本地后台模式。
+账号管理仍然只通过本地后台完成。
 
 ## GitHub Pages 部署
 
