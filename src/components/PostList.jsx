@@ -36,21 +36,21 @@ export default function PostList() {
   }, [posts, selectedTag, searchQuery])
 
   return (
-    <section id="posts" className="py-12">
+    <section id="posts" className="py-8">
       {/* Search and filter */}
       <motion.div
-        className="mb-8"
+        className="mb-6"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3 }}
       >
-        <div className="flex gap-4 mb-6">
+        <div className="mb-5 flex gap-4">
           <input
             type="search"
             placeholder="搜索文章、标签..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 border border-slate-200 bg-white px-4 py-3 text-slate-800 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+            className="flex-1 border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
           />
         </div>
 
@@ -59,8 +59,8 @@ export default function PostList() {
 
       {/* Posts grid */}
       <div>
-        <div className="mb-6">
-          <h2 className="text-3xl font-black text-slate-950">最新文章</h2>
+        <div className="mb-5">
+          <h2 className="text-2xl font-black text-slate-950">最新文章</h2>
         </div>
 
         {filteredPosts.length > 0 ? (

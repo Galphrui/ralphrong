@@ -37,19 +37,19 @@ export default function VisitStats() {
   }, [])
 
   return (
-    <section className="border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="border border-slate-200 bg-white p-4 shadow-sm">
       <p className="mb-3 text-xs font-black uppercase text-primary-700">Ra Visit Record</p>
       <div className="grid gap-3">
         <div>
-          <div className="text-2xl font-black text-slate-950">{record.visits}</div>
+          <div className="text-xl font-black text-slate-950">{record.visits}</div>
           <div className="text-xs font-medium text-slate-500">访问次数</div>
         </div>
         <div>
-          <div className="text-2xl font-black text-slate-950">{record.visitors}</div>
+          <div className="text-xl font-black text-slate-950">{record.visitors}</div>
           <div className="text-xs font-medium text-slate-500">访问人数（本机）</div>
         </div>
         <div>
-          <div className="text-lg font-black text-slate-950">{formatDateTime(record.lastVisitAt)}</div>
+          <div className="text-base font-black text-slate-950">{formatDateTime(record.lastVisitAt)}</div>
           <div className="text-xs font-medium text-slate-500">最近访问时间</div>
         </div>
         <div className="border-t border-slate-100 pt-3 text-xs font-medium text-slate-500">

@@ -2,6 +2,12 @@
 
 这是一个可部署到 GitHub Pages 的 Ra Android 工程笔记站。前台是静态页面，文章数据保存在 `data/posts.json`；后台账号密码以 PBKDF2 加盐哈希形式保存在 `data/admin-users.json`。
 
+完整代码结构、模块职责、构建、发布和部署流程见：
+
+```text
+PROJECT_GUIDE.md
+```
+
 ## 本地预览
 
 前台 React/Vite 开发服务：

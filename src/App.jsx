@@ -66,7 +66,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gradient-hero text-slate-900">
       <Navigation />
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
         {route.name === 'profile' ? (
           <ProfilePage />
         ) : route.name === 'post' ? (

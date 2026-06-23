@@ -3,8 +3,8 @@ import { motion } from 'framer-motion'
 export default function PostCard({ post, onClick }) {
   return (
     <motion.article
-      className="cursor-pointer border border-slate-200 bg-white p-6 shadow-sm hover:border-primary-300 hover:shadow-soft"
-      whileHover={{ y: -3 }}
+      className="cursor-pointer border border-slate-200 bg-white p-5 shadow-sm hover:border-primary-300 hover:shadow-soft"
+      whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
       initial={{ opacity: 0, y: 20 }}
@@ -12,12 +12,12 @@ export default function PostCard({ post, onClick }) {
       transition={{ duration: 0.5 }}
     >
       {/* Meta */}
-      <div className="mb-3 text-sm font-medium text-slate-500">
+      <div className="mb-2 text-sm font-medium text-slate-500">
         {post.date} · {post.readingMinutes || 3} 分钟阅读
       </div>
 
       {/* Title */}
-      <h3 className="mb-3 line-clamp-2 text-2xl font-black text-slate-950">
+      <h3 className="mb-3 line-clamp-2 text-xl font-black leading-tight text-slate-950">
         {post.title}
       </h3>
 
