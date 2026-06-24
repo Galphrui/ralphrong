@@ -3,6 +3,7 @@ const DEFAULT_DATA_PATH = "data/posts.json";
 const DEFAULT_USERS_PATH = "data/admin-users.json";
 const DEFAULT_SESSION_SECONDS = 60 * 60 * 8;
 const PASSWORD_ITERATIONS = 100000;
+const ADMIN_USER_INDEX_KEY = "admin-user-index";
 
 export default {
   async fetch(request, env) {
@@ -141,8 +142,24 @@ async function resetPassword(request, env) {
   user.salt = next.salt;
   user.iterations = next.iterations;
   user.updatedAt = new Date().toISOString();
-  await writeGitHubUsers(env, users, remote.sha, "chore: reset admin password");
-  return json({ ok: true, user: user.username }, request, env);
+  if (env.GITHUB_TOKEN) {
+    await writeGitHubUsers(env, users, remote.sha, "chore: reset admin password");
+  } else {
+    await writeAdminUserOverride(env, user);
+  }
+
+  const sessionSeconds = Number(env.SESSION_SECONDS || DEFAULT_SESSION_SECONDS);
+  const expiresAt = Math.floor(Date.now() / 1000) + sessionSeconds;
+  const cookie = await signSession({ sub: user.username, exp: expiresAt }, env);
+  return json(
+    { ok: true, user: user.username, sessionToken: cookie },
+    request,
+    env,
+    200,
+    {
+      "Set-Cookie": `blog_admin_session=${cookie}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=${sessionSeconds}`,
+    },
+  );
 }
 
 function logout(request, env) {
@@ -173,7 +190,8 @@ async function readGitHubData(env) {
 }
 
 async function readGitHubUsers(env) {
-  return readGitHubUsersRemote(env).then((remote) => remote.data);
+  const remote = await readGitHubUsersRemote(env);
+  return applyAdminUserOverrides(env, remote.data);
 }
 
 async function readGitHubUsersRemote(env) {
@@ -251,6 +269,47 @@ async function updateResetCode(env, resetCode) {
     updatedAt: new Date().toISOString(),
   };
   await writeGitHubUsers(env, remote.data, remote.sha, "chore: update admin reset code");
+}
+
+async function applyAdminUserOverrides(env, users) {
+  if (!env.VISIT_KV) return users;
+  const index = await env.VISIT_KV.get(ADMIN_USER_INDEX_KEY, "json").catch(() => []);
+  if (!Array.isArray(index) || !index.length) return users;
+
+  const byName = new Map(users.users.map((user) => [user.username.toLowerCase(), user]));
+  for (const username of index) {
+    const override = await env.VISIT_KV.get(adminUserKey(username), "json").catch(() => null);
+    if (!override?.username || !override?.passwordHash || !override?.salt) continue;
+    byName.set(override.username.toLowerCase(), {
+      ...(byName.get(override.username.toLowerCase()) || {}),
+      ...override,
+    });
+  }
+
+  return {
+    ...users,
+    users: [...byName.values()],
+  };
+}
+
+async function writeAdminUserOverride(env, user) {
+  if (!env.VISIT_KV) throw httpError(500, "Worker 缺少 VISIT_KV 绑定，无法保存外网密码重置。");
+  const cleanUser = {
+    username: user.username,
+    passwordHash: user.passwordHash,
+    salt: user.salt,
+    iterations: user.iterations,
+    createdAt: user.createdAt || "",
+    updatedAt: user.updatedAt || new Date().toISOString(),
+  };
+  await env.VISIT_KV.put(adminUserKey(cleanUser.username), JSON.stringify(cleanUser));
+  const index = await env.VISIT_KV.get(ADMIN_USER_INDEX_KEY, "json").catch(() => []);
+  const nextIndex = Array.from(new Set([...(Array.isArray(index) ? index : []), cleanUser.username.toLowerCase()]));
+  await env.VISIT_KV.put(ADMIN_USER_INDEX_KEY, JSON.stringify(nextIndex));
+}
+
+function adminUserKey(username) {
+  return `admin-user:${String(username || "").toLowerCase()}`;
 }
 
 function githubInfo(env) {

@@ -55,7 +55,8 @@ async function handleApi(request, response) {
   if (url.pathname === "/api/password-reset" && request.method === "POST") {
     const body = await readJson(request);
     const result = await resetPasswordWithCode(body.username, body.password, body.resetCode);
-    sendJson(response, 200, { ok: true, user: publicUser(result.user) });
+    const sessionToken = setSession(response, result.user.username);
+    sendJson(response, 200, { ok: true, user: result.user.username, sessionToken });
     return;
   }
 

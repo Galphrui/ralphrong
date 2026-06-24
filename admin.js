@@ -189,7 +189,7 @@ async function loadRemoteData() {
   }
 }
 
-async function publishData() {
+async function publishData(target = "posts") {
   try {
     saveSettings();
     const result = RA_IS_LOCAL_ADMIN
@@ -201,10 +201,12 @@ async function publishData() {
           method: "PUT",
           body: JSON.stringify({ data: RaData }),
         });
-    setPublishResult(result);
+    setPublishResult(result, target);
   } catch (error) {
-    setStatus(`发布失败：${error.message}`);
-    setDeployStatus(`发布失败：${error.message}`);
+    const message = `发布失败：${error.message}`;
+    setStatus(message);
+    setDeployStatus(message);
+    setTargetStatus(target, message);
   }
 }
 
@@ -441,7 +443,7 @@ function saveSiteInfo() {
 }
 
 async function publishSiteInfo() {
-  if (saveSiteInfo()) await publishData();
+  if (saveSiteInfo()) await publishData("site");
 }
 
 function lines(value) {
@@ -488,7 +490,7 @@ function saveProfileInfo() {
 }
 
 async function publishProfileInfo() {
-  if (saveProfileInfo()) await publishData();
+  if (saveProfileInfo()) await publishData("profile");
 }
 
 function formatProfileJson() {
@@ -663,7 +665,7 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function setPublishResult(result) {
+function setPublishResult(result, target = "posts") {
   const deploy = result.deploy;
   if (RA_IS_LOCAL_ADMIN && deploy) {
     const files = deploy.changedFiles?.length ? `变更文件：${deploy.changedFiles.join(", ")}。` : "";
@@ -672,12 +674,19 @@ function setPublishResult(result) {
       : `数据已写入，${deploy.message}`;
     setStatus(message);
     setDeployStatus(message);
+    setTargetStatus(target, message);
     return;
   }
 
   const message = "发布成功：已写入 GitHub，GitHub Pages 稍后自动更新。";
   setStatus(message);
   setDeployStatus(message);
+  setTargetStatus(target, message);
+}
+
+function setTargetStatus(target, message) {
+  if (target === "profile") setProfileStatus(message);
+  if (target === "site") setSiteStatus(message);
 }
 
 function createEmptyPost() {

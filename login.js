@@ -46,6 +46,14 @@ async function login() {
     setLoginStatus(`登录成功：${result.user}`);
     goAdmin();
   } catch (error) {
+    if (shouldAutoResetAfterLoginFailure(error)) {
+      setLoginStatus("检测到旧密码哈希需要迁移，正在使用重置指令更新密码...");
+      await resetPassword({ autoLogin: true });
+      return;
+    }
+    if (isLegacyHashError(error)) {
+      showResetPassword();
+    }
     setLoginStatus(`登录失败：${error.message}`);
   }
 }
@@ -79,7 +87,7 @@ function showResetPassword() {
   setLoginStatus("请输入账号、新密码、确认密码和重置指令。");
 }
 
-async function resetPassword() {
+async function resetPassword(options = {}) {
   try {
     const username = RaLoginEls.user.value.trim();
     const password = RaLoginEls.password.value;
@@ -95,7 +103,14 @@ async function resetPassword() {
       body: JSON.stringify({ username, password, resetCode }),
     });
     RaLoginEls.resetCode.value = "";
-    setLoginStatus(`密码已重置：${result.user}。请使用新密码登录。`);
+    saveSessionToken(result.sessionToken);
+    if (options.autoLogin && result.sessionToken) {
+      setLoginStatus(`密码已迁移并登录：${result.user}`);
+      goAdmin();
+      return;
+    }
+    setLoginStatus(`密码已重置：${result.user}。${result.sessionToken ? "正在进入后台。" : "请使用新密码登录。"}`);
+    if (result.sessionToken) goAdmin();
   } catch (error) {
     setLoginStatus(`重置失败：${error.message}`);
   }
@@ -137,6 +152,19 @@ function authHeaders() {
 
 function saveSessionToken(token) {
   if (token) localStorage.setItem(RA_SESSION_TOKEN_KEY, token);
+}
+
+function shouldAutoResetAfterLoginFailure(error) {
+  return (
+    isLegacyHashError(error) &&
+    !RaLoginEls.resetCodeField.hidden &&
+    RaLoginEls.resetCode.value &&
+    RaLoginEls.registerPassword.value
+  );
+}
+
+function isLegacyHashError(error) {
+  return String(error?.message || "").includes("密码哈希");
 }
 
 function goAdmin() {

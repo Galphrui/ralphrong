@@ -100,6 +100,7 @@ https://galphrui.github.io/ralphrong/login.html
 GitHub Pages 是纯静态托管，不能单独安全地完成登录和写入。因此外网后台需要部署 `worker/admin-worker.js` 作为 API：
 
 - 登录时 Worker 从 GitHub 读取 `data/admin-users.json`，用哈希验证账号密码。
+- 如果旧账号哈希超过 Cloudflare Worker 的 PBKDF2 上限，登录页会引导用重置指令迁移密码；没有 `GITHUB_TOKEN` 时，Worker 会把迁移后的账号哈希写入 KV，后续外网登录直接使用 KV 覆盖项。
 - Worker 不提供注册、删号、改密码接口。
 - Worker 使用 GitHub token secret 写入 `data/posts.json`，token 不暴露给浏览器。
 
