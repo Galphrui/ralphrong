@@ -21,6 +21,13 @@
       "salt": "1a9701b7341ee1dd6d3ae7f52a8969b2",
       "iterations": 210000,
       "createdAt": "2026-06-23T16:34:02.437Z"
+    },
+    {
+      "username": "ruiao",
+      "passwordHash": "038f36f84629d76bc45a4815fcd7edb5d7d5078ca32fe4f8a71c30f298ac6726",
+      "salt": "2a8522cfbfb8f50ae57f437ecc87b6e0",
+      "iterations": 100000,
+      "createdAt": "2026-06-24T02:32:31.029Z"
     }
   ]
 }
