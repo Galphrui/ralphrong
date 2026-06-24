@@ -145,6 +145,4 @@ app.get('/api/health', (req, res) => {
 })
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Blog API server running on http://localhost:${PORT}`)
-})
+export default app
