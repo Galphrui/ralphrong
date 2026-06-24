@@ -632,7 +632,7 @@ textarea {
   align-items: center;
   color: var(--RaMuted);
   display: flex;
-  gap: 18px;
+  gap: 12px;
   font-weight: 800;
 }
 
@@ -641,15 +641,52 @@ textarea {
   color: var(--RaInk);
 }
 
-.RaNavButton {
+.RaTopLink {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.RaAdminTabs {
+  align-items: center;
+  background: #e8eef5;
+  border: 1px solid var(--RaLine);
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+}
+
+.RaTabButton {
   background: transparent;
+  border-radius: 6px;
   color: var(--RaMuted);
-  min-height: auto;
-  padding: 0;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.RaTabButton:hover {
+  background: #f8fafc;
+  color: var(--RaInk);
+}
+
+.RaTabButton.RaActive {
+  background: var(--RaPanel);
+  box-shadow: 0 1px 3px rgba(24, 34, 48, 0.12);
+  color: var(--RaPrimaryStrong);
+}
+
+.RaNavButton {
+  background: var(--RaInk);
+  color: #fff;
+  min-height: 38px;
+  padding: 0 14px;
 }
 
 .RaNavButton:hover {
-  background: transparent;
+  background: var(--RaPrimaryStrong);
+  color: #fff;
 }
 
 .RaLoginShell {
@@ -676,17 +713,24 @@ textarea {
 
 .RaAdminShell {
   margin: 0 auto;
-  max-width: 1280px;
-  padding: 40px clamp(18px, 4vw, 56px);
+  max-width: 1520px;
+  padding: 24px clamp(18px, 3vw, 44px) 40px;
 }
 
 .RaPanel {
   padding: 22px;
 }
 
-.RaPanel + .RaPanel,
-.RaAdminGrid + .RaPanel {
-  margin-top: 22px;
+.RaWorkspacePanel {
+  display: block;
+}
+
+.RaWorkspaceHeader {
+  align-items: end;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin-bottom: 18px;
 }
 
 .RaSectionHeading {
@@ -712,6 +756,25 @@ textarea {
 .RaHint,
 .RaStatus {
   color: var(--RaMuted);
+}
+
+.RaPostCommands {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(260px, 460px) auto auto;
+}
+
+.RaSearchField {
+  min-width: 0;
+}
+
+.RaCountText {
+  color: var(--RaMuted);
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 4px;
 }
 
 .RaQuickConnect {
@@ -799,6 +862,36 @@ textarea {
   background: #1e40af;
 }
 
+.RaPage .RaTabButton {
+  background: transparent;
+  color: var(--RaMuted);
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.RaPage .RaTabButton:hover {
+  background: #f8fafc;
+  color: var(--RaInk);
+}
+
+.RaPage .RaTabButton.RaActive {
+  background: var(--RaPanel);
+  box-shadow: 0 1px 3px rgba(24, 34, 48, 0.12);
+  color: var(--RaPrimaryStrong);
+}
+
+.RaPage .RaNavButton {
+  background: var(--RaInk);
+  color: #fff;
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.RaPage .RaNavButton:hover {
+  background: var(--RaPrimaryStrong);
+  color: #fff;
+}
+
 .RaFileButton input {
   display: none;
 }
@@ -806,15 +899,44 @@ textarea {
 .RaAdminGrid {
   align-items: start;
   display: grid;
-  gap: 22px;
-  grid-template-columns: 330px minmax(0, 1fr);
-  margin-top: 22px;
+  gap: 18px;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  margin-top: 0;
+  transition: grid-template-columns 0.2s ease;
+}
+
+.RaAdminGrid.RaPostListCollapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.RaAdminGrid.RaPostListCollapsed .RaPostListPanel {
+  display: none;
+}
+
+.RaPostListPanel {
+  max-height: calc(100vh - 150px);
+  overflow: hidden;
+  position: sticky;
+  top: 96px;
+}
+
+.RaCompactHeading {
+  align-items: start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.RaCompactHeading .RaEyebrow {
+  grid-column: 1 / -1;
 }
 
 .RaList {
   display: grid;
   gap: 10px;
   margin-top: 16px;
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .RaItem {
@@ -823,6 +945,15 @@ textarea {
   border-radius: 8px;
   cursor: pointer;
   padding: 12px;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.RaItem:hover {
+  border-color: rgba(11, 122, 117, 0.4);
+  transform: translateY(-1px);
 }
 
 .RaItem.RaActive {
@@ -839,6 +970,15 @@ textarea {
   color: var(--RaMuted);
 }
 
+.RaEmptyState {
+  border: 1px dashed var(--RaLine);
+  border-radius: 8px;
+  color: var(--RaMuted);
+  font-weight: 800;
+  padding: 18px;
+  text-align: center;
+}
+
 @media (max-width: 860px) {
   .RaTopbar,
   .RaNav {
@@ -846,8 +986,31 @@ textarea {
     flex-direction: column;
   }
 
+  .RaAdminTabs {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .RaWorkspaceHeader,
+  .RaPostCommands {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
   .RaFormGrid,
   .RaAdminGrid {
     grid-template-columns: 1fr;
+  }
+
+  .RaPostListPanel {
+    max-height: none;
+    position: static;
+  }
+
+  .RaList {
+    max-height: 320px;
   }
 }

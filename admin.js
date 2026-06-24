@@ -7,14 +7,19 @@ const RA_API_BASE = (window.BLOG_ADMIN_API_BASE || RA_LOCAL_API_BASE || "").repl
 const RA_SESSION_TOKEN_KEY = "RaBlogAdminSessionToken";
 const RA_PUBLISH_POLL_ATTEMPTS = 36;
 const RA_PUBLISH_POLL_DELAY_MS = 5000;
+const RA_DEFAULT_PANEL = "posts";
 
 let RaData = getDefaultData();
 let RaSelectedSlug = "";
 let RaRemoteSha = "";
+let RaPostSearchQuery = "";
+let RaPostListCollapsed = false;
 
 const RaEls = {
   adminShell: document.querySelector("#RaAdminShell"),
   logout: document.querySelector("#RaLogoutButton"),
+  tabButtons: document.querySelectorAll("[data-ra-admin-tab]"),
+  tabPanels: document.querySelectorAll("[data-ra-admin-panel]"),
   accountsNavLink: document.querySelector("#RaAccountsNavLink"),
   accountsPanel: document.querySelector("#RaAccountsPanel"),
   localAccountTools: document.querySelector("#RaLocalAccountTools"),
@@ -43,6 +48,10 @@ const RaEls = {
   openRepo: document.querySelector("#RaOpenRepoButton"),
   download: document.querySelector("#RaDownloadButton"),
   importInput: document.querySelector("#RaImportInput"),
+  postWorkspace: document.querySelector("#RaPostWorkspace"),
+  postSearch: document.querySelector("#RaPostSearchInput"),
+  togglePostList: document.querySelector("#RaTogglePostListButton"),
+  postCount: document.querySelector("#RaPostCountText"),
   adminPostList: document.querySelector("#RaAdminPostList"),
   newPost: document.querySelector("#RaNewPostButton"),
   form: document.querySelector("#RaPostForm"),
@@ -96,9 +105,10 @@ async function initRaAdmin() {
   document.body.classList.remove("RaAuthPending");
   RaEls.adminShell.hidden = false;
   RaEls.accountsNavLink.hidden = false;
-  RaEls.accountsPanel.hidden = false;
   RaEls.localAccountTools.hidden = !RA_IS_LOCAL_ADMIN;
   RaEls.syncData.hidden = !RA_IS_LOCAL_ADMIN;
+  showAdminPanel(getPanelFromHash());
+  updatePostListCollapsed();
 
   await loadInitialData();
   renderSiteForm();
@@ -107,6 +117,41 @@ async function initRaAdmin() {
   selectPost(RaData.posts[0]?.slug || "");
   await loadRemoteData();
   if (RA_IS_LOCAL_ADMIN) await loadAccounts();
+}
+
+function getPanelFromHash() {
+  const raw = window.location.hash.replace(/^#/, "");
+  const legacyPanelMap = {
+    RaEditorPanel: "posts",
+    RaSettingsPanel: "settings",
+    RaProfilePanel: "profile",
+    RaAccountsPanel: "accounts",
+  };
+  const panel = legacyPanelMap[raw] || raw;
+  return [...RaEls.tabButtons].some((button) => button.dataset.raAdminTab === panel) ? panel : RA_DEFAULT_PANEL;
+}
+
+function showAdminPanel(panel = RA_DEFAULT_PANEL, updateHash = true) {
+  const nextPanel = [...RaEls.tabButtons].some((button) => button.dataset.raAdminTab === panel)
+    ? panel
+    : RA_DEFAULT_PANEL;
+
+  RaEls.tabButtons.forEach((button) => {
+    const active = button.dataset.raAdminTab === nextPanel;
+    button.classList.toggle("RaActive", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+
+  RaEls.tabPanels.forEach((section) => {
+    section.hidden = section.dataset.raAdminPanel !== nextPanel;
+  });
+
+  if (updateHash) {
+    const nextHash = nextPanel === RA_DEFAULT_PANEL ? "" : `#${nextPanel}`;
+    if (window.location.hash !== nextHash) {
+      history.replaceState(null, "", `${location.pathname}${location.search}${nextHash}`);
+    }
+  }
 }
 
 function loadSettings() {
@@ -344,7 +389,10 @@ async function syncLocalChangesForAccounts(successMessage) {
 }
 
 function renderPostList() {
-  RaEls.adminPostList.innerHTML = RaData.posts
+  const visiblePosts = filterPosts(RaData.posts, RaPostSearchQuery);
+  RaEls.postCount.textContent = `${visiblePosts.length} / ${RaData.posts.length}`;
+  RaEls.adminPostList.innerHTML = visiblePosts.length
+    ? visiblePosts
     .map(
       (post) => `
         <div class="RaItem ${post.slug === RaSelectedSlug ? "RaActive" : ""}" data-RaSlug="${escapeAttr(post.slug)}">
@@ -353,7 +401,31 @@ function renderPostList() {
         </div>
       `,
     )
-    .join("");
+    .join("")
+    : `<div class="RaEmptyState">没有匹配的文章</div>`;
+}
+
+function filterPosts(posts, query) {
+  const keyword = query.trim().toLowerCase();
+  if (!keyword) return posts;
+
+  return posts.filter((post) => {
+    const haystack = [post.title, post.slug, post.date, post.summary, post.content, ...(post.tags || [])]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(keyword);
+  });
+}
+
+function updatePostListCollapsed() {
+  RaEls.postWorkspace.classList.toggle("RaPostListCollapsed", RaPostListCollapsed);
+  RaEls.togglePostList.textContent = RaPostListCollapsed ? "展开列表" : "折叠列表";
+  RaEls.togglePostList.setAttribute("aria-expanded", String(!RaPostListCollapsed));
+}
+
+function togglePostList() {
+  RaPostListCollapsed = !RaPostListCollapsed;
+  updatePostListCollapsed();
 }
 
 function renderSiteForm() {
@@ -942,6 +1014,10 @@ function escapeAttr(value) {
 }
 
 RaEls.saveSettings.addEventListener("click", saveSettings);
+RaEls.tabButtons.forEach((button) => {
+  button.addEventListener("click", () => showAdminPanel(button.dataset.raAdminTab));
+});
+window.addEventListener("hashchange", () => showAdminPanel(getPanelFromHash(), false));
 RaEls.applyRepoUrl.addEventListener("click", () => {
   applyRepositoryUrl(true);
   saveSettings();
@@ -962,6 +1038,11 @@ RaEls.openRepo.addEventListener("click", openRepository);
 RaEls.publish.addEventListener("click", publishCurrentPost);
 RaEls.download.addEventListener("click", exportJson);
 RaEls.importInput.addEventListener("change", importJson);
+RaEls.postSearch.addEventListener("input", () => {
+  RaPostSearchQuery = RaEls.postSearch.value;
+  renderPostList();
+});
+RaEls.togglePostList.addEventListener("click", togglePostList);
 RaEls.adminPostList.addEventListener("click", (event) => {
   const item = event.target.closest("[data-RaSlug]");
   if (item) selectPost(item.dataset.raslug);

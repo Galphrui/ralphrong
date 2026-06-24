@@ -17,17 +17,89 @@
         </span>
       </a>
       <nav class="RaNav">
-        <a href="./index.html">前台</a>
-        <a href="#RaSettingsPanel">设置</a>
-        <a href="#RaEditorPanel">编辑</a>
-        <a href="#RaProfilePanel">简历</a>
-        <a href="#RaAccountsPanel" id="RaAccountsNavLink">账号</a>
+        <a class="RaTopLink" href="./index.html">前台</a>
+        <div class="RaAdminTabs" role="tablist" aria-label="后台管理导航">
+          <button class="RaTabButton RaActive" type="button" data-ra-admin-tab="posts">文章</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="site">站点</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="profile">简历</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="accounts" id="RaAccountsNavLink">账号</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="settings">仓库</button>
+        </div>
         <button id="RaLogoutButton" class="RaNavButton" type="button">退出</button>
       </nav>
     </header>
 
     <main class="RaAdminShell" id="RaAdminShell" hidden>
-      <section class="RaPanel" id="RaSettingsPanel">
+      <section class="RaWorkspacePanel" id="RaPostsPanel" data-ra-admin-panel="posts">
+        <div class="RaWorkspaceHeader">
+          <div class="RaSectionHeading">
+            <p class="RaEyebrow">Posts</p>
+            <h1>文章管理</h1>
+          </div>
+          <div class="RaPostCommands">
+            <label class="RaSearchField">
+              <span>搜索文章</span>
+              <input id="RaPostSearchInput" type="search" placeholder="搜索标题、标签、摘要或正文" />
+            </label>
+            <button id="RaTogglePostListButton" class="RaSecondaryButton" type="button">折叠列表</button>
+            <button id="RaNewPostButton" type="button">新建文章</button>
+          </div>
+        </div>
+
+        <section class="RaAdminGrid" id="RaPostWorkspace">
+          <aside class="RaPanel RaPostListPanel">
+            <div class="RaSectionHeading RaCompactHeading">
+              <p class="RaEyebrow">Library</p>
+              <h2>文章列表</h2>
+              <span id="RaPostCountText" class="RaCountText"></span>
+            </div>
+            <div class="RaList" id="RaAdminPostList"></div>
+          </aside>
+
+          <section class="RaPanel" id="RaEditorPanel">
+            <div class="RaSectionHeading">
+              <p class="RaEyebrow">Editor</p>
+              <h2>内容编辑</h2>
+            </div>
+            <form id="RaPostForm">
+              <div class="RaFormGrid">
+                <label class="RaField">
+                  标题
+                  <input id="RaTitleInput" required />
+                </label>
+                <label class="RaField">
+                  Slug
+                  <input id="RaSlugInput" required />
+                </label>
+                <label class="RaField">
+                  发布日期
+                  <input id="RaDateInput" type="date" required />
+                </label>
+                <label class="RaField">
+                  标签，逗号分隔
+                  <input id="RaTagsInput" placeholder="JavaScript, 架构" />
+                </label>
+                <label class="RaField RaWide">
+                  摘要
+                  <textarea id="RaSummaryInput" rows="3"></textarea>
+                </label>
+                <label class="RaField RaWide">
+                  正文 Markdown
+                  <textarea id="RaContentInput" rows="16"></textarea>
+                </label>
+              </div>
+              <div class="RaActions">
+                <button type="submit">保存到数据</button>
+                <button id="RaDeletePostButton" class="RaDangerButton" type="button">删除文章</button>
+                <button id="RaPublishButton" class="RaPublishButton" type="button">发布到外网</button>
+              </div>
+            </form>
+            <p class="RaStatus" id="RaStatusText" role="status"></p>
+          </section>
+        </section>
+      </section>
+
+      <section class="RaWorkspacePanel" id="RaSettingsPanel" data-ra-admin-panel="settings" hidden>
         <div class="RaSectionHeading">
           <p class="RaEyebrow">Repository</p>
           <h1>仓库连接</h1>
@@ -77,59 +149,8 @@
         <p class="RaStatus" id="RaDeployStatusText" role="status"></p>
       </section>
 
-      <section class="RaAdminGrid">
-        <aside class="RaPanel">
-          <div class="RaSectionHeading">
-            <p class="RaEyebrow">Posts</p>
-            <h2>文章列表</h2>
-          </div>
-          <button id="RaNewPostButton" type="button">新建文章</button>
-          <div class="RaList" id="RaAdminPostList"></div>
-        </aside>
-
-        <section class="RaPanel" id="RaEditorPanel">
-          <div class="RaSectionHeading">
-            <p class="RaEyebrow">Editor</p>
-            <h2>内容编辑</h2>
-          </div>
-          <form id="RaPostForm">
-            <div class="RaFormGrid">
-              <label class="RaField">
-                标题
-                <input id="RaTitleInput" required />
-              </label>
-              <label class="RaField">
-                Slug
-                <input id="RaSlugInput" required />
-              </label>
-              <label class="RaField">
-                发布日期
-                <input id="RaDateInput" type="date" required />
-              </label>
-              <label class="RaField">
-                标签，逗号分隔
-                <input id="RaTagsInput" placeholder="JavaScript, 架构" />
-              </label>
-              <label class="RaField RaWide">
-                摘要
-                <textarea id="RaSummaryInput" rows="3"></textarea>
-              </label>
-              <label class="RaField RaWide">
-                正文 Markdown
-                <textarea id="RaContentInput" rows="14"></textarea>
-              </label>
-            </div>
-            <div class="RaActions">
-              <button type="submit">保存到数据</button>
-              <button id="RaDeletePostButton" class="RaDangerButton" type="button">删除文章</button>
-              <button id="RaPublishButton" class="RaPublishButton" type="button">发布到外网</button>
-            </div>
-          </form>
-          <p class="RaStatus" id="RaStatusText" role="status"></p>
-        </section>
-      </section>
-
-      <section class="RaPanel">
+      <section class="RaWorkspacePanel" id="RaSitePanel" data-ra-admin-panel="site" hidden>
+        <div class="RaPanel">
         <div class="RaSectionHeading">
           <p class="RaEyebrow">Site</p>
           <h2>站点信息</h2>
@@ -157,9 +178,11 @@
           <button id="RaPublishSiteButton" class="RaPublishButton" type="button">保存并发布</button>
         </div>
         <p class="RaStatus" id="RaSiteStatusText" role="status"></p>
+        </div>
       </section>
 
-      <section class="RaPanel" id="RaProfilePanel">
+      <section class="RaWorkspacePanel" id="RaProfilePanel" data-ra-admin-panel="profile" hidden>
+        <div class="RaPanel">
         <div class="RaSectionHeading">
           <p class="RaEyebrow">Profile</p>
           <h2>Ra 个人简历</h2>
@@ -216,9 +239,11 @@
           <button id="RaFormatProfileButton" class="RaSecondaryButton" type="button">格式化 JSON</button>
         </div>
         <p class="RaStatus" id="RaProfileStatusText" role="status"></p>
+        </div>
       </section>
 
-      <section class="RaPanel" id="RaAccountsPanel">
+      <section class="RaWorkspacePanel" id="RaAccountsPanel" data-ra-admin-panel="accounts" hidden>
+        <div class="RaPanel">
         <div class="RaSectionHeading">
           <p class="RaEyebrow">Accounts</p>
           <h2>账号管理</h2>
@@ -255,6 +280,7 @@
           </div>
         </div>
         <p class="RaStatus" id="RaAccountStatus" role="status"></p>
+        </div>
       </section>
     </main>
 
