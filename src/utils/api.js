@@ -1,17 +1,14 @@
-// Direct GitHub API access - no backend needed
-const GITHUB_OWNER = 'Galphrui'
-const GITHUB_REPO = 'ralphrong'
-const GITHUB_BRANCH = 'main'
 const DATA_PATH = 'data/posts.json'
 
-// GitHub raw content URL
-const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${DATA_PATH}`
-const DATA_URL = import.meta.env.DEV ? `/${DATA_PATH}` : GITHUB_RAW_URL
+const DATA_URL = `${import.meta.env.BASE_URL}${DATA_PATH}`
+
+const dataUrl = () => `${DATA_URL}?t=${Date.now()}`
 
 export const fetchSiteData = async () => {
-  const response = await fetch(DATA_URL, {
+  const response = await fetch(dataUrl(), {
+    cache: 'no-store',
     headers: {
-      'Accept': 'application/vnd.github.v3.raw',
+      Accept: 'application/json',
     },
   })
 
@@ -89,7 +86,7 @@ export const extractPdf = async (file) => {
 
 export const fetchTags = async () => {
   try {
-    const response = await fetch(DATA_URL)
+    const response = await fetch(dataUrl(), { cache: 'no-store' })
     const data = await response.json()
     const tags = [...new Set(data.posts?.flatMap((p) => p.tags) || [])].sort()
     return tags

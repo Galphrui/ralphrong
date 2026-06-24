@@ -216,6 +216,11 @@ async function publishData(target = "posts") {
   }
 }
 
+async function publishCurrentPost() {
+  if (hasEditablePostDraft() && !saveCurrentPost()) return;
+  await publishData("posts");
+}
+
 async function syncLocalData() {
   try {
     setPublishing(true);
@@ -386,7 +391,7 @@ function selectPost(slug) {
 }
 
 function saveCurrentPost(event) {
-  event.preventDefault();
+  if (event) event.preventDefault();
   const post = {
     title: RaEls.title.value.trim(),
     slug: slugify(RaEls.slug.value || RaEls.title.value),
@@ -402,7 +407,7 @@ function saveCurrentPost(event) {
 
   if (!post.title || !post.slug) {
     setStatus("标题和 Slug 必填。");
-    return;
+    return false;
   }
 
   const index = RaData.posts.findIndex((item) => item.slug === RaSelectedSlug);
@@ -415,7 +420,19 @@ function saveCurrentPost(event) {
   RaSelectedSlug = post.slug;
   saveLocalData();
   selectPost(post.slug);
-  setStatus("已保存到当前数据，点击发布写入后端。");
+  setStatus("已保存到当前数据，点击发布到外网。");
+  return true;
+}
+
+function hasEditablePostDraft() {
+  return Boolean(
+    RaSelectedSlug ||
+      RaEls.title.value.trim() ||
+      RaEls.slug.value.trim() ||
+      RaEls.tags.value.trim() ||
+      RaEls.summary.value.trim() ||
+      RaEls.content.value.trim(),
+  );
 }
 
 function deleteSelectedPost() {
@@ -942,7 +959,7 @@ RaEls.detectRepo.addEventListener("click", () => {
 RaEls.loadRemote.addEventListener("click", loadRemoteData);
 RaEls.syncData.addEventListener("click", syncLocalData);
 RaEls.openRepo.addEventListener("click", openRepository);
-RaEls.publish.addEventListener("click", publishData);
+RaEls.publish.addEventListener("click", publishCurrentPost);
 RaEls.download.addEventListener("click", exportJson);
 RaEls.importInput.addEventListener("change", importJson);
 RaEls.adminPostList.addEventListener("click", (event) => {

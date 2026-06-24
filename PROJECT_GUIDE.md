@@ -58,7 +58,7 @@
 
 `src/components/VisitStats.jsx`
 
-访问记录卡片。当前使用 `localStorage` 在本机记录访问次数、访问人数和最近访问时间。它不是全站真实 UV 统计，只代表当前浏览器本地记录。
+访问记录卡片。访客标识保存在浏览器 `localStorage`，全站访问次数、访客数和最近访问时间通过 Cloudflare Worker 的 `VISIT_KV` 汇总保存。
 
 `src/components/TagFilter.jsx`
 
@@ -70,7 +70,7 @@
 
 `src/utils/api.js`
 
-数据读取层。本地开发时读取 `/data/posts.json`，线上环境读取 GitHub raw 地址，避免 GitHub Pages 缓存静态 JSON 后不及时更新。
+数据读取层。本地开发和线上环境都读取当前部署站点下的 `data/posts.json`，并带时间戳与 `cache: no-store` 避免旧缓存导致页面看不到刚发布的数据。
 
 ## 样式说明
 
@@ -318,7 +318,7 @@ gh api repos/Galphrui/ralphrong/actions/runs --jq '.workflow_runs[0] | {name,sta
 - 检查 `data/posts.json` 是否格式正确。
 - 检查 `posts` 数组是否为空。
 - 检查文章是否缺少 `slug`、`title`、`content`。
-- 线上可能有缓存，稍等 GitHub raw 数据更新后再刷新。
+- 线上可能有 GitHub Pages 构建延迟，等后台提示“上线完成”后再刷新。
 
 后台登录失败：
 
