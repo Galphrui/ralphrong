@@ -75,6 +75,9 @@ const RaEls = {
   profileName: document.querySelector("#RaProfileNameInput"),
   profileHeadline: document.querySelector("#RaProfileHeadlineInput"),
   profilePhoto: document.querySelector("#RaProfilePhotoInput"),
+  profilePhotoFile: document.querySelector("#RaProfilePhotoFileInput"),
+  clearProfilePhoto: document.querySelector("#RaClearProfilePhotoButton"),
+  profilePhotoPreview: document.querySelector("#RaProfilePhotoPreview"),
   profileContacts: document.querySelector("#RaProfileContactsInput"),
   profileSummary: document.querySelector("#RaProfileSummaryInput"),
   profileSectionList: document.querySelector("#RaProfileSectionList"),
@@ -437,7 +440,66 @@ function renderProfileForm() {
   RaEls.profilePhoto.value = profile.photoUrl || "";
   RaEls.profileContacts.value = (profile.contacts || []).join("\n");
   RaEls.profileSummary.value = profile.summary || "";
+  updateProfilePhotoPreview();
   renderProfileSections(getProfileSections(profile));
+}
+
+function updateProfilePhotoPreview() {
+  const photoUrl = RaEls.profilePhoto.value.trim();
+  RaEls.profilePhotoPreview.innerHTML = photoUrl
+    ? `<img src="${escapeAttr(photoUrl)}" alt="个人照片预览" />`
+    : "<span>照片预览</span>";
+}
+
+async function selectProfilePhoto(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  try {
+    if (!file.type.startsWith("image/")) throw new Error("请选择图片文件。");
+    const photoUrl = await resizeProfilePhoto(file);
+    RaEls.profilePhoto.value = photoUrl;
+    updateProfilePhotoPreview();
+    setProfileStatus("本地照片已添加并压缩，保存并发布后会显示在外网简历。");
+  } catch (error) {
+    setProfileStatus(`照片处理失败：${error.message}`);
+  } finally {
+    event.target.value = "";
+  }
+}
+
+function clearProfilePhoto() {
+  RaEls.profilePhoto.value = "";
+  updateProfilePhotoPreview();
+  setProfileStatus("照片已清除，保存并发布后外网会恢复占位。");
+}
+
+function resizeProfilePhoto(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("读取图片失败。"));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("图片格式无法识别。"));
+      image.onload = () => {
+        const maxWidth = 720;
+        const maxHeight = 960;
+        const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, width, height);
+        context.drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.86));
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function renderProfileSections(sections) {
@@ -1179,6 +1241,9 @@ RaEls.saveSite.addEventListener("click", saveSiteInfo);
 RaEls.publishSite.addEventListener("click", publishSiteInfo);
 RaEls.saveProfile.addEventListener("click", saveProfileInfo);
 RaEls.publishProfile.addEventListener("click", publishProfileInfo);
+RaEls.profilePhoto.addEventListener("input", updateProfilePhotoPreview);
+RaEls.profilePhotoFile.addEventListener("change", selectProfilePhoto);
+RaEls.clearProfilePhoto.addEventListener("click", clearProfilePhoto);
 RaEls.addProfileSection.addEventListener("click", addProfileSection);
 RaEls.profileSectionList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-ra-delete-profile-section]");

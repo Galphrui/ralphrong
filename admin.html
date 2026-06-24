@@ -197,9 +197,24 @@
             <input id="RaProfileHeadlineInput" />
           </label>
           <label class="RaField RaWide">
-            个人照片地址（可选）
-            <input id="RaProfilePhotoInput" placeholder="./assets/profile.jpg 或 https://..." />
+            个人照片（可选）
+            <input id="RaProfilePhotoInput" placeholder="可粘贴图片地址，也可选择本地图片上传" />
           </label>
+          <div class="RaProfilePhotoEditor RaWide">
+            <div class="RaProfilePhotoPreview" id="RaProfilePhotoPreview">
+              <span>照片预览</span>
+            </div>
+            <div>
+              <div class="RaActions RaCompactActions">
+                <label class="RaFileButton">
+                  选择本地图片
+                  <input id="RaProfilePhotoFileInput" type="file" accept="image/*" />
+                </label>
+                <button id="RaClearProfilePhotoButton" class="RaSecondaryButton" type="button">清除照片</button>
+              </div>
+              <p class="RaHint">本地图片会自动压缩后保存到简历数据中，发布后外网可直接显示。</p>
+            </div>
+          </div>
           <label class="RaField RaWide">
             联系信息（每行一条）
             <textarea id="RaProfileContactsInput" rows="3"></textarea>

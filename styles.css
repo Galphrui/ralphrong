@@ -985,6 +985,41 @@ textarea {
   padding-top: 22px;
 }
 
+.RaCompactActions {
+  margin-top: 0;
+}
+
+.RaProfilePhotoEditor {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--RaLine);
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 120px minmax(0, 1fr);
+  padding: 14px;
+}
+
+.RaProfilePhotoPreview {
+  align-items: center;
+  aspect-ratio: 3 / 4;
+  background: #ecfdf3;
+  border: 1px dashed rgba(11, 122, 117, 0.38);
+  color: var(--RaPrimaryStrong);
+  display: flex;
+  font-size: 13px;
+  font-weight: 900;
+  justify-content: center;
+  overflow: hidden;
+  width: 100%;
+}
+
+.RaProfilePhotoPreview img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
 .RaProfileSectionList {
   display: grid;
   gap: 14px;
@@ -1034,6 +1069,14 @@ textarea {
   .RaFormGrid,
   .RaAdminGrid {
     grid-template-columns: 1fr;
+  }
+
+  .RaProfilePhotoEditor {
+    grid-template-columns: 1fr;
+  }
+
+  .RaProfilePhotoPreview {
+    max-width: 180px;
   }
 
   .RaPostListPanel {

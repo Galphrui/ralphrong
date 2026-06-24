@@ -129,18 +129,18 @@ export default function ProfilePage() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
     >
+      <button
+        type="button"
+        onClick={() => window.print()}
+        className="resume-print-hide fixed bottom-6 right-6 z-40 border border-primary-100 bg-primary-700 px-5 py-3 text-sm font-black text-white shadow-brand hover:bg-primary-600"
+      >
+        导出 PDF
+      </button>
       <div className="grid gap-6">
         <section className="resume-sheet relative overflow-hidden border border-slate-200 bg-hero-panel p-8 shadow-soft">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-brand" />
-          <div className="resume-print-hide flex items-center justify-between gap-4">
+          <div className="resume-print-hide">
             <a href="#" className="text-sm font-bold text-primary-700 hover:text-primary-500">返回 Ra 首页</a>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="border border-primary-100 bg-primary-50 px-4 py-2 text-sm font-black text-primary-700 hover:border-primary-300"
-            >
-              导出 PDF
-            </button>
           </div>
           <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_240px]">
             <div>
