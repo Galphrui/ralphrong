@@ -340,9 +340,9 @@ async function getChangedFiles(files) {
   const result = await runGit(["status", "--porcelain", "--", ...files]);
   return result.stdout
     .split("\n")
-    .map((line) => line.trim())
+    .map((line) => line.slice(3).trim())
     .filter(Boolean)
-    .map((line) => line.replace(/^.. /, ""));
+    .map((file) => (file.includes(" -> ") ? file.split(" -> ").pop() : file));
 }
 
 async function currentBranch() {

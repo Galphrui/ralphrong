@@ -19,18 +19,6 @@
   },
   "posts": [
     {
-      "title": "Day-2026-06-24",
-      "slug": "day-2026-06-24",
-      "date": "2026-06-24",
-      "tags": [
-        "测试",
-        "调试"
-      ],
-      "summary": "测试后台管理",
-      "content": "## 背景\n\n在这里写下问题背景。\n\n## 方案\n\n记录你的技术方案与取舍。",
-      "readingMinutes": 1
-    },
-    {
       "title": "Android Context：理解组件运行环境的入口",
       "slug": "android-context-core",
       "date": "2026-06-23",
@@ -633,7 +621,7 @@
     ],
     "education": [
       {
-        "title": "【学校名称】｜【专业名称】｜【学历】",
+        "title": "【郑州西亚斯学院】｜【软件工程】｜【本科】",
         "period": "【20XX.XX - 20XX.XX】",
         "meta": "可补充主修课程、毕业设计、校内项目、竞赛/证书等与 Android / 嵌入式 / 计算机相关的信息。",
         "details": []
