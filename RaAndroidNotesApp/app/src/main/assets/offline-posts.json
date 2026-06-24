@@ -1,0 +1,98 @@
+{
+  "site": {
+    "title": "Ra Android Notes",
+    "subtitle": "工程实践与调试笔记"
+  },
+  "profile": {
+    "name": "Ralph Rong / Ra",
+    "headline": "Android 系统工程师 | Framework | 智能穿戴 | 系统调试",
+    "summary": "聚焦 Android Framework、系统服务、权限、存储、构建发布和问题闭环。离线模式下展示内置摘要数据，联网后会同步公网博客内容。",
+    "intent": "Android 系统工程师 / Android Framework 工程师 / 智能穿戴系统工程师",
+    "photoUrl": "",
+    "contacts": [
+      "邮箱：ruiao1231@gmail.com",
+      "方向：Android Framework / 系统调试 / 智能穿戴"
+    ],
+    "advantages": [
+      "熟悉 Android 应用层到 Framework 的常见问题定位路径。",
+      "习惯把日志、源码、复现条件和修复方案整理成可追踪闭环。"
+    ],
+    "skills": [
+      {
+        "name": "Android 系统开发",
+        "items": [
+          "Framework",
+          "Activity",
+          "Service",
+          "BroadcastReceiver",
+          "ContentProvider",
+          "权限",
+          "通知",
+          "存储"
+        ]
+      },
+      {
+        "name": "工程发布",
+        "items": [
+          "Gradle",
+          "APK 签名",
+          "版本发布",
+          "缺陷跟踪"
+        ]
+      }
+    ],
+    "workExperience": [],
+    "projects": [],
+    "education": [],
+    "sections": [
+      {
+        "title": "离线说明",
+        "content": "当前展示的是 App 内置离线数据。网络可用时，App 会自动读取 GitHub Pages 上的最新博客数据。"
+      }
+    ],
+    "selfReview": [
+      "重视问题复现、日志证据、影响范围和回归验证。"
+    ]
+  },
+  "posts": [
+    {
+      "title": "Android Context：理解组件运行环境的入口",
+      "slug": "offline-android-context",
+      "date": "2026-06-24",
+      "tags": [
+        "Android",
+        "Framework",
+        "Context"
+      ],
+      "summary": "Context 不是普通工具类，而是 Android 组件访问资源、系统服务、存储和启动能力的运行环境入口。",
+      "content": "## 背景\n\n离线模式下展示内置 Android 笔记，保证 App 没有网络时仍可浏览核心内容。\n\n## 要点\n\n- Context 连接资源、系统服务和组件能力。\n- Activity、Service、Application 的 Context 生命周期不同。\n- 调试问题时要先确认当前代码运行在哪个组件环境中。",
+      "readingMinutes": 3
+    },
+    {
+      "title": "Android 权限控制：从声明到运行时授权",
+      "slug": "offline-android-permission",
+      "date": "2026-06-23",
+      "tags": [
+        "Android",
+        "权限",
+        "Framework"
+      ],
+      "summary": "权限问题通常不是单点错误，要同时检查 manifest、运行时授权、系统策略和目标 SDK 行为变化。",
+      "content": "## 排查路径\n\n- 检查 AndroidManifest 声明。\n- 检查运行时权限申请结果。\n- 检查目标 SDK 对权限行为的影响。\n- 检查系统服务侧是否有额外限制。",
+      "readingMinutes": 4
+    },
+    {
+      "title": "APK 签名：让应用能在其他手机安装",
+      "slug": "offline-apk-signing",
+      "date": "2026-06-22",
+      "tags": [
+        "Android",
+        "签名",
+        "发布"
+      ],
+      "summary": "Debug 包适合本机调试，分发给其他手机建议使用 release 签名包，并妥善保存 keystore。",
+      "content": "## 说明\n\nAndroid 安装包必须签名。当前项目支持生成 release 签名 APK，本地 keystore 不应提交到公开仓库。\n\n## 命令\n\n```bash\n./gradlew assembleRelease\n```",
+      "readingMinutes": 2
+    }
+  ]
+}

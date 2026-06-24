@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    tools:background="@color/ra_bg">
+
+    <LinearLayout
+        android:id="@+id/article_editor_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_panel"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            style="@style/RaSectionTitle"
+            android:text="文章编辑" />
+
+        <EditText
+            android:id="@+id/admin_post_search"
+            style="@style/RaInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="搜索后台文章" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/admin_post_list"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView
+                    style="@style/RaSecondaryAction"
+                    android:text="Android Context"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <EditText
+            android:id="@+id/editor_title"
+            style="@style/RaInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:hint="标题"
+            tools:text="Android Context：理解组件运行环境的入口" />
+
+        <EditText
+            android:id="@+id/editor_date"
+            style="@style/RaInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="日期 yyyy-MM-dd"
+            tools:text="2026-06-24" />
+
+        <EditText
+            android:id="@+id/editor_tags"
+            style="@style/RaInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="标签，逗号分隔"
+            tools:text="Android, Framework, Context" />
+
+        <EditText
+            android:id="@+id/editor_summary"
+            style="@style/RaInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="top"
+            android:hint="摘要"
+            android:minLines="3"
+            android:singleLine="false"
+            tools:text="Context 不是普通工具类，而是 Android 组件访问资源、系统服务和启动能力的入口。" />
+
+        <EditText
+            android:id="@+id/editor_content"
+            style="@style/RaInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="top"
+            android:hint="正文 Markdown"
+            android:minLines="8"
+            android:singleLine="false"
+            tools:text="## 背景&#10;&#10;这里是文章正文预览。&#10;&#10;## 方案&#10;&#10;- 梳理问题&#10;- 记录结论" />
+
+        <TextView
+            android:id="@+id/editor_add"
+            style="@style/RaSecondaryAction"
+            android:text="新增文章" />
+
+        <TextView
+            android:id="@+id/editor_save"
+            style="@style/RaPrimaryAction"
+            android:text="保存到待发布数据" />
+
+        <TextView
+            android:id="@+id/editor_delete"
+            style="@style/RaSecondaryAction"
+            android:text="删除当前文章" />
+
+        <TextView
+            android:id="@+id/editor_publish"
+            style="@style/RaPrimaryAction"
+            android:text="发布到 GitHub Pages" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/profile_editor_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_panel"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            style="@style/RaSectionTitle"
+            android:text="简历快速编辑" />
+
+        <EditText
+            android:id="@+id/profile_edit_name"
+            style="@style/RaInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="姓名"
+            tools:text="Ralph Rong / Ra" />
+
+        <EditText
+            android:id="@+id/profile_edit_headline"
+            style="@style/RaInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="标题"
+            tools:text="Android 系统工程师 | Framework" />
+
+        <EditText
+            android:id="@+id/profile_edit_summary"
+            style="@style/RaInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="top"
+            android:hint="个人简介"
+            android:minLines="4"
+            android:singleLine="false"
+            tools:text="聚焦 Android Framework、系统服务、权限、存储、构建发布和问题闭环。" />
+
+        <EditText
+            android:id="@+id/profile_edit_contacts"
+            style="@style/RaInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="top"
+            android:hint="联系方式，每行一条"
+            android:minLines="4"
+            android:singleLine="false"
+            tools:text="邮箱：ruiao1231@gmail.com&#10;方向：Android Framework" />
+
+        <TextView
+            android:id="@+id/profile_edit_save"
+            style="@style/RaPrimaryAction"
+            android:text="保存简历到待发布数据" />
+    </LinearLayout>
+</LinearLayout>

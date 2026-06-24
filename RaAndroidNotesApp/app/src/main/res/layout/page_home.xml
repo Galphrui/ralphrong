@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    tools:background="@color/ra_bg">
+
+    <LinearLayout
+        android:id="@+id/home_hero"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_hero"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/home_hero_label"
+            style="@style/RaLabel"
+            android:text="ANDROID ENGINEERING NOTES" />
+
+        <TextView
+            android:id="@+id/home_hero_title"
+            style="@style/RaHeroTitle"
+            android:text="拆解 Android 工程现场，沉淀可复现答案" />
+
+        <TextView
+            android:id="@+id/home_hero_summary"
+            style="@style/RaParagraph"
+            android:text="记录 Framework、调试、构建发布与系统适配中的真实问题，把零散经验整理成下次能直接拿来用的排查路径。" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/home_stats"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_panel"
+        android:orientation="horizontal"
+        android:padding="14dp">
+
+        <TextView
+            android:id="@+id/home_stat_articles"
+            style="@style/RaStatCell"
+            tools:text="38&#10;文章" />
+
+        <TextView
+            android:id="@+id/home_stat_tags"
+            style="@style/RaStatCell"
+            tools:text="36&#10;标签" />
+
+        <TextView
+            android:id="@+id/home_stat_latest"
+            style="@style/RaStatCell"
+            tools:text="2026-06-24&#10;最近" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/home_data_source"
+        style="@style/RaMutedText"
+        android:layout_marginTop="8dp"
+        tools:text="已同步公网数据。" />
+
+    <EditText
+        android:id="@+id/home_search"
+        style="@style/RaInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:hint="搜索文章、标签..." />
+
+    <HorizontalScrollView
+        android:id="@+id/home_tags_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:overScrollMode="never"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/home_tags_row"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                style="@style/RaSecondaryAction"
+                android:text="全部"
+                tools:visibility="visible" />
+
+            <TextView
+                style="@style/RaSecondaryAction"
+                android:layout_marginLeft="8dp"
+                android:text="Android"
+                tools:visibility="visible" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <TextView
+        android:id="@+id/home_list_title"
+        style="@style/RaSectionTitle"
+        android:layout_marginTop="18dp"
+        android:text="最新文章" />
+
+    <LinearLayout
+        android:id="@+id/home_post_list"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <include
+            layout="@layout/view_post_item"
+            tools:visibility="visible" />
+    </LinearLayout>
+</LinearLayout>

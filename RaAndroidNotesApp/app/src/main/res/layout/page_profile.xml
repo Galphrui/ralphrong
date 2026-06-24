@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    tools:background="@color/ra_bg">
+
+    <LinearLayout
+        android:id="@+id/profile_hero"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_hero"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="top"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/profile_label"
+                    style="@style/RaLabel"
+                    android:text="RA RESUME" />
+
+                <TextView
+                    android:id="@+id/profile_name"
+                    style="@style/RaHeroTitle"
+                    tools:text="Ralph Rong / Ra" />
+
+                <TextView
+                    android:id="@+id/profile_headline"
+                    style="@style/RaStrongText"
+                    tools:text="Android 系统工程师 | Framework | 智能穿戴" />
+            </LinearLayout>
+
+            <ImageView
+                android:id="@+id/profile_photo"
+                android:layout_width="92dp"
+                android:layout_height="118dp"
+                android:layout_marginLeft="10dp"
+                android:background="@drawable/bg_photo_placeholder"
+                android:scaleType="centerCrop" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/profile_summary"
+            style="@style/RaParagraph"
+            android:layout_marginTop="8dp"
+            tools:text="聚焦 Android Framework、系统服务、权限、存储、构建发布和问题闭环。" />
+
+        <LinearLayout
+            android:id="@+id/profile_contacts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
+
+            <TextView
+                style="@style/RaMutedText"
+                android:visibility="gone"
+                tools:text="邮箱：ruiao1231@gmail.com"
+                tools:visibility="visible" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/profile_sections"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_panel"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <TextView
+                style="@style/RaLabel"
+                android:text="CORE SKILLS" />
+
+            <TextView
+                style="@style/RaParagraph"
+                android:text="Framework / Activity / Service / 权限 / 存储 / Gradle" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

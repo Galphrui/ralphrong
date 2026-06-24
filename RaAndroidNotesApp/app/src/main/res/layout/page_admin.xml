@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    tools:background="@color/ra_bg">
+
+    <LinearLayout
+        android:id="@+id/admin_intro"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_panel"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            style="@style/RaLabel"
+            android:text="RA MOBILE ADMIN" />
+
+        <TextView
+            style="@style/RaSectionTitle"
+            android:text="移动后台" />
+
+        <TextView
+            style="@style/RaParagraph"
+            android:text="输入网页后台账号密码即可登录。文章和简历发布通过 Cloudflare Worker 写入 GitHub；本机密码只作为设备侧保护，不影响远端账号。" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/admin_login_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_panel"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            style="@style/RaSectionTitle"
+            android:text="后台登录" />
+
+        <EditText
+            android:id="@+id/admin_username"
+            style="@style/RaInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="后台账号" />
+
+        <EditText
+            android:id="@+id/admin_password"
+            style="@style/RaInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="后台密码"
+            android:inputType="textPassword" />
+
+        <TextView
+            android:id="@+id/admin_login_button"
+            style="@style/RaPrimaryAction"
+            android:text="登录并读取数据" />
+
+        <TextView
+            android:id="@+id/admin_status"
+            style="@style/RaMutedText"
+            android:layout_marginTop="8dp"
+            tools:text="输入网页后台账号密码后登录。" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/admin_editor_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:orientation="vertical">
+
+        <include
+            layout="@layout/page_admin_editor"
+            android:visibility="gone"
+            tools:visibility="visible" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/admin_local_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_panel"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            style="@style/RaSectionTitle"
+            android:text="本机安全" />
+
+        <TextView
+            android:id="@+id/local_security_hint"
+            style="@style/RaParagraph"
+            tools:text="本机密码只保护当前手机，不参与网页后台账号校验。" />
+
+        <TextView
+            android:id="@+id/local_security_primary"
+            style="@style/RaSecondaryAction"
+            android:text="注册或修改本机密码" />
+    </LinearLayout>
+</LinearLayout>

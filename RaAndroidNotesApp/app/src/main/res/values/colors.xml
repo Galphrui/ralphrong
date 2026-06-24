@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ra_bg">#F6FBF8</color>
+    <color name="ra_panel">#FFFFFFFF</color>
+    <color name="ra_primary">#075F51</color>
+    <color name="ra_primary_light">#E9FBF6</color>
+    <color name="ra_accent">#F59E0B</color>
+    <color name="ra_text">#020617</color>
+    <color name="ra_muted">#64748B</color>
+    <color name="ra_line">#D8E4E0</color>
+</resources>

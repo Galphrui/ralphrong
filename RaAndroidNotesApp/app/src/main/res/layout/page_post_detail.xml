@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    tools:background="@color/ra_bg">
+
+    <TextView
+        android:id="@+id/detail_back"
+        style="@style/RaSecondaryAction"
+        android:text="返回文章首页" />
+
+    <LinearLayout
+        android:id="@+id/detail_head"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/bg_panel"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+        android:id="@+id/detail_label"
+            style="@style/RaLabel"
+            tools:text="ANDROID / FRAMEWORK" />
+
+        <TextView
+        android:id="@+id/detail_title"
+            style="@style/RaHeroTitle"
+            tools:text="Android 权限控制" />
+
+        <TextView
+        android:id="@+id/detail_meta"
+            style="@style/RaMutedText"
+            tools:text="作者：Ralph Rong / Ra · 2026-06-24 · 5 分钟阅读" />
+
+        <TextView
+        android:id="@+id/detail_summary"
+            style="@style/RaParagraph"
+            tools:text="权限问题通常需要同时检查 manifest、运行时授权和系统策略。" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/detail_body"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_panel"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            style="@style/RaSectionTitle"
+            android:visibility="gone"
+            tools:text="背景"
+            tools:visibility="visible" />
+
+        <TextView
+            style="@style/RaParagraph"
+            android:visibility="gone"
+            tools:text="这里展示 Markdown 正文的预览效果。"
+            tools:visibility="visible" />
+    </LinearLayout>
+</LinearLayout>
