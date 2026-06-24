@@ -19,24 +19,6 @@
   },
   "posts": [
     {
-      "title": "1",
-      "slug": "1",
-      "date": "2026-06-24",
-      "tags": [],
-      "summary": "1",
-      "content": "## 背景\n11111\n## 方案\n\n记录你的技术方案与取舍。",
-      "readingMinutes": 1
-    },
-    {
-      "title": "13412",
-      "slug": "13412",
-      "date": "2026-06-24",
-      "tags": [],
-      "summary": "13123",
-      "content": "## 背景\n\n在这里写下问题背景。\n\n## 方案13132131\n\n记录你的技术方案与取舍。",
-      "readingMinutes": 1
-    },
-    {
       "title": "Android Context：理解组件运行环境的入口",
       "slug": "android-context-core",
       "date": "2026-06-23",
@@ -47,7 +29,7 @@
       ],
       "summary": "Context 不是普通工具类，而是 Android 组件访问资源、系统服务、存储和组件启动能力的运行环境入口。",
       "content": "## Context 的本质\nContext 可以理解为 Android Framework 交给组件的一把环境钥匙。Activity、Service、Application 都不是凭空拥有系统能力，它们背后都包装着真正工作的 ContextImpl。\n\n常见继承关系可以这样记：Activity 带主题能力，Service 和 Application 更偏运行环境包装。因此在 Activity 里把 `this` 传给 Toast、资源读取或页面跳转通常可行，因为 Activity 本身就是一种 Context。\n\n## 它解决什么问题\n- 确认当前代码属于哪个应用包，从而正确解析 `R.string`、`R.drawable`、`R.color` 等资源。\n- 获取系统服务，例如 `AlarmManager`、`NotificationManager`、`PowerManager`、`UserManager`。\n- 访问应用私有文件、数据库、SharedPreferences 和缓存目录。\n- 启动 Activity、Service，发送或注册 BroadcastReceiver。\n\n```java\nString name = context.getString(R.string.app_name);\nAlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);\nSharedPreferences sp = context.getSharedPreferences(\"config\", Context.MODE_PRIVATE);\n```\n\n## Activity Context 与 Application Context\nActivity Context 绑定页面生命周期，并且包含主题信息。适合创建 Dialog、加载与主题有关的视图、启动需要页面上下文的流程。\n\nApplication Context 生命周期跟随整个进程，适合单例、工具类、长期缓存，但不要拿它创建依赖 Activity 窗口的 UI，否则容易出现主题缺失或窗口异常。\n\n## 启动组件时的坑\n如果 Context 不是 Activity，例如来自 Application、Service 或 BroadcastReceiver，启动 Activity 时通常需要加 `FLAG_ACTIVITY_NEW_TASK`。\n\n```java\nIntent intent = new Intent(context, MainActivity.class);\nintent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);\ncontext.startActivity(intent);\n```\n\n## 广播注册要配合生命周期\n动态注册 Receiver 后要在合适时机注销。Activity 中常见做法是 `onStart` 注册、`onStop` 注销，或者 `onResume` / `onPause` 成对处理。泄漏问题通常不是广播本身造成的，而是 Context 生命周期和注册周期没有对齐。\n\n## 实战判断\n遇到“资源找不到、Dialog 报错、启动页面失败、文件路径不对”这类问题，先问自己：当前传入的是哪一种 Context？它属于哪个组件？它的生命周期是否比被创建对象更长？这三个问题通常能快速定位方向。",
-      "readingMinutes": 7
+      "readingMinutes": 3
     },
     {
       "title": "Android CE 与 DE：Direct Boot 场景下的数据放在哪里",
