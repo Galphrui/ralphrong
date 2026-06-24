@@ -19,6 +19,15 @@
   },
   "posts": [
     {
+      "title": "1",
+      "slug": "1",
+      "date": "2026-06-24",
+      "tags": [],
+      "summary": "1",
+      "content": "## 背景\n11111\n## 方案\n\n记录你的技术方案与取舍。",
+      "readingMinutes": 1
+    },
+    {
       "title": "Android Context：理解组件运行环境的入口",
       "slug": "android-context-core",
       "date": "2026-06-23",
@@ -500,7 +509,7 @@
     }
   ],
   "profile": {
-    "name": "Ralph Rong / Ra-001",
+    "name": "Ralph Rong / Ra  芮傲",
     "headline": "Android 系统工程师｜智能穿戴 / 安卓系统｜2 年经验",
     "contacts": [
       "手机：【13213521875】",
