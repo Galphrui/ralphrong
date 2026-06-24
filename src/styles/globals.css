@@ -22,3 +22,38 @@
     @apply bg-gradient-brand bg-clip-text text-transparent;
   }
 }
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .print-hide,
+  .resume-print-hide {
+    display: none !important;
+  }
+
+  .resume-page {
+    max-width: none !important;
+    gap: 12px !important;
+  }
+
+  .resume-sheet,
+  .resume-section {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  .resume-sheet {
+    background: #fff !important;
+  }
+
+  .resume-section {
+    padding: 14px !important;
+  }
+}

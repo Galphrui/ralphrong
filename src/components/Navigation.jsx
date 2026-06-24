@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 export default function Navigation() {
   return (
     <motion.nav
-      className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur-md"
+      className="print-hide sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur-md"
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}

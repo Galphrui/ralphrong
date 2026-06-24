@@ -3,7 +3,7 @@ import { useBlogStore } from '../store/useStore'
 
 function Section({ title, eyebrow, children }) {
   return (
-    <section className="border border-slate-200 bg-white p-6 shadow-sm">
+    <section className="resume-section border border-slate-200 bg-white p-6 shadow-sm">
       <p className="mb-2 text-xs font-black uppercase text-primary-700">{eyebrow}</p>
       <h2 className="mb-4 text-2xl font-black text-slate-950">{title}</h2>
       {children}
@@ -23,33 +23,89 @@ function BulletList({ items }) {
   )
 }
 
-function Tags({ items }) {
+function stripListMarker(value) {
+  return String(value || '').replace(/^[-*•]\s*/, '').trim()
+}
+
+function SectionContent({ content }) {
+  const blocks = String(content || '')
+    .split(/\n\s*\n/)
+    .map((block) => block.split('\n').map((line) => line.trim()).filter(Boolean))
+    .filter((block) => block.length)
+
+  if (!blocks.length) {
+    return <p className="text-sm leading-7 text-slate-600">暂无内容</p>
+  }
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {(items || []).map((item) => (
-        <span key={item} className="bg-primary-50 px-3 py-1 text-xs font-bold text-primary-700">
-          {item}
-        </span>
-      ))}
+    <div className="grid gap-4">
+      {blocks.map((lines, index) => {
+        const [first, ...rest] = lines
+        const listItems = rest.map(stripListMarker).filter(Boolean)
+        const firstIsList = /^[-*•]\s*/.test(first)
+
+        if (!listItems.length && !firstIsList) {
+          return (
+            <p key={`${first}-${index}`} className="text-base font-bold leading-8 text-slate-700">
+              {stripListMarker(first)}
+            </p>
+          )
+        }
+
+        if (firstIsList) {
+          return <BulletList key={`${first}-${index}`} items={lines.map(stripListMarker)} />
+        }
+
+        return (
+          <article key={`${first}-${index}`} className="border border-slate-100 bg-slate-50 p-4">
+            <h3 className="text-lg font-black text-slate-950">{stripListMarker(first)}</h3>
+            <BulletList items={listItems} />
+          </article>
+        )
+      })}
     </div>
   )
 }
 
-function ExperienceList({ items }) {
-  return (
-    <div className="grid gap-4">
-      {(items || []).map((item) => (
-        <article key={item.title} className="border border-slate-100 bg-slate-50 p-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="text-lg font-black text-slate-950">{item.title}</h3>
-            {item.period && <span className="text-sm font-bold text-slate-500">{item.period}</span>}
-          </div>
-          {item.meta && <p className="mt-1 text-sm font-bold text-primary-700">{item.meta}</p>}
-          <BulletList items={item.details} />
-        </article>
-      ))}
-    </div>
-  )
+function legacySectionContent(items) {
+  return (items || []).join('\n')
+}
+
+function legacySkillsContent(groups) {
+  return (groups || [])
+    .map((group) => [group.name, ...(group.items || []).map((item) => `- ${item}`)].filter(Boolean).join('\n'))
+    .join('\n\n')
+}
+
+function legacyExperienceContent(items) {
+  return (items || [])
+    .map((item) =>
+      [
+        item.title,
+        item.period ? `时间：${item.period}` : '',
+        item.meta ? `说明：${item.meta}` : '',
+        ...(item.details || []).map((detail) => `- ${detail}`),
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    )
+    .join('\n\n')
+}
+
+function getResumeSections(profile) {
+  if (Array.isArray(profile.sections) && profile.sections.length) {
+    return profile.sections.filter((section) => section.title || section.content)
+  }
+
+  return [
+    { title: '求职意向', content: profile.intent || '' },
+    { title: '个人优势', content: legacySectionContent(profile.advantages) },
+    { title: '核心技能', content: legacySkillsContent(profile.skills) },
+    { title: '工作经历', content: legacyExperienceContent(profile.workExperience) },
+    { title: '项目经历', content: legacyExperienceContent(profile.projects) },
+    { title: '教育经历', content: legacyExperienceContent(profile.education) },
+    { title: '个人评价', content: legacySectionContent(profile.selfReview) },
+  ].filter((section) => section.title || section.content)
 }
 
 export default function ProfilePage() {
@@ -64,72 +120,61 @@ export default function ProfilePage() {
     )
   }
 
+  const sections = getResumeSections(profile)
+
   return (
     <motion.div
-      className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]"
+      className="resume-page mx-auto grid max-w-[1180px] gap-6"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
     >
       <div className="grid gap-6">
-        <section className="relative overflow-hidden border border-slate-200 bg-hero-panel p-8 shadow-soft">
+        <section className="resume-sheet relative overflow-hidden border border-slate-200 bg-hero-panel p-8 shadow-soft">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-brand" />
-          <a href="#" className="text-sm font-bold text-primary-700 hover:text-primary-500">返回 Ra 首页</a>
-          <p className="mt-8 text-sm font-black uppercase text-primary-700">Ra Resume</p>
-          <h1 className="mt-3 text-4xl font-black leading-tight text-slate-950">{profile.name}</h1>
-          <p className="mt-3 text-xl font-bold text-slate-700">{profile.headline}</p>
-          <p className="mt-5 max-w-3xl text-base leading-8 text-slate-600">{profile.summary}</p>
-          <div className="mt-6 flex flex-wrap gap-3 text-sm font-bold text-slate-600">
-            {(profile.contacts || []).map((contact) => (
-              <span key={contact} className="border border-slate-200 bg-white/80 px-3 py-2">
-                {contact}
-              </span>
-            ))}
+          <div className="resume-print-hide flex items-center justify-between gap-4">
+            <a href="#" className="text-sm font-bold text-primary-700 hover:text-primary-500">返回 Ra 首页</a>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="border border-primary-100 bg-primary-50 px-4 py-2 text-sm font-black text-primary-700 hover:border-primary-300"
+            >
+              导出 PDF
+            </button>
+          </div>
+          <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_240px]">
+            <div>
+              <p className="text-sm font-black uppercase text-primary-700">Ra Resume</p>
+              <h1 className="mt-3 text-4xl font-black leading-tight text-slate-950">{profile.name}</h1>
+              <p className="mt-3 text-xl font-bold text-slate-700">{profile.headline}</p>
+              <p className="mt-5 max-w-3xl text-base leading-8 text-slate-600">{profile.summary}</p>
+              <div className="mt-6 flex flex-wrap gap-3 text-sm font-bold text-slate-600">
+                {(profile.contacts || []).map((contact) => (
+                  <span key={contact} className="border border-slate-200 bg-white/80 px-3 py-2">
+                    {contact}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="aspect-[3/4] w-full max-w-[240px] justify-self-center border-2 border-dashed border-primary-200 bg-white/70 p-2">
+              {profile.photoUrl ? (
+                <img src={profile.photoUrl} alt={`${profile.name} 个人照片`} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center bg-primary-50 text-primary-700">
+                  <span className="text-3xl font-black">RA</span>
+                  <span className="mt-2 text-sm font-bold">个人照片</span>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
-        <Section eyebrow="Intent" title="求职意向">
-          <p className="text-base font-bold leading-8 text-slate-700">{profile.intent}</p>
-        </Section>
-
-        <Section eyebrow="Strengths" title="个人优势">
-          <BulletList items={profile.advantages} />
-        </Section>
-
-        <Section eyebrow="Experience" title="工作经历">
-          <ExperienceList items={profile.workExperience} />
-        </Section>
-
-        <Section eyebrow="Projects" title="项目经历">
-          <ExperienceList items={profile.projects} />
-        </Section>
-
-        <Section eyebrow="Education" title="教育经历">
-          <ExperienceList items={profile.education} />
-        </Section>
-
-        <Section eyebrow="Self Review" title="个人评价">
-          <BulletList items={profile.selfReview} />
-        </Section>
+        {sections.map((section, index) => (
+          <Section key={`${section.title}-${index}`} eyebrow={`Section ${index + 1}`} title={section.title}>
+            <SectionContent content={section.content} />
+          </Section>
+        ))}
       </div>
-
-      <aside className="grid gap-6 lg:sticky lg:top-24 lg:self-start">
-        <Section eyebrow="Skills" title="核心技能">
-          <div className="grid gap-4">
-            {(profile.skills || []).map((group) => (
-              <div key={group.name}>
-                <h3 className="mb-2 text-sm font-black text-slate-950">{group.name}</h3>
-                <Tags items={group.items} />
-              </div>
-            ))}
-          </div>
-        </Section>
-        <Section eyebrow="Ra Direction" title="方向">
-          <p className="text-sm leading-7 text-slate-600">
-            Android 系统、Framework、智能穿戴、嵌入式 Android 与系统问题闭环。
-          </p>
-        </Section>
-      </aside>
     </motion.div>
   )
 }

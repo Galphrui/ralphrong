@@ -74,18 +74,13 @@ const RaEls = {
   siteStatus: document.querySelector("#RaSiteStatusText"),
   profileName: document.querySelector("#RaProfileNameInput"),
   profileHeadline: document.querySelector("#RaProfileHeadlineInput"),
+  profilePhoto: document.querySelector("#RaProfilePhotoInput"),
   profileContacts: document.querySelector("#RaProfileContactsInput"),
-  profileIntent: document.querySelector("#RaProfileIntentInput"),
   profileSummary: document.querySelector("#RaProfileSummaryInput"),
-  profileAdvantages: document.querySelector("#RaProfileAdvantagesInput"),
-  profileSkills: document.querySelector("#RaProfileSkillsInput"),
-  profileWork: document.querySelector("#RaProfileWorkInput"),
-  profileProjects: document.querySelector("#RaProfileProjectsInput"),
-  profileEducation: document.querySelector("#RaProfileEducationInput"),
-  profileReview: document.querySelector("#RaProfileReviewInput"),
+  profileSectionList: document.querySelector("#RaProfileSectionList"),
+  addProfileSection: document.querySelector("#RaAddProfileSectionButton"),
   saveProfile: document.querySelector("#RaSaveProfileButton"),
   publishProfile: document.querySelector("#RaPublishProfileButton"),
-  formatProfile: document.querySelector("#RaFormatProfileButton"),
   profileStatus: document.querySelector("#RaProfileStatusText"),
 };
 
@@ -439,15 +434,100 @@ function renderProfileForm() {
   const profile = RaData.profile || getDefaultProfile();
   RaEls.profileName.value = profile.name || "";
   RaEls.profileHeadline.value = profile.headline || "";
+  RaEls.profilePhoto.value = profile.photoUrl || "";
   RaEls.profileContacts.value = (profile.contacts || []).join("\n");
-  RaEls.profileIntent.value = profile.intent || "";
   RaEls.profileSummary.value = profile.summary || "";
-  RaEls.profileAdvantages.value = (profile.advantages || []).join("\n");
-  RaEls.profileSkills.value = JSON.stringify(profile.skills || [], null, 2);
-  RaEls.profileWork.value = JSON.stringify(profile.workExperience || [], null, 2);
-  RaEls.profileProjects.value = JSON.stringify(profile.projects || [], null, 2);
-  RaEls.profileEducation.value = JSON.stringify(profile.education || [], null, 2);
-  RaEls.profileReview.value = (profile.selfReview || []).join("\n");
+  renderProfileSections(getProfileSections(profile));
+}
+
+function renderProfileSections(sections) {
+  RaEls.profileSectionList.innerHTML = sections
+    .map(
+      (section, index) => `
+        <article class="RaProfileSectionItem" data-ra-profile-section="${index}">
+          <div class="RaProfileSectionHeader">
+            <strong>栏目 ${index + 1}</strong>
+            <button class="RaDangerButton" type="button" data-ra-delete-profile-section="${index}">删除</button>
+          </div>
+          <label class="RaField">
+            标题
+            <input class="RaProfileSectionTitle" value="${escapeAttr(section.title || "")}" />
+          </label>
+          <label class="RaField">
+            内容
+            <textarea class="RaProfileSectionContent" rows="8">${escapeHtml(section.content || "")}</textarea>
+          </label>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function getProfileSections(profile = {}) {
+  if (Array.isArray(profile.sections) && profile.sections.length) {
+    return profile.sections
+      .map((section) => ({
+        title: String(section.title || "").trim(),
+        content: String(section.content || "").trim(),
+      }))
+      .filter((section) => section.title || section.content);
+  }
+
+  return [
+    { title: "求职意向", content: profile.intent || "" },
+    { title: "个人优势", content: listToText(profile.advantages) },
+    { title: "核心技能", content: skillsToText(profile.skills) },
+    { title: "工作经历", content: experienceToText(profile.workExperience) },
+    { title: "项目经历", content: experienceToText(profile.projects) },
+    { title: "教育经历", content: experienceToText(profile.education) },
+    { title: "个人评价", content: listToText(profile.selfReview) },
+  ].filter((section) => section.title || section.content);
+}
+
+function collectProfileSections() {
+  return [...RaEls.profileSectionList.querySelectorAll(".RaProfileSectionItem")]
+    .map((item) => ({
+      title: item.querySelector(".RaProfileSectionTitle").value.trim(),
+      content: item.querySelector(".RaProfileSectionContent").value.trim(),
+    }))
+    .filter((section) => section.title || section.content);
+}
+
+function addProfileSection() {
+  const sections = collectProfileSections();
+  sections.push({ title: "", content: "" });
+  renderProfileSections(sections);
+}
+
+function deleteProfileSection(index) {
+  const sections = collectProfileSections();
+  sections.splice(index, 1);
+  renderProfileSections(sections);
+}
+
+function listToText(items) {
+  return (Array.isArray(items) ? items : []).join("\n");
+}
+
+function skillsToText(groups) {
+  return (Array.isArray(groups) ? groups : [])
+    .map((group) => [group.name, ...(group.items || []).map((item) => `- ${item}`)].filter(Boolean).join("\n"))
+    .join("\n\n");
+}
+
+function experienceToText(items) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) =>
+      [
+        item.title,
+        item.period ? `时间：${item.period}` : "",
+        item.meta ? `说明：${item.meta}` : "",
+        ...(item.details || []).map((detail) => `- ${detail}`),
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    )
+    .join("\n\n");
 }
 
 function selectPost(slug) {
@@ -552,29 +632,23 @@ function lines(value) {
     .filter(Boolean);
 }
 
-function parseJsonField(value, fallback, label) {
-  try {
-    const parsed = JSON.parse(value || "null");
-    return parsed || fallback;
-  } catch (error) {
-    throw new Error(`${label} JSON 格式不正确：${error.message}`);
-  }
-}
-
 function saveProfileInfo() {
   try {
+    const sections = collectProfileSections();
     RaData.profile = {
       name: RaEls.profileName.value.trim() || "Ralph Rong / Ra",
       headline: RaEls.profileHeadline.value.trim(),
+      photoUrl: RaEls.profilePhoto.value.trim(),
       contacts: lines(RaEls.profileContacts.value),
-      intent: RaEls.profileIntent.value.trim(),
       summary: RaEls.profileSummary.value.trim(),
-      advantages: lines(RaEls.profileAdvantages.value),
-      skills: parseJsonField(RaEls.profileSkills.value, [], "核心技能"),
-      workExperience: parseJsonField(RaEls.profileWork.value, [], "工作经历"),
-      projects: parseJsonField(RaEls.profileProjects.value, [], "项目经历"),
-      education: parseJsonField(RaEls.profileEducation.value, [], "教育经历"),
-      selfReview: lines(RaEls.profileReview.value),
+      sections,
+      intent: findSectionContent(sections, "求职") || "",
+      advantages: sectionLines(sections, "优势"),
+      skills: sectionToSkillGroups(sections, "技能"),
+      workExperience: sectionToExperience(sections, "工作"),
+      projects: sectionToExperience(sections, "项目"),
+      education: sectionToExperience(sections, "教育"),
+      selfReview: sectionLines(sections, "评价"),
     };
     saveLocalData();
     renderProfileForm();
@@ -592,16 +666,55 @@ async function publishProfileInfo() {
   if (saveProfileInfo()) await publishData("profile");
 }
 
-function formatProfileJson() {
-  try {
-    RaEls.profileSkills.value = JSON.stringify(parseJsonField(RaEls.profileSkills.value, [], "核心技能"), null, 2);
-    RaEls.profileWork.value = JSON.stringify(parseJsonField(RaEls.profileWork.value, [], "工作经历"), null, 2);
-    RaEls.profileProjects.value = JSON.stringify(parseJsonField(RaEls.profileProjects.value, [], "项目经历"), null, 2);
-    RaEls.profileEducation.value = JSON.stringify(parseJsonField(RaEls.profileEducation.value, [], "教育经历"), null, 2);
-    setStatus("简历 JSON 已格式化。");
-  } catch (error) {
-    setStatus(`格式化失败：${error.message}`);
-  }
+function findSectionContent(sections, keyword) {
+  return sections.find((section) => section.title.includes(keyword))?.content || "";
+}
+
+function sectionLines(sections, keyword) {
+  return lines(findSectionContent(sections, keyword)).map(stripListMarker);
+}
+
+function sectionToSkillGroups(sections, keyword) {
+  const content = findSectionContent(sections, keyword);
+  const blocks = content
+    .split(/\n\s*\n/)
+    .map((block) => lines(block))
+    .filter((block) => block.length);
+  return blocks.map((block) => ({
+    name: stripListMarker(block[0] || "技能"),
+    items: block.slice(1).map(stripListMarker).filter(Boolean),
+  }));
+}
+
+function sectionToExperience(sections, keyword) {
+  const content = findSectionContent(sections, keyword);
+  return content
+    .split(/\n\s*\n/)
+    .map((block) => lines(block))
+    .filter((block) => block.length)
+    .map((block) => {
+      const title = stripListMarker(block[0] || "经历");
+      const details = [];
+      let period = "";
+      let meta = "";
+
+      block.slice(1).forEach((line) => {
+        const clean = stripListMarker(line);
+        if (clean.startsWith("时间：")) {
+          period = clean.slice(3).trim();
+        } else if (clean.startsWith("说明：")) {
+          meta = clean.slice(3).trim();
+        } else if (clean) {
+          details.push(clean);
+        }
+      });
+
+      return { title, period, meta, details };
+    });
+}
+
+function stripListMarker(value) {
+  return String(value || "").replace(/^[-*•]\s*/, "").trim();
 }
 
 function exportJson() {
@@ -933,6 +1046,7 @@ function normalizeProfile(profile = {}) {
   return {
     name: profile.name || fallback.name,
     headline: profile.headline || fallback.headline,
+    photoUrl: profile.photoUrl || "",
     contacts: Array.isArray(profile.contacts) ? profile.contacts : fallback.contacts,
     intent: profile.intent || fallback.intent,
     summary: profile.summary || fallback.summary,
@@ -942,6 +1056,7 @@ function normalizeProfile(profile = {}) {
     projects: Array.isArray(profile.projects) ? profile.projects : fallback.projects,
     education: Array.isArray(profile.education) ? profile.education : fallback.education,
     selfReview: Array.isArray(profile.selfReview) ? profile.selfReview : fallback.selfReview,
+    sections: getProfileSections(profile).length ? getProfileSections(profile) : fallback.sections,
   };
 }
 
@@ -949,6 +1064,7 @@ function getDefaultProfile() {
   return {
     name: "Ralph Rong / Ra",
     headline: "Android 系统工程师｜智能穿戴 / 安卓系统",
+    photoUrl: "",
     contacts: ["手机：【待补充】", "邮箱：【待补充】", "城市：【待补充】"],
     intent: "Android 系统工程师 / Android Framework 工程师 / 智能穿戴系统工程师",
     summary: "记录 Android 系统开发、智能穿戴项目、系统调试和版本问题闭环。",
@@ -958,6 +1074,15 @@ function getDefaultProfile() {
     projects: [],
     education: [],
     selfReview: [],
+    sections: [
+      { title: "求职意向", content: "Android 系统工程师 / Android Framework 工程师 / 智能穿戴系统工程师" },
+      { title: "个人优势", content: "" },
+      { title: "核心技能", content: "" },
+      { title: "工作经历", content: "" },
+      { title: "项目经历", content: "" },
+      { title: "教育经历", content: "" },
+      { title: "个人评价", content: "" },
+    ],
   };
 }
 
@@ -1054,7 +1179,12 @@ RaEls.saveSite.addEventListener("click", saveSiteInfo);
 RaEls.publishSite.addEventListener("click", publishSiteInfo);
 RaEls.saveProfile.addEventListener("click", saveProfileInfo);
 RaEls.publishProfile.addEventListener("click", publishProfileInfo);
-RaEls.formatProfile.addEventListener("click", formatProfileJson);
+RaEls.addProfileSection.addEventListener("click", addProfileSection);
+RaEls.profileSectionList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-ra-delete-profile-section]");
+  if (!button) return;
+  deleteProfileSection(Number(button.dataset.raDeleteProfileSection));
+});
 RaEls.title.addEventListener("input", () => {
   if (!RaSelectedSlug) RaEls.slug.value = slugify(RaEls.title.value);
 });
