@@ -40,20 +40,26 @@
 
   .resume-page {
     max-width: none !important;
-    gap: 12px !important;
+    gap: 10px !important;
   }
 
   .resume-sheet,
   .resume-section {
     break-inside: avoid;
+    border-color: #cbd5e1 !important;
     box-shadow: none !important;
   }
 
   .resume-sheet {
     background: #fff !important;
+    padding: 16px !important;
   }
 
   .resume-section {
-    padding: 14px !important;
+    padding: 12px !important;
+  }
+
+  .resume-section article {
+    break-inside: avoid;
   }
 }
