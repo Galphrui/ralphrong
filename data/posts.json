@@ -630,7 +630,8 @@
     "selfReview": [
       "做事偏工程落地，重视问题复现、日志证据、影响范围和回归验证，能够在版本压力下推进问题闭环。",
       "熟悉智能手表项目从需求开发到量产维护的节奏，具备跨模块沟通能力和持续维护复杂系统问题的耐心。",
-      "希望继续深耕 Android 系统、Framework、智能穿戴或嵌入式 Android 方向，承担更完整的系统模块和项目交付职责。"
+      "希望继续深耕 Android 系统、Framework、智能穿戴或嵌入式 Android 方向，承担更完整的系统模块和项目交付职责。",
+      "grantDefaultSystemHandlerPermissions"
     ]
   }
 }
