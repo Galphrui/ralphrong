@@ -4,6 +4,7 @@ const RA_LOCAL_API_BASE =
   location.hostname === "localhost" || location.hostname === "127.0.0.1" ? location.origin : "";
 const RA_IS_LOCAL_ADMIN = Boolean(RA_LOCAL_API_BASE);
 const RA_API_BASE = (window.BLOG_ADMIN_API_BASE || RA_LOCAL_API_BASE || "").replace(/\/$/, "");
+const RA_SESSION_TOKEN_KEY = "RaBlogAdminSessionToken";
 
 let RaData = getDefaultData();
 let RaSelectedSlug = "";
@@ -36,6 +37,7 @@ const RaEls = {
   path: document.querySelector("#RaPathInput"),
   saveSettings: document.querySelector("#RaSaveSettingsButton"),
   loadRemote: document.querySelector("#RaLoadRemoteButton"),
+  syncData: document.querySelector("#RaSyncDataButton"),
   openRepo: document.querySelector("#RaOpenRepoButton"),
   download: document.querySelector("#RaDownloadButton"),
   importInput: document.querySelector("#RaImportInput"),
@@ -51,11 +53,14 @@ const RaEls = {
   deletePost: document.querySelector("#RaDeletePostButton"),
   publish: document.querySelector("#RaPublishButton"),
   status: document.querySelector("#RaStatusText"),
+  deployStatus: document.querySelector("#RaDeployStatusText"),
   siteTitle: document.querySelector("#RaSiteTitleInput"),
   siteSubtitle: document.querySelector("#RaSiteSubtitleInput"),
   author: document.querySelector("#RaAuthorInput"),
   bio: document.querySelector("#RaBioInput"),
   saveSite: document.querySelector("#RaSaveSiteButton"),
+  publishSite: document.querySelector("#RaPublishSiteButton"),
+  siteStatus: document.querySelector("#RaSiteStatusText"),
   profileName: document.querySelector("#RaProfileNameInput"),
   profileHeadline: document.querySelector("#RaProfileHeadlineInput"),
   profileContacts: document.querySelector("#RaProfileContactsInput"),
@@ -68,7 +73,9 @@ const RaEls = {
   profileEducation: document.querySelector("#RaProfileEducationInput"),
   profileReview: document.querySelector("#RaProfileReviewInput"),
   saveProfile: document.querySelector("#RaSaveProfileButton"),
+  publishProfile: document.querySelector("#RaPublishProfileButton"),
   formatProfile: document.querySelector("#RaFormatProfileButton"),
+  profileStatus: document.querySelector("#RaProfileStatusText"),
 };
 
 initRaAdmin();
@@ -89,6 +96,7 @@ async function initRaAdmin() {
   RaEls.accountsNavLink.hidden = false;
   RaEls.accountsPanel.hidden = false;
   RaEls.localAccountTools.hidden = !RA_IS_LOCAL_ADMIN;
+  RaEls.syncData.hidden = !RA_IS_LOCAL_ADMIN;
 
   await loadInitialData();
   renderSiteForm();
@@ -137,6 +145,7 @@ async function logoutAdmin() {
   if (RA_API_BASE) {
     await raApi("/api/logout", { method: "POST" }).catch(() => {});
   }
+  localStorage.removeItem(RA_SESSION_TOKEN_KEY);
   location.href = "./login.html";
 }
 
@@ -183,13 +192,29 @@ async function loadRemoteData() {
 async function publishData() {
   try {
     saveSettings();
-    await raApi("/api/posts", {
-      method: "PUT",
-      body: JSON.stringify({ data: RaData }),
-    });
-    setStatus(RA_IS_LOCAL_ADMIN ? "已写入本地 data/posts.json。推送后外网博客会更新。" : "发布成功，GitHub Pages 稍后更新。");
+    const result = RA_IS_LOCAL_ADMIN
+      ? await raApi("/api/publish", {
+          method: "POST",
+          body: JSON.stringify({ data: RaData, message: `chore: publish Ra blog ${new Date().toISOString()}` }),
+        })
+      : await raApi("/api/posts", {
+          method: "PUT",
+          body: JSON.stringify({ data: RaData }),
+        });
+    setPublishResult(result);
   } catch (error) {
     setStatus(`发布失败：${error.message}`);
+    setDeployStatus(`发布失败：${error.message}`);
+  }
+}
+
+async function syncLocalData() {
+  try {
+    if (!RA_IS_LOCAL_ADMIN) throw new Error("外网后台发布会直接写入 GitHub，不需要本地推送。");
+    const result = await raApi("/api/sync", { method: "POST" });
+    setPublishResult(result);
+  } catch (error) {
+    setDeployStatus(`推送失败：${error.message}`);
   }
 }
 
@@ -228,7 +253,7 @@ async function createAccount() {
     });
     RaEls.accountPassword.value = "";
     await loadAccounts();
-    setAccountStatus("账号已新增。记得提交并推送 data/admin-users.json。");
+    await syncLocalChangesForAccounts("账号已新增并推送。");
   } catch (error) {
     setAccountStatus(`新增账号失败：${error.message}`);
   }
@@ -245,7 +270,7 @@ async function resetAccountPassword() {
     });
     RaEls.accountPassword.value = "";
     await loadAccounts();
-    setAccountStatus("密码已重置。记得提交并推送 data/admin-users.json。");
+    await syncLocalChangesForAccounts("密码已重置并推送。");
   } catch (error) {
     setAccountStatus(`重置密码失败：${error.message}`);
   }
@@ -260,7 +285,11 @@ async function saveResetCode() {
       body: JSON.stringify({ resetCode }),
     });
     RaEls.resetCode.value = "";
-    setAccountStatus(RA_IS_LOCAL_ADMIN ? "重置指令已保存。记得提交并推送 data/admin-users.json。" : "重置指令已保存到 GitHub。");
+    if (RA_IS_LOCAL_ADMIN) {
+      await syncLocalChangesForAccounts("重置指令已保存并推送。");
+    } else {
+      setAccountStatus("重置指令已保存到 GitHub。");
+    }
   } catch (error) {
     setAccountStatus(`保存重置指令失败：${error.message}`);
   }
@@ -277,10 +306,24 @@ async function deleteAccount() {
     });
     RaEls.accountUser.value = "";
     await loadAccounts();
-    setAccountStatus("账号已删除。记得提交并推送 data/admin-users.json。");
+    await syncLocalChangesForAccounts("账号已删除并推送。");
   } catch (error) {
     setAccountStatus(`删除账号失败：${error.message}`);
   }
+}
+
+async function syncLocalChangesForAccounts(successMessage) {
+  if (!RA_IS_LOCAL_ADMIN) {
+    setAccountStatus(successMessage);
+    return;
+  }
+  const result = await raApi("/api/sync", { method: "POST" });
+  const deploy = result.deploy;
+  const message = deploy?.pushed
+    ? `${successMessage} 已推送到 ${deploy.branch} 分支，GitHub Pages 稍后更新。`
+    : `${successMessage} ${deploy?.message || ""}`.trim();
+  setAccountStatus(message);
+  setDeployStatus(message);
 }
 
 function renderPostList() {
@@ -392,7 +435,13 @@ function saveSiteInfo() {
     },
   };
   saveLocalData();
-  setStatus("站点信息已保存到当前数据，点击发布写入后端。");
+  setSiteStatus("站点信息已保存到当前数据，点击发布到外网。");
+  setStatus("站点信息已保存到当前数据，点击发布到外网。");
+  return true;
+}
+
+async function publishSiteInfo() {
+  if (saveSiteInfo()) await publishData();
 }
 
 function lines(value) {
@@ -428,10 +477,18 @@ function saveProfileInfo() {
     };
     saveLocalData();
     renderProfileForm();
-    setStatus("Ra 简历已保存到当前数据，点击发布写入后端。");
+    setProfileStatus("Ra 简历已保存到当前数据，点击发布到外网。");
+    setStatus("Ra 简历已保存到当前数据，点击发布到外网。");
+    return true;
   } catch (error) {
+    setProfileStatus(`简历保存失败：${error.message}`);
     setStatus(`简历保存失败：${error.message}`);
+    return false;
   }
+}
+
+async function publishProfileInfo() {
+  if (saveProfileInfo()) await publishData();
 }
 
 function formatProfileJson() {
@@ -578,21 +635,49 @@ function getSettings() {
 
 async function raApi(path, options = {}) {
   if (!RA_API_BASE) throw new Error("后台 API 未配置。");
-  const response = await fetch(`${RA_API_BASE}${path}`, {
-    method: options.method || "GET",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    body: options.body,
-  });
+  let response;
+  try {
+    response = await fetch(`${RA_API_BASE}${path}`, {
+      method: options.method || "GET",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders(),
+        ...(options.headers || {}),
+      },
+      body: options.body,
+    });
+  } catch (error) {
+    throw new Error(`无法连接后台 API：${RA_API_BASE}`);
+  }
 
   const result = await response.json().catch(() => ({}));
   if (!response.ok || result.ok === false) {
     throw new Error(result.error || `后台服务请求失败：${response.status}`);
   }
   return result;
+}
+
+function authHeaders() {
+  const token = localStorage.getItem(RA_SESSION_TOKEN_KEY);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function setPublishResult(result) {
+  const deploy = result.deploy;
+  if (RA_IS_LOCAL_ADMIN && deploy) {
+    const files = deploy.changedFiles?.length ? `变更文件：${deploy.changedFiles.join(", ")}。` : "";
+    const message = deploy.pushed
+      ? `发布成功：已推送到 ${deploy.branch} 分支。${files}GitHub Pages 稍后自动更新。`
+      : `数据已写入，${deploy.message}`;
+    setStatus(message);
+    setDeployStatus(message);
+    return;
+  }
+
+  const message = "发布成功：已写入 GitHub，GitHub Pages 稍后自动更新。";
+  setStatus(message);
+  setDeployStatus(message);
 }
 
 function createEmptyPost() {
@@ -705,6 +790,18 @@ function setStatus(message) {
   RaEls.status.textContent = message;
 }
 
+function setDeployStatus(message) {
+  if (RaEls.deployStatus) RaEls.deployStatus.textContent = message;
+}
+
+function setSiteStatus(message) {
+  if (RaEls.siteStatus) RaEls.siteStatus.textContent = message;
+}
+
+function setProfileStatus(message) {
+  if (RaEls.profileStatus) RaEls.profileStatus.textContent = message;
+}
+
 function setAccountStatus(message) {
   RaEls.accountStatus.textContent = message;
 }
@@ -738,6 +835,7 @@ RaEls.detectRepo.addEventListener("click", () => {
   saveSettings();
 });
 RaEls.loadRemote.addEventListener("click", loadRemoteData);
+RaEls.syncData.addEventListener("click", syncLocalData);
 RaEls.openRepo.addEventListener("click", openRepository);
 RaEls.publish.addEventListener("click", publishData);
 RaEls.download.addEventListener("click", exportJson);
@@ -750,7 +848,9 @@ RaEls.newPost.addEventListener("click", createNewPost);
 RaEls.form.addEventListener("submit", saveCurrentPost);
 RaEls.deletePost.addEventListener("click", deleteSelectedPost);
 RaEls.saveSite.addEventListener("click", saveSiteInfo);
+RaEls.publishSite.addEventListener("click", publishSiteInfo);
 RaEls.saveProfile.addEventListener("click", saveProfileInfo);
+RaEls.publishProfile.addEventListener("click", publishProfileInfo);
 RaEls.formatProfile.addEventListener("click", formatProfileJson);
 RaEls.title.addEventListener("input", () => {
   if (!RaSelectedSlug) RaEls.slug.value = slugify(RaEls.title.value);

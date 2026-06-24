@@ -1,10 +1,10 @@
 {
   "version": 1,
   "resetCode": {
-    "passwordHash": "4676daa67647f9bed0740573616803e6cf5fc6993e183d600285e3d1c9d7d1f6",
-    "salt": "e693c5900c0fe5e8e3907c236d51bd00",
-    "iterations": 210000,
-    "updatedAt": "2026-06-24T00:00:00.000Z"
+    "passwordHash": "ae792e1219780c0d89e50c165628c94421c3991b273b79575b595350f09d521c",
+    "salt": "6896bbbb05019ed216490f383c89335a",
+    "iterations": 100000,
+    "updatedAt": "2026-06-24T01:43:09.156Z"
   },
   "users": [
     {

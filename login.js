@@ -2,6 +2,7 @@ const RA_LOCAL_API_BASE =
   location.hostname === "localhost" || location.hostname === "127.0.0.1" ? location.origin : "";
 const RA_IS_LOCAL_ADMIN = Boolean(RA_LOCAL_API_BASE);
 const RA_API_BASE = (window.BLOG_ADMIN_API_BASE || RA_LOCAL_API_BASE || "").replace(/\/$/, "");
+const RA_SESSION_TOKEN_KEY = "RaBlogAdminSessionToken";
 
 const RaLoginEls = {
   user: document.querySelector("#RaLoginUserInput"),
@@ -41,6 +42,7 @@ async function login() {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
+    saveSessionToken(result.sessionToken);
     setLoginStatus(`登录成功：${result.user}`);
     goAdmin();
   } catch (error) {
@@ -62,6 +64,7 @@ async function register() {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
+    saveSessionToken(result.sessionToken);
     setLoginStatus(`注册成功：${result.user}`);
     goAdmin();
   } catch (error) {
@@ -104,21 +107,36 @@ async function getSession() {
 
 async function raApi(path, options = {}) {
   if (!RA_API_BASE) throw new Error("后台 API 未配置。");
-  const response = await fetch(`${RA_API_BASE}${path}`, {
-    method: options.method || "GET",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    body: options.body,
-  });
+  let response;
+  try {
+    response = await fetch(`${RA_API_BASE}${path}`, {
+      method: options.method || "GET",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders(),
+        ...(options.headers || {}),
+      },
+      body: options.body,
+    });
+  } catch (error) {
+    throw new Error(`无法连接后台 API：${RA_API_BASE}`);
+  }
 
   const result = await response.json().catch(() => ({}));
   if (!response.ok || result.ok === false) {
     throw new Error(result.error || `后台服务请求失败：${response.status}`);
   }
   return result;
+}
+
+function authHeaders() {
+  const token = localStorage.getItem(RA_SESSION_TOKEN_KEY);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function saveSessionToken(token) {
+  if (token) localStorage.setItem(RA_SESSION_TOKEN_KEY, token);
 }
 
 function goAdmin() {

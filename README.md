@@ -68,7 +68,7 @@ data/admin-users.json
 - 算法：PBKDF2
 - 哈希：SHA-256
 - salt：16 字节随机数，hex 存储
-- iterations：210000
+- iterations：100000（Cloudflare Worker PBKDF2 支持的上限）
 - 输出：32 字节 hash，hex 存储
 
 本地账号管理后执行：
@@ -126,15 +126,7 @@ window.BLOG_ADMIN_API_BASE = "https://ralphrong-blog-admin.ralphrong.workers.dev
 
 然后提交并推送。外网后台就能用本地注册过的账号登录和编辑文章。
 
-如果在本地后台编辑文章，点击发布会写入本地 `data/posts.json`。然后执行：
-
-```bash
-git add data/posts.json
-git commit -m "update blog content"
-git push
-```
-
-GitHub Pages 会自动更新公开博客。
+如果在本地后台编辑文章、站点信息或简历，点击“发布到外网”会写入本地 `data/posts.json`，并通过本地后台服务自动执行 `git add`、`git commit`、`git push`。GitHub Actions 随后会重新构建 GitHub Pages。
 
 ## 外网访问
 

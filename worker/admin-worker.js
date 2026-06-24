@@ -2,6 +2,7 @@ const DEFAULT_BRANCH = "main";
 const DEFAULT_DATA_PATH = "data/posts.json";
 const DEFAULT_USERS_PATH = "data/admin-users.json";
 const DEFAULT_SESSION_SECONDS = 60 * 60 * 8;
+const PASSWORD_ITERATIONS = 100000;
 
 export default {
   async fetch(request, env) {
@@ -13,16 +14,16 @@ export default {
 
     try {
       if (url.pathname === "/api/login" && request.method === "POST") {
-        return login(request, env);
+        return await login(request, env);
       }
       if (url.pathname === "/api/visits" && request.method === "GET") {
-        return getVisits(request, env);
+        return await getVisits(request, env);
       }
       if (url.pathname === "/api/visits" && request.method === "POST") {
-        return recordVisit(request, env);
+        return await recordVisit(request, env);
       }
       if (url.pathname === "/api/password-reset" && request.method === "POST") {
-        return resetPassword(request, env);
+        return await resetPassword(request, env);
       }
       if (url.pathname === "/api/reset-code" && request.method === "PUT") {
         await requireSession(request, env);
@@ -31,7 +32,7 @@ export default {
         return json({ ok: true }, request, env);
       }
       if (url.pathname === "/api/logout" && request.method === "POST") {
-        return logout(request, env);
+        return await logout(request, env);
       }
       if (url.pathname === "/api/session" && request.method === "GET") {
         const session = await requireSession(request, env);
@@ -111,7 +112,7 @@ async function login(request, env) {
   const cookie = await signSession({ sub: user.username, exp: expiresAt }, env);
 
   return json(
-    { ok: true, user: user.username },
+    { ok: true, user: user.username, sessionToken: cookie },
     request,
     env,
     200,
@@ -157,7 +158,9 @@ function logout(request, env) {
 }
 
 async function requireSession(request, env) {
-  const cookie = getCookie(request.headers.get("Cookie") || "", "blog_admin_session");
+  const cookie =
+    getBearerToken(request.headers.get("Authorization") || "") ||
+    getCookie(request.headers.get("Cookie") || "", "blog_admin_session");
   if (!cookie) throw httpError(401, "请先登录。");
 
   const session = await verifySession(cookie, env);
@@ -182,7 +185,7 @@ async function readGitHubJson(env, path) {
   const response = await fetch(
     `https://api.github.com/repos/${info.owner}/${info.repo}/contents/${path}?ref=${encodeURIComponent(info.branch)}`,
     {
-      headers: githubHeaders(env),
+      headers: githubReadHeaders(env),
     },
   );
   const result = await response.json().catch(() => ({}));
@@ -201,7 +204,7 @@ async function writeGitHubData(env, data) {
   const remote = await readGitHubData(env);
   const response = await fetch(`https://api.github.com/repos/${info.owner}/${info.repo}/contents/${info.path}`, {
     method: "PUT",
-    headers: githubHeaders(env),
+    headers: githubWriteHeaders(env),
     body: JSON.stringify({
       message: `chore: update blog data ${new Date().toISOString()}`,
       content: toBase64(JSON.stringify(data, null, 2) + "\n"),
@@ -221,7 +224,7 @@ async function writeGitHubUsers(env, data, sha, message = "chore: update admin u
   const path = env.GITHUB_USERS_PATH || DEFAULT_USERS_PATH;
   const response = await fetch(`https://api.github.com/repos/${info.owner}/${info.repo}/contents/${path}`, {
     method: "PUT",
-    headers: githubHeaders(env),
+    headers: githubWriteHeaders(env),
     body: JSON.stringify({
       message,
       content: toBase64(JSON.stringify(data, null, 2) + "\n"),
@@ -259,34 +262,50 @@ function githubInfo(env) {
   };
 }
 
-function githubHeaders(env) {
-  return {
+function githubReadHeaders(env) {
+  const headers = {
     Accept: "application/vnd.github+json",
-    Authorization: `Bearer ${required(env.GITHUB_TOKEN, "GITHUB_TOKEN")}`,
     "User-Agent": "tech-blog-admin-worker",
     "X-GitHub-Api-Version": "2022-11-28",
+  };
+  if (env.GITHUB_TOKEN) headers.Authorization = `Bearer ${env.GITHUB_TOKEN}`;
+  return headers;
+}
+
+function githubWriteHeaders(env) {
+  return {
+    ...githubReadHeaders(env),
+    Authorization: `Bearer ${requiredGitHubToken(env)}`,
   };
 }
 
 async function verifyUserPassword(password, user) {
+  ensureWorkerSupportedIterations(user.iterations);
   const hash = await derivePasswordHash(password, user.salt, user.iterations);
   return timingSafeEqual(hash, user.passwordHash);
 }
 
 async function verifyResetCode(resetCode, users) {
   if (!users.resetCode?.passwordHash || !users.resetCode?.salt) return false;
-  const hash = await derivePasswordHash(resetCode, users.resetCode.salt, users.resetCode.iterations || 210000);
+  ensureWorkerSupportedIterations(users.resetCode.iterations || PASSWORD_ITERATIONS);
+  const hash = await derivePasswordHash(resetCode, users.resetCode.salt, users.resetCode.iterations || PASSWORD_ITERATIONS);
   return timingSafeEqual(hash, users.resetCode.passwordHash);
 }
 
 async function createPasswordRecord(password) {
   const salt = hex(crypto.getRandomValues(new Uint8Array(16)));
-  const iterations = 210000;
+  const iterations = PASSWORD_ITERATIONS;
   return {
     passwordHash: await derivePasswordHash(password, salt, iterations),
     salt,
     iterations,
   };
+}
+
+function ensureWorkerSupportedIterations(iterations) {
+  if (Number(iterations || PASSWORD_ITERATIONS) > PASSWORD_ITERATIONS) {
+    throw httpError(400, "当前账号密码哈希迭代数超过 Cloudflare Worker 支持上限。请点击“重置密码”，使用重置指令设置一次新密码后再登录。");
+  }
 }
 
 async function derivePasswordHash(password, salt, iterations) {
@@ -335,7 +354,7 @@ function corsHeaders(request, env) {
   const allowedOrigin = env.ADMIN_ORIGIN || "https://galphrui.github.io";
   const headers = new Headers({
     "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
     Vary: "Origin",
   });
@@ -360,6 +379,10 @@ function getCookie(cookieHeader, name) {
     ?.slice(name.length + 1);
 }
 
+function getBearerToken(header) {
+  return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+}
+
 function httpError(status, message) {
   const error = new Error(message);
   error.status = status;
@@ -369,6 +392,13 @@ function httpError(status, message) {
 function required(value, name) {
   if (!value) throw httpError(500, `Worker 缺少环境变量：${name}`);
   return value;
+}
+
+function requiredGitHubToken(env) {
+  if (!env.GITHUB_TOKEN) {
+    throw httpError(500, "Worker 缺少 GITHUB_TOKEN。外网后台可以登录读取数据，但发布、改密和重置指令必须先在 Cloudflare Worker Secret 配置 GitHub Token。");
+  }
+  return env.GITHUB_TOKEN;
 }
 
 function validatePassword(password) {

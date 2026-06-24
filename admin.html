@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
     <title>Ra 后台管理</title>
-    <link rel="stylesheet" href="./styles.css?v=ra-20260623-3" />
+    <link rel="stylesheet" href="./styles.css?v=ra-20260624-2" />
   </head>
   <body class="RaPage RaAdminPage RaAuthPending">
     <header class="RaTopbar">
@@ -65,6 +65,7 @@
         <div class="RaActions">
           <button id="RaSaveSettingsButton" type="button">保存设置</button>
           <button id="RaLoadRemoteButton" class="RaSecondaryButton" type="button">读取数据</button>
+          <button id="RaSyncDataButton" class="RaPublishButton" type="button">推送数据</button>
           <button id="RaOpenRepoButton" class="RaSecondaryButton" type="button">打开仓库</button>
           <button id="RaDownloadButton" class="RaSecondaryButton" type="button">导出 JSON</button>
           <label class="RaFileButton">
@@ -72,7 +73,8 @@
             <input id="RaImportInput" type="file" accept="application/json" />
           </label>
         </div>
-        <p class="RaHint">账号注册和账号控制只在本地后台开放；外网后台只允许已注册账号登录和编辑内容。</p>
+        <p class="RaHint">本地后台会把数据写入文件，并可直接提交推送到 GitHub；外网后台会通过 Worker 直接写入 GitHub。</p>
+        <p class="RaStatus" id="RaDeployStatusText" role="status"></p>
       </section>
 
       <section class="RaAdminGrid">
@@ -120,7 +122,7 @@
             <div class="RaActions">
               <button type="submit">保存到数据</button>
               <button id="RaDeletePostButton" class="RaDangerButton" type="button">删除文章</button>
-              <button id="RaPublishButton" class="RaPublishButton" type="button">发布</button>
+              <button id="RaPublishButton" class="RaPublishButton" type="button">发布到外网</button>
             </div>
           </form>
           <p class="RaStatus" id="RaStatusText" role="status"></p>
@@ -152,7 +154,9 @@
         </div>
         <div class="RaActions">
           <button id="RaSaveSiteButton" type="button">保存站点信息</button>
+          <button id="RaPublishSiteButton" class="RaPublishButton" type="button">保存并发布</button>
         </div>
+        <p class="RaStatus" id="RaSiteStatusText" role="status"></p>
       </section>
 
       <section class="RaPanel" id="RaProfilePanel">
@@ -208,8 +212,10 @@
         </div>
         <div class="RaActions">
           <button id="RaSaveProfileButton" type="button">保存简历</button>
+          <button id="RaPublishProfileButton" class="RaPublishButton" type="button">保存并发布简历</button>
           <button id="RaFormatProfileButton" class="RaSecondaryButton" type="button">格式化 JSON</button>
         </div>
+        <p class="RaStatus" id="RaProfileStatusText" role="status"></p>
       </section>
 
       <section class="RaPanel" id="RaAccountsPanel">
@@ -218,7 +224,7 @@
           <h2>账号管理</h2>
         </div>
         <p class="RaHint">
-          重置指令用于登录页找回密码。账号新增、删除和直接改密只在本地后台服务中可用。
+          重置指令用于登录页找回密码。账号新增、删除和直接改密只在本地后台服务中可用；本地修改后会自动推送账号数据。若外网提示密码哈希迭代数超限，请在这里重置一次账号密码。
         </p>
         <div class="RaFormGrid">
           <label class="RaField RaWide">
@@ -252,7 +258,7 @@
       </section>
     </main>
 
-    <script src="./admin-config.js?v=ra-20260624-1"></script>
-    <script src="./admin.js?v=ra-20260624-1"></script>
+    <script src="./admin-config.js?v=ra-20260624-2"></script>
+    <script src="./admin.js?v=ra-20260624-2"></script>
   </body>
 </html>

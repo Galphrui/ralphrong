@@ -1,8 +1,10 @@
 import { createHash, randomBytes, timingSafeEqual, pbkdf2Sync } from "node:crypto";
+import { execFile } from "node:child_process";
 import { createReadStream, existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve } from "node:path";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
@@ -10,6 +12,8 @@ const port = Number(process.env.PORT || 8080);
 const usersPath = join(root, "data", "admin-users.json");
 const postsPath = join(root, "data", "posts.json");
 const sessions = new Map();
+const execFileAsync = promisify(execFile);
+const PASSWORD_ITERATIONS = 100000;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -43,8 +47,8 @@ async function handleApi(request, response) {
   if (url.pathname === "/api/register" && request.method === "POST") {
     const body = await readJson(request);
     const result = await register(body.username, body.password);
-    setSession(response, result.username);
-    sendJson(response, 200, { ok: true, user: result.username });
+    const sessionToken = setSession(response, result.username);
+    sendJson(response, 200, { ok: true, user: result.username, sessionToken });
     return;
   }
 
@@ -100,8 +104,8 @@ async function handleApi(request, response) {
   if (url.pathname === "/api/login" && request.method === "POST") {
     const body = await readJson(request);
     const result = await login(body.username, body.password);
-    setSession(response, result.username);
-    sendJson(response, 200, { ok: true, user: result.username });
+    const sessionToken = setSession(response, result.username);
+    sendJson(response, 200, { ok: true, user: result.username, sessionToken });
     return;
   }
 
@@ -132,6 +136,32 @@ async function handleApi(request, response) {
     return;
   }
 
+  if (url.pathname === "/api/publish" && request.method === "POST") {
+    requireSession(request);
+    const body = await readJson(request);
+    await writePosts(body.data);
+    const deploy = await deployDataFiles(["data/posts.json"], body.message || "chore: publish blog data");
+    sendJson(response, 200, { ok: true, deploy });
+    return;
+  }
+
+  if (url.pathname === "/api/sync" && request.method === "POST") {
+    requireSession(request);
+    const deploy = await deployDataFiles(
+      ["data/posts.json", "data/admin-users.json"],
+      "chore: sync blog admin data",
+    );
+    sendJson(response, 200, { ok: true, deploy });
+    return;
+  }
+
+  if (url.pathname === "/api/git/status" && request.method === "GET") {
+    requireSession(request);
+    const status = await getGitStatus(["data/posts.json", "data/admin-users.json"]);
+    sendJson(response, 200, { ok: true, status });
+    return;
+  }
+
   sendJson(response, 404, { ok: false, error: "Not found" });
 }
 
@@ -144,7 +174,7 @@ async function register(username, password) {
   }
 
   const salt = randomBytes(16).toString("hex");
-  const iterations = 210000;
+  const iterations = PASSWORD_ITERATIONS;
   const user = {
     username: cleanUser,
     passwordHash: hashPassword(password, salt, iterations),
@@ -165,7 +195,7 @@ async function changePassword(username, password) {
   if (!user) throw httpError(404, "账号不存在。");
 
   user.salt = randomBytes(16).toString("hex");
-  user.iterations = 210000;
+  user.iterations = PASSWORD_ITERATIONS;
   user.passwordHash = hashPassword(password, user.salt, user.iterations);
   user.updatedAt = new Date().toISOString();
   await writeUsers(store);
@@ -181,7 +211,7 @@ async function resetPasswordWithCode(username, password, resetCode) {
   if (!verifyResetCode(store, resetCode)) throw httpError(401, "重置指令错误。");
 
   user.salt = randomBytes(16).toString("hex");
-  user.iterations = 210000;
+  user.iterations = PASSWORD_ITERATIONS;
   user.passwordHash = hashPassword(password, user.salt, user.iterations);
   user.updatedAt = new Date().toISOString();
   await writeUsers(store);
@@ -193,7 +223,7 @@ async function changeResetCode(resetCode) {
   if (value.length < 8) throw httpError(400, "重置指令至少需要 8 位。");
   const store = await readUsers();
   const salt = randomBytes(16).toString("hex");
-  const iterations = 210000;
+  const iterations = PASSWORD_ITERATIONS;
   store.resetCode = {
     passwordHash: hashPassword(value, salt, iterations),
     salt,
@@ -254,6 +284,7 @@ function setSession(response, username) {
     expiresAt: Date.now() + 8 * 60 * 60 * 1000,
   });
   response.setHeader("Set-Cookie", `blog_admin_session=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800`);
+  return sessionId;
 }
 
 function clearSession(request, response) {
@@ -263,13 +294,69 @@ function clearSession(request, response) {
 }
 
 function requireSession(request) {
-  const sessionId = getCookie(request, "blog_admin_session");
+  const sessionId = getBearerToken(request) || getCookie(request, "blog_admin_session");
   const session = sessionId ? sessions.get(sessionId) : null;
   if (!session || session.expiresAt < Date.now()) {
     if (sessionId) sessions.delete(sessionId);
     throw httpError(401, "请先登录。");
   }
   return session.username;
+}
+
+async function deployDataFiles(files, message) {
+  const changedFiles = await getChangedFiles(files);
+  if (!changedFiles.length) {
+    return {
+      pushed: false,
+      branch: await currentBranch(),
+      message: "没有需要推送的数据变更。",
+      changedFiles: [],
+    };
+  }
+
+  await runGit(["add", ...changedFiles]);
+  const commit = await runGit(["commit", "-m", message, "--", ...changedFiles]);
+  const branch = await currentBranch();
+  const push = await runGit(["push", "origin", branch]);
+  return {
+    pushed: true,
+    branch,
+    message: "已提交并推送到 GitHub，GitHub Pages 稍后会自动构建。",
+    changedFiles,
+    commit: commit.stdout.trim(),
+    push: push.stdout.trim() || push.stderr.trim(),
+  };
+}
+
+async function getGitStatus(files) {
+  const changedFiles = await getChangedFiles(files);
+  return {
+    branch: await currentBranch(),
+    changedFiles,
+  };
+}
+
+async function getChangedFiles(files) {
+  const result = await runGit(["status", "--porcelain", "--", ...files]);
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^.. /, ""));
+}
+
+async function currentBranch() {
+  const result = await runGit(["rev-parse", "--abbrev-ref", "HEAD"]);
+  return result.stdout.trim() || "main";
+}
+
+async function runGit(args) {
+  try {
+    return await execFileAsync("git", args, { cwd: root, timeout: 120000 });
+  } catch (error) {
+    const message = [error.stderr, error.stdout, error.message].filter(Boolean).join("\n").trim();
+    throw httpError(500, message || `git ${args.join(" ")} 执行失败。`);
+  }
 }
 
 async function serveStatic(request, response) {
@@ -319,7 +406,7 @@ function hashPassword(password, salt, iterations) {
 
 function verifyResetCode(store, resetCode) {
   if (!store.resetCode?.passwordHash || !store.resetCode?.salt) return false;
-  const actual = hashPassword(resetCode, store.resetCode.salt, store.resetCode.iterations || 210000);
+  const actual = hashPassword(resetCode, store.resetCode.salt, store.resetCode.iterations || PASSWORD_ITERATIONS);
   return (
     actual.length === store.resetCode.passwordHash.length &&
     timingSafeEqual(Buffer.from(actual, "hex"), Buffer.from(store.resetCode.passwordHash, "hex"))
@@ -344,6 +431,11 @@ function getCookie(request, name) {
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${name}=`))
     ?.slice(name.length + 1);
+}
+
+function getBearerToken(request) {
+  const header = String(request.headers.authorization || "");
+  return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 }
 
 function httpError(status, message) {
