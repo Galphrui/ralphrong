@@ -11,3 +11,7 @@ GITHUB_REPO = "ralphrong"
 GITHUB_BRANCH = "main"
 GITHUB_DATA_PATH = "data/posts.json"
 GITHUB_USERS_PATH = "data/admin-users.json"
+
+[[kv_namespaces]]
+binding = "VISIT_KV"
+id = "3ce3a158509e44fc9acbe3102423ca35"

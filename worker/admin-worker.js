@@ -15,6 +15,12 @@ export default {
       if (url.pathname === "/api/login" && request.method === "POST") {
         return login(request, env);
       }
+      if (url.pathname === "/api/visits" && request.method === "GET") {
+        return getVisits(request, env);
+      }
+      if (url.pathname === "/api/visits" && request.method === "POST") {
+        return recordVisit(request, env);
+      }
       if (url.pathname === "/api/password-reset" && request.method === "POST") {
         return resetPassword(request, env);
       }
@@ -49,6 +55,46 @@ export default {
     }
   },
 };
+
+async function getVisits(request, env) {
+  const data = await readVisitStats(env);
+  return json({ ok: true, data }, request, env);
+}
+
+async function recordVisit(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const visitorId = normalizeVisitorId(body.visitorId);
+  const data = await readVisitStats(env);
+  data.visits += 1;
+  data.lastVisitAt = new Date().toISOString();
+
+  if (visitorId) {
+    const knownKey = `visitor:${visitorId}`;
+    const known = await env.VISIT_KV.get(knownKey);
+    if (!known) {
+      data.visitors += 1;
+      await env.VISIT_KV.put(knownKey, data.lastVisitAt);
+    }
+  }
+
+  await env.VISIT_KV.put("stats", JSON.stringify(data));
+  return json({ ok: true, data }, request, env);
+}
+
+async function readVisitStats(env) {
+  if (!env.VISIT_KV) throw httpError(500, "Worker 缺少 VISIT_KV 绑定。");
+  const stored = await env.VISIT_KV.get("stats", "json");
+  return {
+    visits: Number(stored?.visits || 0),
+    visitors: Number(stored?.visitors || 0),
+    lastVisitAt: stored?.lastVisitAt || "",
+  };
+}
+
+function normalizeVisitorId(value) {
+  const text = String(value || "").trim();
+  return /^[a-zA-Z0-9_-]{6,64}$/.test(text) ? text : "";
+}
 
 async function login(request, env) {
   const body = await request.json();
