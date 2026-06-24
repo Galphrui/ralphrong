@@ -319,11 +319,13 @@ async function deployDataFiles(files, message) {
   const commit = await runGit(["commit", "-m", message, "--", ...changedFiles]);
   const branch = await currentBranch();
   const push = await runGit(["push", "origin", branch]);
+  const headSha = await currentHeadSha();
   return {
     pushed: true,
     branch,
     message: "已提交并推送到 GitHub，GitHub Pages 稍后会自动构建。",
     changedFiles,
+    commitSha: headSha,
     commit: commit.stdout.trim(),
     push: push.stdout.trim() || push.stderr.trim(),
   };
@@ -349,6 +351,11 @@ async function getChangedFiles(files) {
 async function currentBranch() {
   const result = await runGit(["rev-parse", "--abbrev-ref", "HEAD"]);
   return result.stdout.trim() || "main";
+}
+
+async function currentHeadSha() {
+  const result = await runGit(["rev-parse", "HEAD"]);
+  return result.stdout.trim();
 }
 
 async function runGit(args) {

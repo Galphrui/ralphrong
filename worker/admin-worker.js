@@ -47,8 +47,8 @@ export default {
       if (url.pathname === "/api/posts" && request.method === "PUT") {
         await requireSession(request, env);
         const body = await request.json();
-        await writeGitHubData(env, body.data);
-        return json({ ok: true }, request, env);
+        const deploy = await writeGitHubData(env, body.data);
+        return json({ ok: true, deploy }, request, env);
       }
 
       return json({ ok: false, error: "Not found" }, request, env, 404);
@@ -234,7 +234,33 @@ async function writeGitHubData(env, data) {
   if (!response.ok) {
     throw httpError(response.status, result.message || "写入 GitHub 数据失败。");
   }
-  return result;
+  const workflow = await triggerPagesWorkflow(env).catch((error) => ({
+    triggered: false,
+    error: error.message || "GitHub Actions 触发失败。",
+  }));
+  return {
+    pushed: true,
+    branch: info.branch,
+    commitSha: result.commit?.sha || "",
+    workflowTriggered: workflow.triggered,
+    workflowError: workflow.error || "",
+    message: "已写入 GitHub，等待 GitHub Pages 构建。",
+  };
+}
+
+async function triggerPagesWorkflow(env) {
+  const info = githubInfo(env);
+  const response = await fetch(
+    `https://api.github.com/repos/${info.owner}/${info.repo}/actions/workflows/deploy.yml/dispatches`,
+    {
+      method: "POST",
+      headers: githubWriteHeaders(env),
+      body: JSON.stringify({ ref: info.branch }),
+    },
+  );
+  if (response.status === 204) return { triggered: true };
+  const result = await response.json().catch(() => ({}));
+  throw httpError(response.status, result.message || "触发 GitHub Actions 失败。");
 }
 
 async function writeGitHubUsers(env, data, sha, message = "chore: update admin users") {

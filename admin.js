@@ -5,6 +5,8 @@ const RA_LOCAL_API_BASE =
 const RA_IS_LOCAL_ADMIN = Boolean(RA_LOCAL_API_BASE);
 const RA_API_BASE = (window.BLOG_ADMIN_API_BASE || RA_LOCAL_API_BASE || "").replace(/\/$/, "");
 const RA_SESSION_TOKEN_KEY = "RaBlogAdminSessionToken";
+const RA_PUBLISH_POLL_ATTEMPTS = 36;
+const RA_PUBLISH_POLL_DELAY_MS = 5000;
 
 let RaData = getDefaultData();
 let RaSelectedSlug = "";
@@ -191,6 +193,7 @@ async function loadRemoteData() {
 
 async function publishData(target = "posts") {
   try {
+    setPublishing(true);
     saveSettings();
     const result = RA_IS_LOCAL_ADMIN
       ? await raApi("/api/publish", {
@@ -202,21 +205,28 @@ async function publishData(target = "posts") {
           body: JSON.stringify({ data: RaData }),
         });
     setPublishResult(result, target);
+    await waitForPagesUpdate(target, result.deploy);
   } catch (error) {
     const message = `发布失败：${error.message}`;
     setStatus(message);
     setDeployStatus(message);
     setTargetStatus(target, message);
+  } finally {
+    setPublishing(false);
   }
 }
 
 async function syncLocalData() {
   try {
+    setPublishing(true);
     if (!RA_IS_LOCAL_ADMIN) throw new Error("外网后台发布会直接写入 GitHub，不需要本地推送。");
     const result = await raApi("/api/sync", { method: "POST" });
     setPublishResult(result);
+    await waitForPagesUpdate("posts", result.deploy);
   } catch (error) {
     setDeployStatus(`推送失败：${error.message}`);
+  } finally {
+    setPublishing(false);
   }
 }
 
@@ -669,8 +679,10 @@ function setPublishResult(result, target = "posts") {
   const deploy = result.deploy;
   if (RA_IS_LOCAL_ADMIN && deploy) {
     const files = deploy.changedFiles?.length ? `变更文件：${deploy.changedFiles.join(", ")}。` : "";
+    const sha = deploy.commitSha ? `提交：${deploy.commitSha.slice(0, 7)}。` : "";
+    const workflow = deploy.workflowTriggered ? "已触发 Pages 构建。" : "";
     const message = deploy.pushed
-      ? `发布成功：已推送到 ${deploy.branch} 分支。${files}GitHub Pages 稍后自动更新。`
+      ? `发布成功：已推送到 ${deploy.branch} 分支。${sha}${files}${workflow}正在等待 GitHub Pages 上线...`
       : `数据已写入，${deploy.message}`;
     setStatus(message);
     setDeployStatus(message);
@@ -678,10 +690,94 @@ function setPublishResult(result, target = "posts") {
     return;
   }
 
-  const message = "发布成功：已写入 GitHub，GitHub Pages 稍后自动更新。";
+  const sha = deploy?.commitSha ? `提交：${deploy.commitSha.slice(0, 7)}。` : "";
+  const workflow = deploy?.workflowTriggered ? "已触发 Pages 构建。" : deploy?.workflowError ? `Pages 构建触发未确认：${deploy.workflowError}。` : "";
+  const message = `发布成功：已写入 GitHub。${sha}${workflow}正在等待 GitHub Pages 上线...`;
   setStatus(message);
   setDeployStatus(message);
   setTargetStatus(target, message);
+}
+
+async function waitForPagesUpdate(target = "posts", deploy = {}) {
+  const expectedSignature = createDataSignature(RaData);
+  const dataUrl = getPublicDataUrl();
+  const commitText = deploy?.commitSha ? `提交 ${deploy.commitSha.slice(0, 7)}，` : "";
+
+  for (let attempt = 1; attempt <= RA_PUBLISH_POLL_ATTEMPTS; attempt += 1) {
+    const message = `${commitText}正在等待公开博客上线（${attempt}/${RA_PUBLISH_POLL_ATTEMPTS}）...`;
+    setStatus(message);
+    setDeployStatus(message);
+    setTargetStatus(target, message);
+
+    await delay(attempt === 1 ? 1800 : RA_PUBLISH_POLL_DELAY_MS);
+
+    try {
+      const response = await fetch(`${dataUrl}${dataUrl.includes("?") ? "&" : "?"}t=${Date.now()}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`公开数据读取失败：${response.status}`);
+      const liveData = await response.json();
+      if (createDataSignature(liveData) === expectedSignature) {
+        const done = `上线完成：公开博客数据已更新。${commitText}现在刷新前台即可看到最新内容。`;
+        setStatus(done);
+        setDeployStatus(done);
+        setTargetStatus(target, done);
+        return;
+      }
+    } catch (error) {
+      const message = `正在等待公开博客上线；刚才检查失败：${error.message}`;
+      setDeployStatus(message);
+      setTargetStatus(target, message);
+    }
+  }
+
+  const timeout = `${commitText}已写入 GitHub，但暂未在公开博客读到更新。请稍后刷新前台，或打开 GitHub Actions 查看 Pages 构建状态。`;
+  setStatus(timeout);
+  setDeployStatus(timeout);
+  setTargetStatus(target, timeout);
+}
+
+function getPublicDataUrl() {
+  if (location.hostname.toLowerCase().endsWith(".github.io")) {
+    return new URL("./data/posts.json", location.href).href;
+  }
+
+  const settings = getSettings();
+  if (settings.owner && settings.repo) {
+    const owner = settings.owner.toLowerCase();
+    const repo = settings.repo;
+    const repoPath = repo.toLowerCase() === `${owner}.github.io` ? "" : `/${repo}`;
+    return `https://${owner}.github.io${repoPath}/data/posts.json`;
+  }
+
+  return new URL("./data/posts.json", location.href).href;
+}
+
+function createDataSignature(input) {
+  return JSON.stringify(canonicalize(normalizeData(input)));
+}
+
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === "object") {
+    return Object.keys(value)
+      .sort()
+      .reduce((result, key) => {
+        result[key] = canonicalize(value[key]);
+        return result;
+      }, {});
+  }
+  return value;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function setPublishing(isPublishing) {
+  [RaEls.publish, RaEls.publishSite, RaEls.publishProfile, RaEls.syncData].forEach((button) => {
+    if (button) button.disabled = isPublishing;
+  });
 }
 
 function setTargetStatus(target, message) {
