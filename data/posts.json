@@ -508,6 +508,17 @@
       "summary": "从《开发记录》导入的 Ra Android 开发记录，整理为可检索的公开技术笔记，已脱敏处理。",
       "content": "## 导入说明\n\n本文由《开发记录》PDF 开发记录导入，已跳过账号、密码、内网地址、VPN、代理等敏感内容。\n\n测试jni错误：\n\n01：\n\nPlain Text\n\n1 extern \"C\"\n\n2 JNIEXPORT jstring JNICALL\n\n3 [已脱敏凭据](JNIEnv *env, jobject thiz, j\n\nint i) {\n\n4 std::string hello = \"Hello from C++\";\n\n5 // env->GetInt\n\n6 // int i = 1 / 0;\n\n7 int *ptr = nullptr;\n\n8 *ptr = 42; // 访问 NULL 指针，导致 Segmentation Fault (SIGSEGV)\n\n10 return env->NewStringUTF(hello.c_str());\n\n11 }\n\n## public native String stringFromJni(int i);\n\n## 测试页\n\nPlain Text\n\n1 <activity\n\n2 android:name=\"com.sgtc.TestRaActivity\"\n\n3 android:exported=\"true\"/>\n\n## 如何写一个时间：\n\n## 直接写\n\nPlain Text\n\n1 <TextClock\n\n2 android:id=\"@+id/time\"\n\n3 android:layout_width=\"match_parent\"\n\n4 android:layout_height=\"wrap_content\"\n\n5 android:text=\"00:00\"\n\n6 android:textColor=\"@color/white\"\n\n7 android:[已脱敏凭据]\"30dp\"\n\n8 android:textSize=\"24sp\"\n\n9 android:format24Hour=\"HH:mm\"\n\n10 android:gravity=\"right\"/>\n\n## 带有上午下午\n\nPlain Text\n\n1 <TextClock\n\n2 android:id=\"@+id/time\"\n\n3 android:layout_width=\"wrap_content\"\n\n4 android:layout_height=\"wrap_content\"\n\n5 android:text=\"00:00\"\n\n6 android:textColor=\"#FB8C00\"\n\n7 android:textSize=\"24sp\"\n\n8 android:format24Hour=\"HH:mm\"/>\n\n## 时间TItle\n\nJava\n\n1 <LinearLayout\n\n2 android:layout_width=\"match_parent\"\n\n3 android:layout_height=\"80dp\"\n\n4 android:orientation=\"horizontal\">\n\n5 <ImageView\n\n6 android:id=\"@+id/back_one\"\n\n7 android:layout_width=\"60dp\"\n\n8 android:layout_height=\"60dp\"\n\n9 android:[已脱敏凭据]\"20dp\"\n\n10 android:layout_marginTop=\"15dp\"\n\n11 android:src=\"@drawable/ic_back\"/>\n\n12 <LinearLayout\n\n13 android:layout_width=\"match_parent\"\n\n14 android:layout_height=\"match_parent\"\n\n15 android:orientation=\"vertical\">\n\n16 <TextClock\n\n17 android:id=\"@+id/time_one\"android:layout_width=\"match_parent\"\n\n18 android:layout_height=\"wrap_content\"\n\n19 android:text=\"00:00\"\n\n20 android:textColor=\"@color/white\"\n\n21 android:layout_gravity=\"end\"\n\n22 android:[已脱敏凭据]\"40dp\"\n\n23 android:textSize=\"34sp\"\n\n24 android:format24Hour=\"HH:mm\"\n\n25 android:gravity=\"right\"/><TextView\n\n26 android:layout_width=\"wrap_content\"\n\n27 android:layout_height=\"wrap_content\"\n\n28 android:gravity=\"right\"\n\n29 android:layout_weight=\"1\"\n\n30 android:layout_gravity=\"right\"\n\n31 android:[已脱敏凭据]\"20dp\"\n\n32 android:text=\"@string/menu_edit_alarm\"\n\n33 android:textColor=\"#FB8C00\"\n\n34 android:textSize=\"30sp\"/>\n\n35 </LinearLayout></LinearLayout>",
       "readingMinutes": 5
+    },
+    {
+      "title": "新的 Ra 文章",
+      "slug": "新的-ra-文章",
+      "date": "2026-06-24",
+      "tags": [
+        "Ra记录"
+      ],
+      "summary": "在这里填写摘要。",
+      "content": "## 背景\n\n记录问题背景。\n\n## 方案\n\n记录解决方案。",
+      "readingMinutes": 1
     }
   ],
   "profile": {
