@@ -30,6 +30,15 @@
       "readingMinutes": 8
     },
     {
+      "title": "系统闹钟为何在触发的时候只响铃无UI界面",
+      "slug": "系统闹钟为何在触发的时候只响铃无ui界面",
+      "date": "2026-06-25",
+      "tags": [],
+      "summary": "设备正常开机状态下，普通闹钟/起床闹钟触发时铃声和 UI 都正常。\n\n设备关机后由闹钟触发开机时，铃声正常播放，`SgtcAlarmActivity` 也能启动，但 UI 只闪一下就消失，最终停留在 Launcher，表现为“只响铃无 UI”。",
+      "content": "**复现步骤**\n\n1. 设置普通闹钟或起床闹钟。\n2. 设备关机。\n3. 等待闹钟触发并拉起开机。\n4. 开机后到闹钟触发时间，铃声播放。\n5. `SgtcAlarmActivity` 短暂闪现后消失，无法稳定显示闹钟 UI。\n\n**排查逻辑**\n\n先确认 Activity 是否没启动，日志证明不是：\n\n- `SgtcAlarmActivity onCreate`\n- `SgtcAlarmActivity onStart`\n- `SgtcAlarmActivity onResume`\n\n说明 UI 链路已经被拉起。\n\n随后确认是否被 Keyguard/Launcher 覆盖，日志显示 Activity 曾经在 top task，但马上 `onPause finishing=true`，说明不是单纯被盖住，而是 Activity 已经进入 finish 流程。\n\n关键日志最终落在状态机：\n\n```text\nIntentId: 28 GlobalId: 29 AlarmState: 5\nIgnoring old Intent\n```\n\n`AlarmStateManager` 把切换到 `FIRED_STATE` 的状态变更 Intent 判定为旧 Intent 并丢弃。铃声仍然播放，但 `AlarmInstance` 的状态没有稳定更新到 `FIRED_STATE`。\n\n**问题定位**\n\n根因在 [SgtcAlarmActivity.java](F:/Sgtc_APP_ALL/SgtcDeskClock20/app/src/main/java/com/sgtc/alarmclock/SgtcAlarmActivity.java:317) 的 `onResume()`：\n\n原逻辑会重新查询 `AlarmInstance`，如果发现：\n\n```java\nmAlarmInstance.mAlarmState != AlarmInstance.FIRED_STATE\n```\n\n就直接 `finish()`。\n\n关机闹钟开机阶段，状态变更 Intent 被 `Ignoring old Intent` 丢弃后，铃声已响，但 provider 中的 instance 状态可能还不是 `FIRED_STATE`。于是 Activity 自己判断“不是 fired，不该显示”，直接关闭，造成 UI 闪一下消失。\n\n**最终原因**\n\n这是一个关机闹钟开机阶段的状态同步时序问题：\n\n- 铃声链路已经执行。\n- Activity 启动链路已经执行。\n- 但 `AlarmStateManager` 的 `FIRED_STATE` 状态变更被旧 Intent 判断拦截。\n- `SgtcAlarmActivity.onResume()` 依赖 provider 状态强校验，状态未同步就主动 `finish()`。\n- 所以最终现象是“只响铃，UI 闪退”。\n\n**修复内容**\n\n1. `SgtcAlarmActivity.onResume()` 中，`mAlarmState != FIRED_STATE` 时不再直接关闭 UI，而是继续显示闹钟页面。\n2. `mAlarmInstance == null` 时不立即 finish，短延迟重拉 UI，避免开机早期 provider 短暂不可用。\n3. 移除 Activity 内主动发送 `ACTION_CLOSE_SYSTEM_DIALOGS`，避免开机阶段额外干扰前台切换。\n4. `onUserLeaveHint()` 不再自动 dismiss。\n5. Activity 未处理闹钟却被压后台时，短延迟重新拉回前台。\n6. Manifest 中让 `SgtcAlarmActivity` 更贴近系统闹钟 UI 配置：`singleTop`、空 `taskAffinity`、`showWhenLocked`、`turnScreenOn`、`resizeableActivity=false`。",
+      "readingMinutes": 4
+    },
+    {
       "title": "Android权限控制",
       "slug": "android81权限控制逻辑",
       "date": "2026-06-24",
