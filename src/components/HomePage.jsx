@@ -9,7 +9,7 @@ function AuthorPanel() {
   const { profile } = useBlogStore()
 
   return (
-    <aside className="grid content-start gap-4 xl:sticky xl:top-24">
+    <aside className="grid content-start gap-5">
       <section className="border border-slate-200 bg-white p-4 shadow-sm">
         <p className="mb-3 text-xs font-black uppercase text-primary-700">Ra Profile</p>
         <div className="mb-4 flex h-11 w-11 items-center justify-center bg-gradient-brand text-base font-black text-white">
@@ -42,7 +42,7 @@ function SiteStatsPanel() {
   ]
 
   return (
-    <aside className="grid content-start gap-4 xl:sticky xl:top-24">
+    <aside className="grid content-start gap-5">
       <SortPanel />
       <section className="border border-slate-200 bg-white p-4 shadow-sm">
         <p className="mb-3 text-xs font-black uppercase text-primary-700">Ra Index</p>
@@ -73,7 +73,7 @@ function SortPanel() {
           <p className="text-xs font-black uppercase text-primary-700">Ra Sort</p>
           <p className="mt-1 text-xs font-medium text-slate-500">{sortLabel(sortMode)}</p>
         </div>
-        <span className="bg-primary-50 px-2 py-1 text-[11px] font-black text-primary-700">悬浮</span>
+        <span className="bg-primary-50 px-2 py-1 text-[11px] font-black text-primary-700">排序</span>
       </div>
       <div className="grid gap-2">
         {SORT_OPTIONS.map((option) => (

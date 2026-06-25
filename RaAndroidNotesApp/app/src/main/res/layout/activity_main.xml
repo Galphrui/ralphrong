@@ -134,7 +134,7 @@
                     android:paddingLeft="14dp"
                     android:paddingTop="14dp"
                     android:paddingRight="14dp"
-                    android:paddingBottom="96dp" />
+                    android:paddingBottom="132dp" />
             </ScrollView>
 
             <FrameLayout
