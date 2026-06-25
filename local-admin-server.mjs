@@ -11,6 +11,8 @@ const root = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 8080);
 const usersPath = join(root, "data", "admin-users.json");
 const postsPath = join(root, "data", "posts.json");
+const messagesPath = join(root, "data", "messages.json");
+const metricsPath = join(root, "data", "post-metrics.json");
 const sessions = new Map();
 const execFileAsync = promisify(execFile);
 const PASSWORD_ITERATIONS = 100000;
@@ -107,6 +109,37 @@ async function handleApi(request, response) {
     const result = await login(body.username, body.password);
     const sessionToken = setSession(response, result.username);
     sendJson(response, 200, { ok: true, user: result.username, sessionToken });
+    return;
+  }
+
+  if (url.pathname === "/api/messages" && request.method === "GET") {
+    sendJson(response, 200, { ok: true, data: await readMessages() });
+    return;
+  }
+
+  if (url.pathname === "/api/messages" && request.method === "POST") {
+    const body = await readJson(request);
+    const messages = await addMessage(body, request);
+    sendJson(response, 200, { ok: true, data: messages });
+    return;
+  }
+
+  if (url.pathname === "/api/post-metrics" && request.method === "GET") {
+    sendJson(response, 200, { ok: true, data: publicPostMetrics(await readPostMetrics()) });
+    return;
+  }
+
+  if (url.pathname === "/api/post-view" && request.method === "POST") {
+    const body = await readJson(request);
+    const metrics = await recordPostMetric(body.slug, "views");
+    sendJson(response, 200, { ok: true, data: metrics });
+    return;
+  }
+
+  if (url.pathname === "/api/post-like" && request.method === "POST") {
+    const body = await readJson(request);
+    const metrics = await recordPostLike(body.slug, body.visitorId);
+    sendJson(response, 200, { ok: true, data: metrics });
     return;
   }
 
@@ -276,6 +309,134 @@ async function readPosts() {
 
 async function writePosts(data) {
   await writeFile(postsPath, `${JSON.stringify(data, null, 2)}\n`);
+}
+
+async function readMessages() {
+  if (!existsSync(messagesPath)) return [];
+  const data = JSON.parse(await readFile(messagesPath, "utf8"));
+  return Array.isArray(data) ? data : [];
+}
+
+async function writeMessages(messages) {
+  await mkdir(join(root, "data"), { recursive: true });
+  await writeFile(messagesPath, `${JSON.stringify(messages, null, 2)}\n`);
+}
+
+async function addMessage(body, request) {
+  const message = normalizeGuestMessage(body);
+  const messages = await readMessages();
+  const next = [
+    {
+      id: `msg-${Date.now()}-${randomBytes(4).toString("hex")}`,
+      name: message.name,
+      message: message.message,
+      createdAt: new Date().toISOString(),
+      visitor: createHash("sha1").update(request.socket.remoteAddress || "local").digest("hex").slice(0, 12),
+    },
+    ...messages,
+  ].slice(0, 80);
+  await writeMessages(next);
+  return next;
+}
+
+function normalizeGuestMessage(body) {
+  const name = normalizeText(body?.name || "陌生朋友").slice(0, 24) || "陌生朋友";
+  const message = normalizeText(body?.message || "");
+  if (message.length < 2) throw httpError(400, "留言至少需要 2 个字。");
+  if (message.length > 240) throw httpError(400, "留言最多 240 个字。");
+  if (hasBlockedTerm(`${name} ${message}`)) throw httpError(400, "留言包含明显不友好的词汇，请调整后再发布。");
+  return { name, message };
+}
+
+function normalizeText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function hasBlockedTerm(value) {
+  return [
+    /傻[逼b屄比]/i,
+    /煞笔/i,
+    /蠢货/i,
+    /废物/i,
+    /去死/i,
+    /滚(开|蛋)?/i,
+    /妈的/i,
+    /操你/i,
+    /草你/i,
+    /fuck/i,
+    /shit/i,
+    /bitch/i,
+    /nazi/i,
+    /恐怖主义/i,
+    /炸弹/i,
+    /枪支/i,
+    /毒品/i,
+    /博彩/i,
+    /赌博/i,
+    /色情/i,
+  ].some((pattern) => pattern.test(value));
+}
+
+async function readPostMetrics() {
+  if (!existsSync(metricsPath)) return {};
+  const data = JSON.parse(await readFile(metricsPath, "utf8"));
+  return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+}
+
+async function writePostMetrics(metrics) {
+  await mkdir(join(root, "data"), { recursive: true });
+  await writeFile(metricsPath, `${JSON.stringify(metrics, null, 2)}\n`);
+}
+
+async function recordPostMetric(slug, field) {
+  const cleanSlug = normalizeSlug(slug);
+  const metrics = await readPostMetrics();
+  const item = metrics[cleanSlug] || { views: 0, likes: 0 };
+  item[field] = Number(item[field] || 0) + 1;
+  metrics[cleanSlug] = item;
+  await writePostMetrics(metrics);
+  return publicPostMetrics(metrics);
+}
+
+async function recordPostLike(slug, visitorId) {
+  const cleanSlug = normalizeSlug(slug);
+  const cleanVisitor = normalizeVisitorId(visitorId);
+  const metrics = await readPostMetrics();
+  const item = metrics[cleanSlug] || { views: 0, likes: 0, likedVisitors: [] };
+  const likedVisitors = Array.isArray(item.likedVisitors) ? item.likedVisitors : [];
+  if (!likedVisitors.includes(cleanVisitor)) {
+    likedVisitors.push(cleanVisitor);
+    item.likes = Number(item.likes || 0) + 1;
+  }
+  item.likedVisitors = likedVisitors.slice(-5000);
+  metrics[cleanSlug] = item;
+  await writePostMetrics(metrics);
+  return publicPostMetrics(metrics);
+}
+
+function publicPostMetrics(metrics) {
+  return Object.fromEntries(
+    Object.entries(metrics).map(([slug, item]) => [
+      slug,
+      {
+        views: Number(item?.views || 0),
+        likes: Number(item?.likes || 0),
+      },
+    ]),
+  );
+}
+
+function normalizeSlug(value) {
+  const slug = String(value || "").trim();
+  if (!/^[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]{1,180}$/.test(slug)) {
+    throw httpError(400, "文章标识无效。");
+  }
+  return slug;
+}
+
+function normalizeVisitorId(value) {
+  const text = String(value || "").trim();
+  return /^[a-zA-Z0-9_-]{6,64}$/.test(text) ? text : "anonymous";
 }
 
 function setSession(response, username) {

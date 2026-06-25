@@ -1,7 +1,14 @@
 import { sortPosts } from './postSort'
+import { validateGuestMessage } from './moderation'
+import { visitorId } from './visitor'
 
 const DATA_PATH = 'data/posts.json'
 const DATA_URL = `${import.meta.env.BASE_URL}${DATA_PATH}`
+const WORKER_API_BASE = 'https://ralphrong-blog-admin.ralphrong.workers.dev'
+const MESSAGE_API_BASE =
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? window.location.origin
+    : WORKER_API_BASE
 
 const dataUrl = () => `${DATA_URL}?t=${Date.now()}`
 
@@ -96,6 +103,70 @@ export const fetchTags = async () => {
   }
 }
 
+export const fetchMessages = async () => {
+  const response = await fetch(`${MESSAGE_API_BASE}/api/messages`, {
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+  const result = await response.json().catch(() => ({}))
+  if (!response.ok || result.ok === false) {
+    throw new Error(result.error || '留言服务暂时不可用')
+  }
+  return Array.isArray(result.data) ? result.data : []
+}
+
+export const createMessage = async ({ name, message }) => {
+  const validation = validateGuestMessage({ name, message })
+  if (!validation.ok) throw new Error(validation.error)
+
+  const response = await fetch(`${MESSAGE_API_BASE}/api/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(validation),
+  })
+  const result = await response.json().catch(() => ({}))
+  if (!response.ok || result.ok === false) {
+    throw new Error(result.error || '留言发布失败')
+  }
+  return Array.isArray(result.data) ? result.data : []
+}
+
+export const fetchPostMetrics = async () => {
+  const response = await fetch(`${MESSAGE_API_BASE}/api/post-metrics`, {
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+  const result = await response.json().catch(() => ({}))
+  if (!response.ok || result.ok === false) {
+    throw new Error(result.error || '文章指标服务暂时不可用')
+  }
+  return result.data || {}
+}
+
+export const recordPostView = async (slug) => {
+  if (!slug) return {}
+  const response = await fetch(`${MESSAGE_API_BASE}/api/post-view`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slug }),
+  })
+  const result = await response.json().catch(() => ({}))
+  if (!response.ok || result.ok === false) throw new Error(result.error || '点击记录失败')
+  return result.data || {}
+}
+
+export const likePost = async (slug) => {
+  if (!slug) return {}
+  const response = await fetch(`${MESSAGE_API_BASE}/api/post-like`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slug, visitorId: visitorId() }),
+  })
+  const result = await response.json().catch(() => ({}))
+  if (!response.ok || result.ok === false) throw new Error(result.error || '点赞失败')
+  return result.data || {}
+}
+
 export default {
   fetchPosts,
   fetchSiteData,
@@ -104,4 +175,9 @@ export default {
   deletePost,
   extractPdf,
   fetchTags,
+  fetchMessages,
+  createMessage,
+  fetchPostMetrics,
+  recordPostView,
+  likePost,
 }

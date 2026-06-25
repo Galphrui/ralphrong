@@ -28,6 +28,50 @@
             android:id="@+id/home_hero_summary"
             style="@style/RaParagraph"
             android:text="记录 Framework、调试、构建发布与系统适配中的真实问题，把零散经验整理成下次能直接拿来用的排查路径。" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:overScrollMode="never"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/home_promo_tabs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <LinearLayout
+            android:id="@+id/home_promo_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_panel"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?android:attr/selectableItemBackground"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:id="@+id/home_promo_meta"
+                style="@style/RaLabel"
+                tools:text="最近发布 · 0 点击 · 0 赞" />
+
+            <TextView
+                android:id="@+id/home_promo_title"
+                style="@style/RaStrongText"
+                android:layout_marginTop="6dp"
+                tools:text="系统闹钟为何在触发的时候只响铃无UI界面" />
+
+            <TextView
+                android:id="@+id/home_promo_summary"
+                style="@style/RaMutedText"
+                android:layout_marginTop="6dp"
+                tools:text="设备正常开机状态下，普通闹钟触发时铃声和 UI 都正常。" />
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout

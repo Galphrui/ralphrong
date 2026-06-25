@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { useBlogStore } from '../store/useStore'
+import { likePost } from '../utils/api'
 
 function parseInline(text) {
   const parts = String(text).split(/(`[^`]+`)/g)
@@ -125,7 +126,7 @@ function MarkdownContent({ content }) {
 }
 
 export default function PostDetail({ post }) {
-  const { isLoading } = useBlogStore()
+  const { isLoading, postMetrics, setPostMetrics } = useBlogStore()
 
   if (isLoading) {
     return (
@@ -145,6 +146,16 @@ export default function PostDetail({ post }) {
         <p className="mt-3 text-slate-600">这篇 Ra 笔记可能已被移动或删除。</p>
       </section>
     )
+  }
+
+  const metrics = postMetrics?.[post.slug] || { views: 0, likes: 0 }
+  const onLike = async () => {
+    try {
+      const next = await likePost(post.slug)
+      setPostMetrics(next)
+    } catch (error) {
+      console.warn(error)
+    }
   }
 
   return (
@@ -169,10 +180,19 @@ export default function PostDetail({ post }) {
         <h1 className="max-w-4xl text-4xl font-black leading-tight text-slate-950">
           {post.title}
         </h1>
-        <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-sm font-medium text-slate-500">
+        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-slate-500">
           <span>作者：Ralph Rong / Ra</span>
           <span>{post.date}</span>
           <span>{post.readingMinutes || 3} 分钟阅读</span>
+          <span>{metrics.views || 0} 点击</span>
+          <span>{metrics.likes || 0} 赞</span>
+          <button
+            type="button"
+            onClick={onLike}
+            className="border border-primary-100 bg-primary-50 px-3 py-1.5 text-xs font-black text-primary-700 hover:border-primary-300"
+          >
+            点赞 {metrics.likes || 0}
+          </button>
         </div>
         {post.summary && <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-600">{post.summary}</p>}
       </header>

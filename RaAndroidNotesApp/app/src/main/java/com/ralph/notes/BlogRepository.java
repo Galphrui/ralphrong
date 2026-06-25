@@ -3,6 +3,7 @@ package com.ralph.notes;
 import android.content.Context;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -16,6 +17,10 @@ import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class BlogRepository {
     public static final String PUBLIC_DATA_URL = "https://galphrui.github.io/ralphrong/data/posts.json";
@@ -90,6 +95,44 @@ public class BlogRepository {
         }
     }
 
+    public List<GuestMessage> fetchMessages() throws Exception {
+        JSONObject response = new JSONObject(request("GET", WORKER_BASE_URL + "/api/messages", null, null));
+        if (!response.optBoolean("ok")) throw new IllegalStateException(response.optString("error", "读取留言失败"));
+        return messagesFromResponse(response);
+    }
+
+    public List<GuestMessage> createMessage(String name, String message) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("name", name);
+        body.put("message", message);
+        JSONObject response = new JSONObject(request("POST", WORKER_BASE_URL + "/api/messages", body, null));
+        if (!response.optBoolean("ok")) throw new IllegalStateException(response.optString("error", "留言发布失败"));
+        return messagesFromResponse(response);
+    }
+
+    public Map<String, PostMetric> fetchPostMetrics() throws Exception {
+        JSONObject response = new JSONObject(request("GET", WORKER_BASE_URL + "/api/post-metrics", null, null));
+        if (!response.optBoolean("ok")) throw new IllegalStateException(response.optString("error", "读取文章指标失败"));
+        return metricsFromResponse(response);
+    }
+
+    public Map<String, PostMetric> recordPostView(String slug) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("slug", slug);
+        JSONObject response = new JSONObject(request("POST", WORKER_BASE_URL + "/api/post-view", body, null));
+        if (!response.optBoolean("ok")) throw new IllegalStateException(response.optString("error", "点击记录失败"));
+        return metricsFromResponse(response);
+    }
+
+    public Map<String, PostMetric> likePost(String slug, String visitorId) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("slug", slug);
+        body.put("visitorId", visitorId);
+        JSONObject response = new JSONObject(request("POST", WORKER_BASE_URL + "/api/post-like", body, null));
+        if (!response.optBoolean("ok")) throw new IllegalStateException(response.optString("error", "点赞失败"));
+        return metricsFromResponse(response);
+    }
+
     public void saveBlogCache(JSONObject data) {
         cacheStore.saveBlog(data);
     }
@@ -103,6 +146,41 @@ public class BlogRepository {
             stats.lastVisitAt = data.optString("lastVisitAt", "");
         }
         return stats;
+    }
+
+    private List<GuestMessage> messagesFromResponse(JSONObject response) {
+        List<GuestMessage> messages = new ArrayList<>();
+        JSONArray array = response.optJSONArray("data");
+        if (array == null) return messages;
+        for (int i = 0; i < array.length(); i++) {
+            JSONObject item = array.optJSONObject(i);
+            if (item == null) continue;
+            GuestMessage message = new GuestMessage();
+            message.id = item.optString("id", "");
+            message.name = item.optString("name", "陌生朋友");
+            message.message = item.optString("message", "");
+            message.createdAt = item.optString("createdAt", "");
+            messages.add(message);
+        }
+        return messages;
+    }
+
+    private Map<String, PostMetric> metricsFromResponse(JSONObject response) {
+        Map<String, PostMetric> metrics = new HashMap<>();
+        JSONObject data = response.optJSONObject("data");
+        if (data == null) return metrics;
+        JSONArray names = data.names();
+        if (names == null) return metrics;
+        for (int i = 0; i < names.length(); i++) {
+            String slug = names.optString(i, "");
+            JSONObject item = data.optJSONObject(slug);
+            if (slug.isEmpty() || item == null) continue;
+            PostMetric metric = new PostMetric();
+            metric.views = item.optInt("views", 0);
+            metric.likes = item.optInt("likes", 0);
+            metrics.put(slug, metric);
+        }
+        return metrics;
     }
 
     public AdminSession login(String username, String password) throws Exception {

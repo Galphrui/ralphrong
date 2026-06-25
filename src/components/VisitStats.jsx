@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react'
+import { visitorId as getVisitorId } from '../utils/visitor'
 
-const VISITOR_KEY = 'ra-android-notes-visitor-id'
 const VISIT_API_BASE = 'https://ralphrong-blog-admin.ralphrong.workers.dev'
-
-function createVisitorId() {
-  return `RA-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
-}
 
 function formatDateTime(value) {
   if (!value) return '-'
@@ -27,11 +23,7 @@ export default function VisitStats() {
   })
 
   useEffect(() => {
-    let visitorId = localStorage.getItem(VISITOR_KEY)
-    if (!visitorId) {
-      visitorId = createVisitorId()
-      localStorage.setItem(VISITOR_KEY, visitorId)
-    }
+    const visitorId = getVisitorId()
 
     let cancelled = false
     const syncVisit = async () => {

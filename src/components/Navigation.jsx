@@ -31,6 +31,7 @@ export default function Navigation() {
           {[
             { label: '文章', href: '#posts' },
             { label: '个人', href: '#profile' },
+            { label: '留言', href: '#guestbook' },
             { label: '管理', href: './admin.html' },
           ].map((link) => (
             <motion.a

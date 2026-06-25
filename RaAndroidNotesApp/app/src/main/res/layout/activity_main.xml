@@ -95,6 +95,11 @@
                     android:text="简历" />
 
                 <TextView
+                    android:id="@+id/nav_guestbook"
+                    style="@style/RaNavTab"
+                    android:text="留言" />
+
+                <TextView
                     android:id="@+id/nav_stats"
                     style="@style/RaNavTab"
                     android:text="统计" />

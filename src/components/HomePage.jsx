@@ -1,4 +1,5 @@
 import Hero from './Hero'
+import Guestbook from './Guestbook'
 import PostList from './PostList'
 import VisitStats from './VisitStats'
 import { useBlogStore } from '../store/useStore'
@@ -25,6 +26,7 @@ function AuthorPanel() {
           查看 Ra 个人页
         </a>
       </section>
+      <Guestbook compact />
       <VisitStats />
     </aside>
   )

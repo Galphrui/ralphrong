@@ -38,6 +38,8 @@ import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -66,16 +68,21 @@ public class MainActivity extends Activity {
     private LinearLayout floatingSortPanel;
     private TextView navArticles;
     private TextView navProfile;
+    private TextView navGuestbook;
     private TextView navStats;
     private TextView navAdmin;
     private LinearLayout homePostList;
     private LinearLayout homeTagsRow;
     private TextView homeListTitle;
+    private LinearLayout homePromoTabs;
+    private LinearLayout homePromoCard;
     private TextView adminStatus;
     private LinearLayout adminEditorContainer;
     private BlogData data;
     private BlogData adminData;
     private VisitStats visitStats;
+    private List<GuestMessage> guestMessages = new ArrayList<>();
+    private Map<String, PostMetric> postMetrics = new HashMap<>();
     private AdminSession adminSession;
     private LocalCredentialStore localCredentials;
     private DeviceIdStore deviceIdStore;
@@ -87,10 +94,12 @@ public class MainActivity extends Activity {
     private String selectedTag = "全部";
     private String searchQuery = "";
     private String sortMode = "date-desc";
+    private String promoMode = "latest";
     private String currentPage = "home";
     private String currentDetailSlug = "";
     private Post selectedAdminPost;
     private String selectedAdminSlug = "";
+    private long lastBackPressedAt;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -108,6 +117,21 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
+    @Override
+    public void onBackPressed() {
+        if ("detail".equals(currentPage) || !"home".equals(currentPage)) {
+            renderHome();
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now - lastBackPressedAt < 1800) {
+            super.onBackPressed();
+            return;
+        }
+        lastBackPressedAt = now;
+        toast("再按一次返回退出。");
+    }
+
     private void buildShell() {
         configureSystemBars();
         setContentView(R.layout.activity_main);
@@ -120,12 +144,14 @@ public class MainActivity extends Activity {
         floatingSortPanel = findViewById(R.id.floating_sort_panel);
         navArticles = findViewById(R.id.nav_articles);
         navProfile = findViewById(R.id.nav_profile);
+        navGuestbook = findViewById(R.id.nav_guestbook);
         navStats = findViewById(R.id.nav_stats);
         navAdmin = findViewById(R.id.nav_admin);
 
         findViewById(R.id.brand_area).setOnClickListener(v -> renderHome());
         navArticles.setOnClickListener(v -> renderHome());
         navProfile.setOnClickListener(v -> renderProfile());
+        navGuestbook.setOnClickListener(v -> renderGuestbook());
         navStats.setOnClickListener(v -> renderStats());
         navAdmin.setOnClickListener(v -> renderAdmin());
         floatingSortButton.setOnClickListener(v -> {
@@ -182,6 +208,7 @@ public class MainActivity extends Activity {
             if (manualRefresh) finishRefresh(data.offlineMode ? "已切换到离线缓存。" : "刷新完成。");
             renderAfterDataRefresh(manualRefresh, targetPage, targetSlug);
             if (backendAvailable) recordVisit();
+            if (backendAvailable) syncPostMetrics();
         }, error -> {
             if (manualRefresh) finishRefresh("刷新失败：" + error.getMessage());
             else toast(error.getMessage());
@@ -244,6 +271,8 @@ public class MainActivity extends Activity {
         }
         if ("profile".equals(targetPage)) {
             renderProfile();
+        } else if ("guestbook".equals(targetPage)) {
+            renderGuestbook();
         } else if ("detail".equals(targetPage)) {
             Post post = findPost(targetSlug);
             if (post == null) renderHome();
@@ -281,6 +310,20 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void syncPostMetrics() {
+        runAsyncQuiet(() -> repository.fetchPostMetrics(), result -> {
+            postMetrics = result;
+            if ("home".equals(currentPage)) {
+                updateHomePromo();
+                renderPostListOnly();
+            } else if ("detail".equals(currentPage)) {
+                Post post = findPost(currentDetailSlug);
+                if (post != null) renderPostDetail(post);
+            }
+        }, error -> {
+        });
+    }
+
     private void renderHome() {
         currentPage = "home";
         currentDetailSlug = "";
@@ -298,6 +341,8 @@ public class MainActivity extends Activity {
         setText(page, R.id.home_stat_tags, allTags().size() + "\n标签");
         setText(page, R.id.home_stat_latest, (data.posts.isEmpty() ? "-" : data.posts.get(0).date) + "\n最近");
         setText(page, R.id.home_data_source, homeSourceText());
+        homePromoTabs = page.findViewById(R.id.home_promo_tabs);
+        homePromoCard = page.findViewById(R.id.home_promo_card);
 
         EditText search = page.findViewById(R.id.home_search);
         search.setText(searchQuery);
@@ -311,9 +356,63 @@ public class MainActivity extends Activity {
         homeTagsRow = page.findViewById(R.id.home_tags_row);
         homePostList = page.findViewById(R.id.home_post_list);
         homeListTitle = page.findViewById(R.id.home_list_title);
+        updateHomePromo();
         renderTags();
         renderPostListOnly();
         updateFloatingSort();
+    }
+
+    private void updateHomePromo() {
+        if (homePromoTabs == null || homePromoCard == null || data == null) return;
+        homePromoTabs.removeAllViews();
+        addPromoTab("最近发布", "latest");
+        addPromoTab("点击最多", "views");
+        addPromoTab("点赞最多", "likes");
+
+        Post post = promotedPost();
+        if (post == null) {
+            homePromoCard.setVisibility(View.GONE);
+            return;
+        }
+        homePromoCard.setVisibility(View.VISIBLE);
+        PostMetric metric = metricFor(post.slug);
+        setText(homePromoCard, R.id.home_promo_meta, promoLabel() + " · " + metric.views + " 点击 · " + metric.likes + " 赞");
+        setText(homePromoCard, R.id.home_promo_title, post.title);
+        setText(homePromoCard, R.id.home_promo_summary, post.summary);
+        homePromoCard.setOnClickListener(v -> openPostDetail(post));
+    }
+
+    private void addPromoTab(String label, String mode) {
+        TextView tab = actionText(label, promoMode.equals(mode));
+        tab.setOnClickListener(v -> {
+            promoMode = mode;
+            updateHomePromo();
+        });
+        homePromoTabs.addView(tab);
+    }
+
+    private Post promotedPost() {
+        if (data == null || data.posts.isEmpty()) return null;
+        List<Post> sorted = new ArrayList<>(data.posts);
+        if ("views".equals(promoMode)) {
+            Collections.sort(sorted, (left, right) -> Integer.compare(metricFor(right.slug).views, metricFor(left.slug).views));
+        } else if ("likes".equals(promoMode)) {
+            Collections.sort(sorted, (left, right) -> Integer.compare(metricFor(right.slug).likes, metricFor(left.slug).likes));
+        } else {
+            Collections.sort(sorted, postComparator());
+        }
+        return sorted.get(0);
+    }
+
+    private String promoLabel() {
+        if ("views".equals(promoMode)) return "点击最多";
+        if ("likes".equals(promoMode)) return "点赞最多";
+        return "最近发布";
+    }
+
+    private PostMetric metricFor(String slug) {
+        PostMetric metric = postMetrics == null ? null : postMetrics.get(slug);
+        return metric == null ? new PostMetric() : metric;
     }
 
     private void bindFloatingSortControls() {
@@ -375,9 +474,10 @@ public class MainActivity extends Activity {
         }
         for (Post post : filtered) {
             View item = LayoutInflater.from(this).inflate(R.layout.view_post_item, homePostList, false);
-            item.setOnClickListener(v -> renderPostDetail(post));
+            item.setOnClickListener(v -> openPostDetail(post));
             String updatedAt = postUpdatedAt(post);
-            String meta = post.date + " · " + post.readingMinutes + " 分钟阅读";
+            PostMetric metric = metricFor(post.slug);
+            String meta = post.date + " · " + post.readingMinutes + " 分钟阅读 · " + metric.views + " 点击 · " + metric.likes + " 赞";
             if (!updatedAt.isEmpty() && !updatedAt.startsWith(post.date)) meta += " · 修改 " + updatedAt.substring(0, Math.min(10, updatedAt.length()));
             ((TextView) item.findViewById(R.id.post_meta)).setText(meta);
             ((TextView) item.findViewById(R.id.post_title)).setText(post.title);
@@ -385,6 +485,17 @@ public class MainActivity extends Activity {
             ((TextView) item.findViewById(R.id.post_tags)).setText(TextTools.join(post.tags, "  "));
             item.setLayoutParams(margins(new LinearLayout.LayoutParams(-1, -2), 0, 0, 0, 12));
             homePostList.addView(item);
+        }
+    }
+
+    private void openPostDetail(Post post) {
+        renderPostDetail(post);
+        if (backendAvailable) {
+            runAsyncQuiet(() -> repository.recordPostView(post.slug), result -> {
+                postMetrics = result;
+                if ("detail".equals(currentPage) && post.slug.equals(currentDetailSlug)) renderPostDetail(post);
+            }, error -> {
+            });
         }
     }
 
@@ -398,10 +509,24 @@ public class MainActivity extends Activity {
         page.findViewById(R.id.detail_back).setOnClickListener(v -> renderHome());
         setText(page, R.id.detail_label, TextTools.join(post.tags, " / "));
         setText(page, R.id.detail_title, post.title);
-        setText(page, R.id.detail_meta, "作者：Ralph Rong / Ra · " + post.date + " · " + post.readingMinutes + " 分钟阅读");
+        PostMetric metric = metricFor(post.slug);
+        setText(page, R.id.detail_meta, "作者：Ralph Rong / Ra · " + post.date + " · " + post.readingMinutes + " 分钟阅读 · " + metric.views + " 点击 · " + metric.likes + " 赞");
         setText(page, R.id.detail_summary, post.summary);
         LinearLayout body = page.findViewById(R.id.detail_body);
         body.removeAllViews();
+        Button like = primaryButton("点赞 " + metric.likes);
+        like.setOnClickListener(v -> {
+            if (!backendAvailable) {
+                toast("后台 API 暂不可用，稍后再点赞。");
+                return;
+            }
+            runAsync(() -> repository.likePost(post.slug, deviceIdStore.visitorId()), result -> {
+                postMetrics = result;
+                toast("已记录点赞。");
+                renderPostDetail(post);
+            }, error -> toast("点赞失败：" + error.getMessage()));
+        });
+        body.addView(like);
         renderMarkdown(body, post.content);
     }
 
@@ -445,6 +570,90 @@ public class MainActivity extends Activity {
         sections.addView(experienceBlock("项目经历", profile.projects));
         sections.addView(experienceBlock("教育经历", profile.education));
         sections.addView(bulletBlock("个人评价", profile.selfReview));
+    }
+
+    private void renderGuestbook() {
+        currentPage = "guestbook";
+        currentDetailSlug = "";
+        selectTab(navGuestbook);
+        clear();
+
+        LinearLayout composer = card();
+        composer.addView(label("RA GUESTBOOK"));
+        composer.addView(title("留言板", 24));
+        EditText name = input("昵称，可留空");
+        EditText message = multiline("给 Ra 留句话", 4);
+        TextView status = paragraph("正在同步留言...");
+        Button submit = primaryButton("发布留言");
+        composer.addView(name);
+        composer.addView(message);
+        composer.addView(submit);
+        composer.addView(status);
+        content.addView(composer);
+
+        LinearLayout listCard = card();
+        listCard.addView(label("PUBLIC MESSAGES"));
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        listCard.addView(list);
+        content.addView(listCard);
+
+        renderMessageList(list);
+        runAsync(() -> repository.fetchMessages(), result -> {
+            guestMessages = result;
+            status.setText(result.isEmpty() ? "还没有留言，欢迎写下第一条。" : "留言已同步。");
+            renderMessageList(list);
+        }, failure -> status.setText("留言同步失败：" + failure.getMessage()));
+
+        submit.setOnClickListener(v -> {
+            String cleanName = name.getText().toString().trim();
+            String cleanMessage = message.getText().toString().trim();
+            String validationError = validateMessage(cleanName, cleanMessage);
+            if (!validationError.isEmpty()) {
+                status.setText(validationError);
+                return;
+            }
+            status.setText("正在发布留言...");
+            hideKeyboard(message);
+            runAsync(() -> repository.createMessage(cleanName, cleanMessage), result -> {
+                guestMessages = result;
+                name.setText("");
+                message.setText("");
+                status.setText("留言已发布，全站可见。");
+                renderMessageList(list);
+            }, failure -> status.setText("留言发布失败：" + failure.getMessage()));
+        });
+    }
+
+    private void renderMessageList(LinearLayout list) {
+        if (list == null) return;
+        list.removeAllViews();
+        if (guestMessages == null || guestMessages.isEmpty()) {
+            list.addView(paragraph("暂无留言。"));
+            return;
+        }
+        for (GuestMessage item : guestMessages) {
+            LinearLayout block = new LinearLayout(this);
+            block.setOrientation(LinearLayout.VERTICAL);
+            block.setPadding(0, dp(10), 0, dp(10));
+            TextView header = text((item.name == null || item.name.isEmpty() ? "陌生朋友" : item.name)
+                    + " · " + formatDate(item.createdAt), 13, PRIMARY, Typeface.BOLD);
+            block.addView(header);
+            block.addView(paragraph(item.message));
+            list.addView(block);
+        }
+    }
+
+    private String validateMessage(String name, String message) {
+        String source = ((name == null ? "" : name) + " " + (message == null ? "" : message)).replaceAll("\\s+", " ").trim();
+        if (message == null || message.trim().length() < 2) return "留言至少需要 2 个字。";
+        if (message.trim().length() > 240) return "留言最多 240 个字。";
+        String lower = source.toLowerCase(Locale.US);
+        String[] blocked = new String[]{"傻逼", "傻b", "煞笔", "蠢货", "废物", "去死", "滚蛋", "妈的", "操你", "草你", "fuck", "shit", "bitch", "nazi", "恐怖主义", "炸弹", "枪支", "毒品", "博彩", "赌博", "色情"};
+        for (String word : blocked) {
+            if (lower.contains(word)) return "留言包含明显不友好的词汇，请调整后再发布。";
+        }
+        return "";
     }
 
     private void renderStats() {
@@ -1076,7 +1285,7 @@ public class MainActivity extends Activity {
     }
 
     private void selectTab(TextView active) {
-        TextView[] tabs = new TextView[]{navArticles, navProfile, navStats, navAdmin};
+        TextView[] tabs = new TextView[]{navArticles, navProfile, navGuestbook, navStats, navAdmin};
         for (TextView tab : tabs) {
             if (tab == null) continue;
             boolean selected = tab == active;

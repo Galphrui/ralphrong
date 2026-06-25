@@ -4,6 +4,8 @@ const DEFAULT_USERS_PATH = "data/admin-users.json";
 const DEFAULT_SESSION_SECONDS = 60 * 60 * 8;
 const PASSWORD_ITERATIONS = 100000;
 const ADMIN_USER_INDEX_KEY = "admin-user-index";
+const GUEST_MESSAGES_KEY = "guest-messages";
+const POST_METRICS_KEY = "post-metrics";
 
 export default {
   async fetch(request, env) {
@@ -22,6 +24,21 @@ export default {
       }
       if (url.pathname === "/api/visits" && request.method === "POST") {
         return await recordVisit(request, env);
+      }
+      if (url.pathname === "/api/messages" && request.method === "GET") {
+        return await getMessages(request, env);
+      }
+      if (url.pathname === "/api/messages" && request.method === "POST") {
+        return await createMessage(request, env);
+      }
+      if (url.pathname === "/api/post-metrics" && request.method === "GET") {
+        return await getPostMetrics(request, env);
+      }
+      if (url.pathname === "/api/post-view" && request.method === "POST") {
+        return await recordPostView(request, env);
+      }
+      if (url.pathname === "/api/post-like" && request.method === "POST") {
+        return await recordPostLike(request, env);
       }
       if (url.pathname === "/api/password-reset" && request.method === "POST") {
         return await resetPassword(request, env);
@@ -91,6 +108,148 @@ async function readVisitStats(env) {
     visitors: Number(stored?.visitors || 0),
     lastVisitAt: stored?.lastVisitAt || "",
   };
+}
+
+async function getMessages(request, env) {
+  const data = await readMessages(env);
+  return json({ ok: true, data }, request, env);
+}
+
+async function createMessage(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const message = normalizeGuestMessage(body);
+  const messages = await readMessages(env);
+  const visitorHash = await sha1(request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "");
+  const next = [
+    {
+      id: `msg-${Date.now()}-${hex(crypto.getRandomValues(new Uint8Array(4)))}`,
+      name: message.name,
+      message: message.message,
+      createdAt: new Date().toISOString(),
+      visitor: visitorHash.slice(0, 12),
+    },
+    ...messages,
+  ].slice(0, 80);
+  await writeMessages(env, next);
+  return json({ ok: true, data: next }, request, env);
+}
+
+async function readMessages(env) {
+  if (!env.VISIT_KV) throw httpError(500, "Worker 缺少 VISIT_KV 绑定。");
+  const stored = await env.VISIT_KV.get(GUEST_MESSAGES_KEY, "json").catch(() => []);
+  return Array.isArray(stored) ? stored : [];
+}
+
+async function writeMessages(env, messages) {
+  if (!env.VISIT_KV) throw httpError(500, "Worker 缺少 VISIT_KV 绑定。");
+  await env.VISIT_KV.put(GUEST_MESSAGES_KEY, JSON.stringify(messages));
+}
+
+async function getPostMetrics(request, env) {
+  const metrics = await readPostMetrics(env);
+  return json({ ok: true, data: publicPostMetrics(metrics) }, request, env);
+}
+
+async function recordPostView(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const metrics = await recordPostMetric(env, body.slug, "views");
+  return json({ ok: true, data: publicPostMetrics(metrics) }, request, env);
+}
+
+async function recordPostLike(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const slug = normalizeSlug(body.slug);
+  const visitorId = normalizeVisitorId(body.visitorId);
+  const metrics = await readPostMetrics(env);
+  const item = metrics[slug] || { views: 0, likes: 0, likedVisitors: [] };
+  const likedVisitors = Array.isArray(item.likedVisitors) ? item.likedVisitors : [];
+  if (!likedVisitors.includes(visitorId)) {
+    likedVisitors.push(visitorId);
+    item.likes = Number(item.likes || 0) + 1;
+  }
+  item.likedVisitors = likedVisitors.slice(-5000);
+  metrics[slug] = item;
+  await writePostMetrics(env, metrics);
+  return json({ ok: true, data: publicPostMetrics(metrics) }, request, env);
+}
+
+async function recordPostMetric(env, slug, field) {
+  const cleanSlug = normalizeSlug(slug);
+  const metrics = await readPostMetrics(env);
+  const item = metrics[cleanSlug] || { views: 0, likes: 0 };
+  item[field] = Number(item[field] || 0) + 1;
+  metrics[cleanSlug] = item;
+  await writePostMetrics(env, metrics);
+  return metrics;
+}
+
+async function readPostMetrics(env) {
+  if (!env.VISIT_KV) throw httpError(500, "Worker 缺少 VISIT_KV 绑定。");
+  const stored = await env.VISIT_KV.get(POST_METRICS_KEY, "json").catch(() => ({}));
+  return stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
+}
+
+async function writePostMetrics(env, metrics) {
+  if (!env.VISIT_KV) throw httpError(500, "Worker 缺少 VISIT_KV 绑定。");
+  await env.VISIT_KV.put(POST_METRICS_KEY, JSON.stringify(metrics));
+}
+
+function publicPostMetrics(metrics) {
+  return Object.fromEntries(
+    Object.entries(metrics).map(([slug, item]) => [
+      slug,
+      {
+        views: Number(item?.views || 0),
+        likes: Number(item?.likes || 0),
+      },
+    ]),
+  );
+}
+
+function normalizeSlug(value) {
+  const slug = String(value || "").trim();
+  if (!/^[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]{1,180}$/.test(slug)) {
+    throw httpError(400, "文章标识无效。");
+  }
+  return slug;
+}
+
+function normalizeGuestMessage(body) {
+  const name = normalizeText(body?.name || "陌生朋友").slice(0, 24) || "陌生朋友";
+  const message = normalizeText(body?.message || "");
+  if (message.length < 2) throw httpError(400, "留言至少需要 2 个字。");
+  if (message.length > 240) throw httpError(400, "留言最多 240 个字。");
+  if (hasBlockedTerm(`${name} ${message}`)) throw httpError(400, "留言包含明显不友好的词汇，请调整后再发布。");
+  return { name, message };
+}
+
+function normalizeText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function hasBlockedTerm(value) {
+  return [
+    /傻[逼b屄比]/i,
+    /煞笔/i,
+    /蠢货/i,
+    /废物/i,
+    /去死/i,
+    /滚(开|蛋)?/i,
+    /妈的/i,
+    /操你/i,
+    /草你/i,
+    /fuck/i,
+    /shit/i,
+    /bitch/i,
+    /nazi/i,
+    /恐怖主义/i,
+    /炸弹/i,
+    /枪支/i,
+    /毒品/i,
+    /博彩/i,
+    /赌博/i,
+    /色情/i,
+  ].some((pattern) => pattern.test(value));
 }
 
 function normalizeVisitorId(value) {
@@ -432,6 +591,11 @@ async function hmac(value, secret) {
   ]);
   const signature = await crypto.subtle.sign("HMAC", key, textBytes(value));
   return base64UrlEncodeBytes(new Uint8Array(signature));
+}
+
+async function sha1(value) {
+  const digest = await crypto.subtle.digest("SHA-1", textBytes(value));
+  return hex(new Uint8Array(digest));
 }
 
 function corsHeaders(request, env) {
