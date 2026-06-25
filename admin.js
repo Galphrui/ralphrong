@@ -606,10 +606,15 @@ function selectPost(slug) {
 
 function saveCurrentPost(event) {
   if (event) event.preventDefault();
+  const existing = RaData.posts.find((item) => item.slug === RaSelectedSlug);
+  const now = new Date().toISOString();
   const post = {
+    ...(existing || {}),
     title: RaEls.title.value.trim(),
     slug: slugify(RaEls.slug.value || RaEls.title.value),
     date: RaEls.date.value || new Date().toISOString().slice(0, 10),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
     tags: RaEls.tags.value
       .split(",")
       .map((tag) => tag.trim())
@@ -1050,10 +1055,13 @@ function setTargetStatus(target, message) {
 }
 
 function createEmptyPost() {
+  const now = new Date().toISOString();
   return {
     title: "",
     slug: "",
     date: new Date().toISOString().slice(0, 10),
+    createdAt: now,
+    updatedAt: now,
     tags: [],
     summary: "",
     content: "## 背景\n\n在这里写下问题背景。\n\n## 方案\n\n记录你的技术方案与取舍。\n",
@@ -1077,6 +1085,8 @@ function normalizeData(input) {
         title: post.title || "未命名文章",
         slug: slugify(post.slug || post.title || "post"),
         date: post.date || new Date().toISOString().slice(0, 10),
+        createdAt: post.createdAt || post.date || "",
+        updatedAt: post.updatedAt || post.modifiedAt || post.lastModified || post.date || "",
         tags: Array.isArray(post.tags) ? post.tags : [],
         summary: post.summary || "",
         content: post.content || "",

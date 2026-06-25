@@ -1,5 +1,6 @@
-const DATA_PATH = 'data/posts.json'
+import { sortPosts } from './postSort'
 
+const DATA_PATH = 'data/posts.json'
 const DATA_URL = `${import.meta.env.BASE_URL}${DATA_PATH}`
 
 const dataUrl = () => `${DATA_URL}?t=${Date.now()}`
@@ -15,7 +16,7 @@ export const fetchSiteData = async () => {
   if (!response.ok) throw new Error('Failed to fetch site data')
 
   const data = await response.json()
-  const posts = [...(data.posts || [])].sort((a, b) => new Date(b.date) - new Date(a.date))
+  const posts = sortPosts(data.posts || [])
 
   return {
     site: data.site || {},
@@ -45,8 +46,7 @@ export const fetchPosts = async (page = 1, limit = 20, filters = {}) => {
       )
     }
 
-    // Sort by date
-    posts.sort((a, b) => new Date(b.date) - new Date(a.date))
+    posts = sortPosts(posts, filters.sortMode || 'date-desc')
 
     // Paginate
     const startIdx = (page - 1) * limit

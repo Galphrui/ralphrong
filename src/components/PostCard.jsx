@@ -1,6 +1,10 @@
 import { motion } from 'framer-motion'
+import { postUpdatedAt } from '../utils/postSort'
 
 export default function PostCard({ post, onClick }) {
+  const updatedAt = postUpdatedAt(post)
+  const showUpdatedAt = updatedAt && updatedAt !== post.date
+
   return (
     <motion.article
       className="cursor-pointer border border-slate-200 bg-white p-5 shadow-sm hover:border-primary-300 hover:shadow-soft"
@@ -12,8 +16,10 @@ export default function PostCard({ post, onClick }) {
       transition={{ duration: 0.5 }}
     >
       {/* Meta */}
-      <div className="mb-2 text-sm font-medium text-slate-500">
-        {post.date} · {post.readingMinutes || 3} 分钟阅读
+      <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-sm font-medium text-slate-500">
+        <span>{post.date}</span>
+        <span>{post.readingMinutes || 3} 分钟阅读</span>
+        {showUpdatedAt && <span>修改 {updatedAt.slice(0, 10)}</span>}
       </div>
 
       {/* Title */}

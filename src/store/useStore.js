@@ -11,6 +11,7 @@ export const useBlogStore = create((set) => ({
   // Search and filter
   searchQuery: '',
   selectedTag: '全部',
+  sortMode: 'date-desc',
   allTags: [],
 
   // UI state
@@ -24,10 +25,11 @@ export const useBlogStore = create((set) => ({
   setCurrentPage: (page) => set({ currentPage: page }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSelectedTag: (tag) => set({ selectedTag: tag }),
+  setSortMode: (sortMode) => set({ sortMode }),
   setAllTags: (tags) => set({ allTags: tags }),
   setIsLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error }),
 
   // Helper methods
-  resetFilters: () => set({ searchQuery: '', selectedTag: '全部', currentPage: 1 }),
+  resetFilters: () => set({ searchQuery: '', selectedTag: '全部', sortMode: 'date-desc', currentPage: 1 }),
 }))
