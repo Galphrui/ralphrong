@@ -7,6 +7,8 @@ public class Post {
     public String title = "";
     public String slug = "";
     public String date = "";
+    public String createdAt = "";
+    public String updatedAt = "";
     public String summary = "";
     public String content = "";
     public int readingMinutes = 3;

@@ -12,6 +12,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
@@ -28,8 +29,11 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.text.Collator;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -53,15 +57,20 @@ public class MainActivity extends Activity {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    private LinearLayout root;
+    private View root;
     private LinearLayout content;
     private ScrollView pageScroll;
+    private View refreshIndicator;
+    private TextView refreshStatus;
+    private TextView floatingSortButton;
+    private LinearLayout floatingSortPanel;
     private TextView navArticles;
     private TextView navProfile;
     private TextView navStats;
     private TextView navAdmin;
     private LinearLayout homePostList;
     private LinearLayout homeTagsRow;
+    private TextView homeListTitle;
     private TextView adminStatus;
     private LinearLayout adminEditorContainer;
     private BlogData data;
@@ -71,8 +80,15 @@ public class MainActivity extends Activity {
     private LocalCredentialStore localCredentials;
     private DeviceIdStore deviceIdStore;
     private boolean backendAvailable = true;
+    private boolean refreshing;
+    private boolean pullTracking;
+    private boolean sortPanelOpen;
+    private float pullStartY;
     private String selectedTag = "全部";
     private String searchQuery = "";
+    private String sortMode = "date-desc";
+    private String currentPage = "home";
+    private String currentDetailSlug = "";
     private Post selectedAdminPost;
     private String selectedAdminSlug = "";
 
@@ -98,6 +114,10 @@ public class MainActivity extends Activity {
         root = findViewById(R.id.app_root);
         content = findViewById(R.id.content_container);
         pageScroll = findViewById(R.id.page_scroll);
+        refreshIndicator = findViewById(R.id.refresh_indicator);
+        refreshStatus = findViewById(R.id.refresh_status);
+        floatingSortButton = findViewById(R.id.floating_sort_button);
+        floatingSortPanel = findViewById(R.id.floating_sort_panel);
         navArticles = findViewById(R.id.nav_articles);
         navProfile = findViewById(R.id.nav_profile);
         navStats = findViewById(R.id.nav_stats);
@@ -108,7 +128,13 @@ public class MainActivity extends Activity {
         navProfile.setOnClickListener(v -> renderProfile());
         navStats.setOnClickListener(v -> renderStats());
         navAdmin.setOnClickListener(v -> renderAdmin());
+        floatingSortButton.setOnClickListener(v -> {
+            sortPanelOpen = !sortPanelOpen;
+            updateFloatingSort();
+        });
         applySystemBarInsets();
+        installPullRefresh();
+        bindFloatingSortControls();
         selectTab(navArticles);
         updateNavigation();
     }
@@ -136,14 +162,107 @@ public class MainActivity extends Activity {
     }
 
     private void loadPublicData() {
-        showLoading("正在加载 Ra 博客数据...");
+        loadPublicData(false);
+    }
+
+    private void loadPublicData(boolean manualRefresh) {
+        if (refreshing) return;
+        refreshing = manualRefresh;
+        if (manualRefresh) {
+            setRefreshIndicator("正在刷新 Ra 数据...", true);
+        } else {
+            showLoading("正在加载 Ra 博客数据...");
+        }
+        String targetPage = currentPage;
+        String targetSlug = currentDetailSlug;
         runAsync(() -> repository.fetchPublicData(), result -> {
             data = result;
             backendAvailable = !data.offlineMode;
             updateNavigation();
-            renderHome();
+            if (manualRefresh) finishRefresh(data.offlineMode ? "已切换到离线缓存。" : "刷新完成。");
+            renderAfterDataRefresh(manualRefresh, targetPage, targetSlug);
             if (backendAvailable) recordVisit();
+        }, error -> {
+            if (manualRefresh) finishRefresh("刷新失败：" + error.getMessage());
+            else toast(error.getMessage());
         });
+    }
+
+    private void installPullRefresh() {
+        int triggerDistance = dp(76);
+        pageScroll.setOnTouchListener((view, event) -> {
+            if (refreshing) return false;
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    pullTracking = pageScroll.getScrollY() == 0;
+                    pullStartY = event.getY();
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (pullTracking && pageScroll.getScrollY() == 0) {
+                        float distance = event.getY() - pullStartY;
+                        if (distance > dp(14)) {
+                            setRefreshIndicator(distance >= triggerDistance ? "松开刷新 Ra 数据" : "下拉刷新 Ra 数据", true);
+                        }
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    if (pullTracking) {
+                        float distance = event.getY() - pullStartY;
+                        pullTracking = false;
+                        if (distance >= triggerDistance) {
+                            loadPublicData(true);
+                        } else if (!refreshing) {
+                            setRefreshIndicator("", false);
+                        }
+                    }
+                    break;
+                default:
+                    break;
+            }
+            return false;
+        });
+    }
+
+    private void setRefreshIndicator(String message, boolean visible) {
+        if (refreshIndicator == null) return;
+        if (refreshStatus != null) refreshStatus.setText(message == null ? "" : message);
+        refreshIndicator.setContentDescription(message == null ? "" : message);
+        refreshIndicator.setVisibility(visible ? View.VISIBLE : View.GONE);
+    }
+
+    private void finishRefresh(String message) {
+        refreshing = false;
+        setRefreshIndicator(message, true);
+        mainHandler.postDelayed(() -> setRefreshIndicator("", false), 900);
+    }
+
+    private void renderAfterDataRefresh(boolean manualRefresh, String targetPage, String targetSlug) {
+        if (!manualRefresh) {
+            renderHome();
+            return;
+        }
+        if ("profile".equals(targetPage)) {
+            renderProfile();
+        } else if ("detail".equals(targetPage)) {
+            Post post = findPost(targetSlug);
+            if (post == null) renderHome();
+            else renderPostDetail(post);
+        } else if ("stats".equals(targetPage) && backendAvailable && !data.offlineMode) {
+            renderStats();
+        } else if ("admin".equals(targetPage) && backendAvailable && !data.offlineMode) {
+            renderAdmin();
+        } else {
+            renderHome();
+        }
+    }
+
+    private Post findPost(String slug) {
+        if (data == null || slug == null || slug.isEmpty()) return null;
+        for (Post post : data.posts) {
+            if (slug.equals(post.slug)) return post;
+        }
+        return null;
     }
 
     private void recordVisit() {
@@ -158,10 +277,13 @@ public class MainActivity extends Activity {
             backendAvailable = false;
             updateNavigation();
             updateHomeSourceHint();
+            if ("stats".equals(currentPage) || "admin".equals(currentPage)) renderHome();
         });
     }
 
     private void renderHome() {
+        currentPage = "home";
+        currentDetailSlug = "";
         selectTab(navArticles);
         clear();
         if (data == null) {
@@ -188,8 +310,42 @@ public class MainActivity extends Activity {
         });
         homeTagsRow = page.findViewById(R.id.home_tags_row);
         homePostList = page.findViewById(R.id.home_post_list);
+        homeListTitle = page.findViewById(R.id.home_list_title);
         renderTags();
         renderPostListOnly();
+        updateFloatingSort();
+    }
+
+    private void bindFloatingSortControls() {
+        bindSort(findViewById(R.id.sort_overlay_date_desc), "date-desc");
+        bindSort(findViewById(R.id.sort_overlay_date_asc), "date-asc");
+        bindSort(findViewById(R.id.sort_overlay_title_asc), "title-asc");
+        bindSort(findViewById(R.id.sort_overlay_title_desc), "title-desc");
+        bindSort(findViewById(R.id.sort_overlay_updated_desc), "updated-desc");
+    }
+
+    private void bindSort(TextView view, String mode) {
+        if (view == null) return;
+        boolean selected = sortMode.equals(mode);
+        view.setTextColor(selected ? Color.WHITE : PRIMARY);
+        view.setBackgroundResource(selected ? R.drawable.bg_button_primary : R.drawable.bg_button_secondary);
+        view.setOnClickListener(v -> {
+            sortMode = mode;
+            sortPanelOpen = false;
+            renderHome();
+        });
+    }
+
+    private void updateFloatingSort() {
+        boolean show = "home".equals(currentPage) && data != null;
+        if (floatingSortButton != null) {
+            floatingSortButton.setVisibility(show ? View.VISIBLE : View.GONE);
+            floatingSortButton.setText("排序 · " + sortLabel());
+        }
+        if (floatingSortPanel != null) {
+            floatingSortPanel.setVisibility(show && sortPanelOpen ? View.VISIBLE : View.GONE);
+        }
+        bindFloatingSortControls();
     }
 
     private void renderTags() {
@@ -212,6 +368,7 @@ public class MainActivity extends Activity {
         homePostList.removeAllViews();
 
         List<Post> filtered = filteredPosts();
+        if (homeListTitle != null) homeListTitle.setText("文章列表 · " + filtered.size() + " 篇 · " + sortLabel());
         if (filtered.isEmpty()) {
             homePostList.addView(paragraph("没有匹配的文章。"));
             return;
@@ -219,7 +376,10 @@ public class MainActivity extends Activity {
         for (Post post : filtered) {
             View item = LayoutInflater.from(this).inflate(R.layout.view_post_item, homePostList, false);
             item.setOnClickListener(v -> renderPostDetail(post));
-            ((TextView) item.findViewById(R.id.post_meta)).setText(post.date + " · " + post.readingMinutes + " 分钟阅读");
+            String updatedAt = postUpdatedAt(post);
+            String meta = post.date + " · " + post.readingMinutes + " 分钟阅读";
+            if (!updatedAt.isEmpty() && !updatedAt.startsWith(post.date)) meta += " · 修改 " + updatedAt.substring(0, Math.min(10, updatedAt.length()));
+            ((TextView) item.findViewById(R.id.post_meta)).setText(meta);
             ((TextView) item.findViewById(R.id.post_title)).setText(post.title);
             ((TextView) item.findViewById(R.id.post_summary)).setText(post.summary);
             ((TextView) item.findViewById(R.id.post_tags)).setText(TextTools.join(post.tags, "  "));
@@ -229,6 +389,8 @@ public class MainActivity extends Activity {
     }
 
     private void renderPostDetail(Post post) {
+        currentPage = "detail";
+        currentDetailSlug = post.slug;
         selectTab(navArticles);
         clear();
         View page = inflatePage(R.layout.page_post_detail);
@@ -244,6 +406,8 @@ public class MainActivity extends Activity {
     }
 
     private void renderProfile() {
+        currentPage = "profile";
+        currentDetailSlug = "";
         selectTab(navProfile);
         clear();
         if (data == null) {
@@ -284,6 +448,8 @@ public class MainActivity extends Activity {
     }
 
     private void renderStats() {
+        currentPage = "stats";
+        currentDetailSlug = "";
         if (data != null && (data.offlineMode || !backendAvailable)) {
             renderHome();
             return;
@@ -324,6 +490,8 @@ public class MainActivity extends Activity {
     }
 
     private void renderAdmin() {
+        currentPage = "admin";
+        currentDetailSlug = "";
         if (data != null && (data.offlineMode || !backendAvailable)) {
             renderHome();
             return;
@@ -371,6 +539,8 @@ public class MainActivity extends Activity {
     }
 
     private void renderLocalPasswordChange() {
+        currentPage = "admin";
+        currentDetailSlug = "";
         selectTab(navAdmin);
         clear();
         View page = inflatePage(R.layout.page_local_password);
@@ -462,6 +632,8 @@ public class MainActivity extends Activity {
             selectedAdminPost = new Post();
             selectedAdminPost.title = "新的 Ra 文章";
             selectedAdminPost.date = TextTools.today();
+            selectedAdminPost.createdAt = TextTools.nowIso();
+            selectedAdminPost.updatedAt = selectedAdminPost.createdAt;
             selectedAdminPost.summary = "在这里填写摘要。";
             selectedAdminPost.content = "## 背景\n\n记录问题背景。\n\n## 方案\n\n记录解决方案。";
             selectedAdminPost.tags.add("Ra记录");
@@ -475,6 +647,8 @@ public class MainActivity extends Activity {
             post.title = title.getText().toString().trim();
             post.slug = selectedAdminSlug.isEmpty() ? TextTools.slugify(post.title) : selectedAdminSlug;
             post.date = date.getText().toString().trim().isEmpty() ? TextTools.today() : date.getText().toString().trim();
+            if (post.createdAt.isEmpty()) post.createdAt = TextTools.nowIso();
+            post.updatedAt = TextTools.nowIso();
             post.tags.clear();
             post.tags.addAll(TextTools.splitTags(tags.getText().toString()));
             post.summary = summary.getText().toString();
@@ -586,7 +760,72 @@ public class MainActivity extends Activity {
             if (!query.isEmpty() && !haystack.contains(query)) continue;
             out.add(post);
         }
+        Collections.sort(out, postComparator());
         return out;
+    }
+
+    private Comparator<Post> postComparator() {
+        final Collator collator = Collator.getInstance(Locale.CHINA);
+        return new Comparator<Post>() {
+            @Override
+            public int compare(Post left, Post right) {
+                if ("date-asc".equals(sortMode)) {
+                    int value = Long.compare(timeValue(left.date), timeValue(right.date));
+                    return value != 0 ? value : compareTitle(left, right, collator);
+                }
+                if ("title-asc".equals(sortMode)) {
+                    int value = compareTitle(left, right, collator);
+                    return value != 0 ? value : Long.compare(timeValue(right.date), timeValue(left.date));
+                }
+                if ("title-desc".equals(sortMode)) {
+                    int value = compareTitle(right, left, collator);
+                    return value != 0 ? value : Long.compare(timeValue(right.date), timeValue(left.date));
+                }
+                if ("updated-desc".equals(sortMode)) {
+                    int value = Long.compare(timeValue(postUpdatedAt(right)), timeValue(postUpdatedAt(left)));
+                    return value != 0 ? value : Long.compare(timeValue(right.date), timeValue(left.date));
+                }
+                int value = Long.compare(timeValue(right.date), timeValue(left.date));
+                return value != 0 ? value : compareTitle(left, right, collator);
+            }
+        };
+    }
+
+    private int compareTitle(Post left, Post right, Collator collator) {
+        String leftTitle = left == null || left.title == null ? "" : left.title;
+        String rightTitle = right == null || right.title == null ? "" : right.title;
+        return collator.compare(leftTitle, rightTitle);
+    }
+
+    private String postUpdatedAt(Post post) {
+        if (post == null) return "";
+        if (post.updatedAt != null && !post.updatedAt.isEmpty()) return post.updatedAt;
+        return post.date == null ? "" : post.date;
+    }
+
+    private long timeValue(String value) {
+        if (value == null || value.isEmpty()) return 0L;
+        String[] patterns = new String[]{
+                "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+                "yyyy-MM-dd'T'HH:mm:ssXXX",
+                "yyyy-MM-dd"
+        };
+        for (String pattern : patterns) {
+            try {
+                Date parsed = new SimpleDateFormat(pattern, Locale.US).parse(value);
+                if (parsed != null) return parsed.getTime();
+            } catch (Exception ignored) {
+            }
+        }
+        return 0L;
+    }
+
+    private String sortLabel() {
+        if ("date-asc".equals(sortMode)) return "最早发布";
+        if ("title-asc".equals(sortMode)) return "标题 A-Z";
+        if ("title-desc".equals(sortMode)) return "标题 Z-A";
+        if ("updated-desc".equals(sortMode)) return "最近修改";
+        return "最新发布";
     }
 
     private Set<String> allTags() {
@@ -660,6 +899,11 @@ public class MainActivity extends Activity {
 
     private void clear() {
         content.removeAllViews();
+        if (!"home".equals(currentPage)) {
+            sortPanelOpen = false;
+            if (floatingSortButton != null) floatingSortButton.setVisibility(View.GONE);
+            if (floatingSortPanel != null) floatingSortPanel.setVisibility(View.GONE);
+        }
         if (pageScroll != null) pageScroll.post(() -> pageScroll.scrollTo(0, 0));
     }
 

@@ -1,123 +1,244 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/app_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/ra_bg"
-    android:orientation="vertical"
     tools:context=".MainActivity">
 
     <LinearLayout
-        android:id="@+id/top_bar"
+        android:id="@+id/main_shell"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/ra_panel"
-        android:elevation="3dp"
-        android:orientation="vertical"
-        android:paddingLeft="16dp"
-        android:paddingTop="10dp"
-        android:paddingRight="16dp"
-        android:paddingBottom="8dp">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
         <LinearLayout
-            android:id="@+id/brand_area"
+            android:id="@+id/top_bar"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:clickable="true"
-            android:focusable="true"
-            android:foreground="?android:attr/selectableItemBackground"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/logo_text"
-                android:layout_width="42dp"
-                android:layout_height="42dp"
-                android:background="@drawable/bg_logo"
-                android:gravity="center"
-                android:text="RA"
-                android:textColor="@android:color/white"
-                android:textSize="18sp"
-                android:textStyle="bold" />
+            android:layout_height="wrap_content"
+            android:background="@color/ra_panel"
+            android:elevation="3dp"
+            android:orientation="vertical"
+            android:paddingLeft="16dp"
+            android:paddingTop="10dp"
+            android:paddingRight="16dp"
+            android:paddingBottom="8dp">
 
             <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="10dp"
-                android:layout_weight="1"
-                android:orientation="vertical">
+                android:id="@+id/brand_area"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?android:attr/selectableItemBackground"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
                 <TextView
-                    android:id="@+id/brand_title"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:singleLine="true"
-                    android:text="Ra Android Notes"
-                    android:textColor="@color/ra_text"
+                    android:id="@+id/logo_text"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:background="@drawable/bg_logo"
+                    android:gravity="center"
+                    android:text="RA"
+                    android:textColor="@android:color/white"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
-                <TextView
-                    android:id="@+id/brand_subtitle"
-                    android:layout_width="match_parent"
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:singleLine="true"
-                    android:text="工程实践与调试笔记"
-                    android:textColor="@color/ra_muted"
-                    android:textSize="12sp" />
+                    android:layout_marginLeft="10dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/brand_title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:singleLine="true"
+                        android:text="Ra Android Notes"
+                        android:textColor="@color/ra_text"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/brand_subtitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:singleLine="true"
+                        android:text="工程实践与调试笔记"
+                        android:textColor="@color/ra_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/nav_tabs"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
+
+                <TextView
+                    android:id="@+id/nav_articles"
+                    style="@style/RaNavTab"
+                    android:text="文章" />
+
+                <TextView
+                    android:id="@+id/nav_profile"
+                    style="@style/RaNavTab"
+                    android:text="简历" />
+
+                <TextView
+                    android:id="@+id/nav_stats"
+                    style="@style/RaNavTab"
+                    android:text="统计" />
+
+                <TextView
+                    android:id="@+id/nav_admin"
+                    style="@style/RaNavTab"
+                    android:text="管理" />
             </LinearLayout>
         </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/nav_tabs"
+        <FrameLayout
+            android:id="@+id/content_frame"
             android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:gravity="center"
-            android:orientation="horizontal"
-            android:paddingTop="4dp">
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipChildren="false">
+
+            <ScrollView
+                android:id="@+id/page_scroll"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:fillViewport="false"
+                android:overScrollMode="ifContentScrolls">
+
+                <LinearLayout
+                    android:id="@+id/content_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingLeft="14dp"
+                    android:paddingTop="14dp"
+                    android:paddingRight="14dp"
+                    android:paddingBottom="96dp" />
+            </ScrollView>
+
+            <FrameLayout
+                android:id="@+id/refresh_indicator"
+                android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:layout_gravity="top"
+                android:clipChildren="false"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <FrameLayout
+                    android:id="@+id/refresh_circle"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_gravity="top|center_horizontal"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_refresh_circle"
+                    android:elevation="6dp">
+
+                    <ProgressBar
+                        android:id="@+id/refresh_spinner"
+                        style="?android:attr/progressBarStyleSmall"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:layout_gravity="center"
+                        android:indeterminate="true"
+                        android:indeterminateTint="@color/ra_primary" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/refresh_status"
+                    style="@style/RaMutedText"
+                    android:layout_width="1dp"
+                    android:layout_height="1dp"
+                    android:visibility="invisible"
+                    tools:text="正在刷新 Ra 数据" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:id="@+id/floating_sort_panel"
+                android:layout_width="168dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|right"
+                android:layout_marginRight="14dp"
+                android:layout_marginBottom="82dp"
+                android:background="@drawable/bg_panel"
+                android:elevation="8dp"
+                android:orientation="vertical"
+                android:padding="10dp"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <TextView
+                    style="@style/RaLabel"
+                    android:text="RA SORT" />
+
+                <TextView
+                    android:id="@+id/sort_overlay_date_desc"
+                    style="@style/RaSecondaryAction"
+                    android:layout_width="match_parent"
+                    android:text="最新发布" />
+
+                <TextView
+                    android:id="@+id/sort_overlay_date_asc"
+                    style="@style/RaSecondaryAction"
+                    android:layout_width="match_parent"
+                    android:text="最早发布" />
+
+                <TextView
+                    android:id="@+id/sort_overlay_title_asc"
+                    style="@style/RaSecondaryAction"
+                    android:layout_width="match_parent"
+                    android:text="标题 A-Z" />
+
+                <TextView
+                    android:id="@+id/sort_overlay_title_desc"
+                    style="@style/RaSecondaryAction"
+                    android:layout_width="match_parent"
+                    android:text="标题 Z-A" />
+
+                <TextView
+                    android:id="@+id/sort_overlay_updated_desc"
+                    style="@style/RaSecondaryAction"
+                    android:layout_width="match_parent"
+                    android:text="最近修改" />
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/nav_articles"
-                style="@style/RaNavTab"
-                android:text="文章" />
-
-            <TextView
-                android:id="@+id/nav_profile"
-                style="@style/RaNavTab"
-                android:text="简历" />
-
-            <TextView
-                android:id="@+id/nav_stats"
-                style="@style/RaNavTab"
-                android:text="统计" />
-
-            <TextView
-                android:id="@+id/nav_admin"
-                style="@style/RaNavTab"
-                android:text="管理" />
-        </LinearLayout>
+                android:id="@+id/floating_sort_button"
+                android:layout_width="wrap_content"
+                android:layout_height="42dp"
+                android:layout_gravity="bottom|right"
+                android:layout_marginRight="14dp"
+                android:layout_marginBottom="28dp"
+                android:background="@drawable/bg_button_primary"
+                android:clickable="true"
+                android:elevation="9dp"
+                android:focusable="true"
+                android:foreground="?android:attr/selectableItemBackground"
+                android:gravity="center"
+                android:paddingLeft="14dp"
+                android:paddingRight="14dp"
+                android:text="排序"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:visibility="visible" />
+        </FrameLayout>
     </LinearLayout>
-
-    <ScrollView
-        android:id="@+id/page_scroll"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:fillViewport="false"
-        android:overScrollMode="ifContentScrolls">
-
-        <LinearLayout
-            android:id="@+id/content_container"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingLeft="14dp"
-            android:paddingTop="14dp"
-            android:paddingRight="14dp"
-            android:paddingBottom="28dp" />
-    </ScrollView>
-</LinearLayout>
+</FrameLayout>

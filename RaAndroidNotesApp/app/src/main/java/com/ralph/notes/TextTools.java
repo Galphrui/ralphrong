@@ -50,6 +50,10 @@ public final class TextTools {
         return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
     }
 
+    public static String nowIso() {
+        return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.US).format(new Date());
+    }
+
     public static String slugify(String text) {
         String source = text == null ? "" : text.trim().toLowerCase(Locale.US);
         String slug = source.replaceAll("[^a-z0-9\\u4e00-\\u9fa5]+", "-");

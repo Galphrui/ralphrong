@@ -44,6 +44,9 @@ public final class JsonMapper {
         post.title = json.optString("title", "");
         post.slug = json.optString("slug", "");
         post.date = json.optString("date", "");
+        post.createdAt = json.optString("createdAt", post.date);
+        post.updatedAt = json.optString("updatedAt",
+                json.optString("modifiedAt", json.optString("lastModified", post.date)));
         post.summary = json.optString("summary", "");
         post.content = json.optString("content", "");
         post.readingMinutes = json.optInt("readingMinutes", 3);
@@ -57,6 +60,8 @@ public final class JsonMapper {
             json.put("title", post.title);
             json.put("slug", post.slug);
             json.put("date", post.date);
+            if (!post.createdAt.isEmpty()) json.put("createdAt", post.createdAt);
+            if (!post.updatedAt.isEmpty()) json.put("updatedAt", post.updatedAt);
             JSONArray tags = new JSONArray();
             for (String tag : post.tags) tags.put(tag);
             json.put("tags", tags);
