@@ -1,6 +1,12 @@
 package com.ralph.notes;
 
 import android.app.Activity;
+import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Build;
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -8,11 +14,14 @@ import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
@@ -46,6 +55,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
+    private static final String GSENSOR_TAG = "Ra_YR_GSENSER";
+    private static final String DIRECTION_TAG = "Ra_YR_Direction";
+    private static final long GSENSOR_LOG_INTERVAL_MS = 500L;
     private static final int BG = Color.rgb(246, 251, 248);
     private static final int PANEL = Color.WHITE;
     private static final int PRIMARY = Color.rgb(7, 95, 81);
@@ -86,6 +98,10 @@ public class MainActivity extends Activity {
     private AdminSession adminSession;
     private LocalCredentialStore localCredentials;
     private DeviceIdStore deviceIdStore;
+    private SensorManager sensorManager;
+    private Sensor accelerometerSensor;
+    private long lastGsensorLogAt;
+    private String lastGsensorCandidate = "";
     private boolean backendAvailable = true;
     private boolean refreshing;
     private boolean pullTracking;
@@ -95,11 +111,20 @@ public class MainActivity extends Activity {
     private String searchQuery = "";
     private String sortMode = "date-desc";
     private String promoMode = "latest";
+    private int promoIndex;
     private String currentPage = "home";
     private String currentDetailSlug = "";
     private Post selectedAdminPost;
     private String selectedAdminSlug = "";
     private long lastBackPressedAt;
+    private final Runnable promoTicker = new Runnable() {
+        @Override
+        public void run() {
+            if (!"home".equals(currentPage) || data == null || data.posts.size() <= 1) return;
+            promoIndex = (promoIndex + 1) % Math.min(5, data.posts.size());
+            updateHomePromo();
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -107,8 +132,21 @@ public class MainActivity extends Activity {
         repository = new BlogRepository(this);
         localCredentials = new LocalCredentialStore(this);
         deviceIdStore = new DeviceIdStore(this);
+        initRotationDebugLogging();
         buildShell();
         loadPublicData();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        startRotationDebugLogging();
+    }
+
+    @Override
+    protected void onPause() {
+        stopRotationDebugLogging();
+        super.onPause();
     }
 
     @Override
@@ -171,6 +209,215 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         }
+    }
+
+    private final SensorEventListener rotationDebugListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+            if (event == null || event.sensor == null || event.sensor.getType() != Sensor.TYPE_ACCELEROMETER) {
+                return;
+            }
+            float x = event.values[0];
+            float y = event.values[1];
+            float z = event.values[2];
+            long now = System.currentTimeMillis();
+            RotationGuess guess = guessRotationFromGsensor(x, y, z);
+            boolean candidateChanged = !guess.candidate.equals(lastGsensorCandidate);
+            if (!candidateChanged && now - lastGsensorLogAt < GSENSOR_LOG_INTERVAL_MS) {
+                return;
+            }
+            lastGsensorLogAt = now;
+            lastGsensorCandidate = guess.candidate;
+
+            String currentOrientation = currentResourceOrientationLabel();
+            String currentRotation = displayRotationLabel();
+            handleSensorDrivenOrientation(guess, currentOrientation, currentRotation, x, y, z);
+            Log.d(GSENSOR_TAG, "Gsensor x=" + formatFloat(x)
+                    + ", y=" + formatFloat(y)
+                    + ", z=" + formatFloat(z)
+                    + ", horizontalG=" + formatFloat(guess.horizontalG)
+                    + ", totalG=" + formatFloat(guess.totalG)
+                    + ", candidate=" + guess.candidate
+                    + ", currentOrientation=" + currentOrientation
+                    + ", displayRotation=" + currentRotation
+                    + ", autoRotate=" + isSystemAutoRotateEnabled()
+                    + ", requestedOrientation=" + requestedOrientationLabel()
+                    + ", noRotateReason=" + noRotateReason(guess, currentOrientation));
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {
+            Log.d(GSENSOR_TAG, "Gsensor accuracy changed: sensor="
+                    + (sensor == null ? "null" : sensor.getName())
+                    + ", accuracy=" + accuracy);
+        }
+    };
+
+    private void initRotationDebugLogging() {
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        if (sensorManager == null) {
+            Log.w(GSENSOR_TAG, "SensorManager is null; cannot read Gsensor data.");
+            return;
+        }
+        accelerometerSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        if (accelerometerSensor == null) {
+            Log.w(GSENSOR_TAG, "No accelerometer sensor found; Android cannot rotate from Gsensor data on this device.");
+            return;
+        }
+        Log.d(DIRECTION_TAG, "Rotation debug ready: sensor=" + accelerometerSensor.getName()
+                + ", vendor=" + accelerometerSensor.getVendor()
+                + ", requestedOrientation=" + requestedOrientationLabel()
+                + ", autoRotate=" + isSystemAutoRotateEnabled()
+                + ", displayRotation=" + displayRotationLabel()
+                + ", resourceOrientation=" + currentResourceOrientationLabel());
+    }
+
+    private void startRotationDebugLogging() {
+        if (sensorManager == null || accelerometerSensor == null) {
+            Log.w(GSENSOR_TAG, "Rotation debug not started: accelerometer unavailable.");
+            return;
+        }
+        lastGsensorLogAt = 0L;
+        lastGsensorCandidate = "";
+        boolean registered = sensorManager.registerListener(
+                rotationDebugListener,
+                accelerometerSensor,
+                SensorManager.SENSOR_DELAY_NORMAL
+        );
+        Log.d(DIRECTION_TAG, "Rotation debug listener registered=" + registered
+                + ", requestedOrientation=" + requestedOrientationLabel()
+                + ", autoRotate=" + isSystemAutoRotateEnabled()
+                + ", displayRotation=" + displayRotationLabel()
+                + ", resourceOrientation=" + currentResourceOrientationLabel());
+    }
+
+    private void stopRotationDebugLogging() {
+        if (sensorManager != null) {
+            sensorManager.unregisterListener(rotationDebugListener);
+            Log.d(DIRECTION_TAG, "Rotation debug listener unregistered.");
+        }
+    }
+
+    private RotationGuess guessRotationFromGsensor(float x, float y, float z) {
+        float horizontalG = (float) Math.sqrt(x * x + y * y);
+        float totalG = (float) Math.sqrt(x * x + y * y + z * z);
+        String candidate;
+        String reason;
+        if (totalG < 6.0f || totalG > 14.0f) {
+            candidate = "unknown";
+            reason = "Gsensor total gravity is outside normal range, probably moving/shaking.";
+        } else if (Math.abs(z) > 7.2f && horizontalG < 6.0f) {
+            candidate = "unknown";
+            reason = "device is too flat; Android usually avoids rotating from flat-table readings.";
+        } else if (horizontalG < 5.5f) {
+            candidate = "unknown";
+            reason = "side gravity is too small; tilt has not crossed a clear rotation threshold.";
+        } else if (Math.abs(x) > Math.abs(y)) {
+            candidate = x > 0 ? "landscape-estimated" : "landscape-reverse-estimated";
+            reason = "Gsensor points closer to landscape than portrait.";
+        } else {
+            candidate = y > 0 ? "portrait-estimated" : "portrait-reverse-estimated";
+            reason = "Gsensor points closer to portrait than landscape.";
+        }
+        return new RotationGuess(candidate, reason, horizontalG, totalG);
+    }
+
+    private void handleSensorDrivenOrientation(RotationGuess guess, String currentOrientation, String currentRotation, float x, float y, float z) {
+        if (guess == null || "unknown".equals(guess.candidate)) {
+            Log.d(DIRECTION_TAG, "RA_YR方向判断：Gsensor暂不满足切屏条件，原因=" + (guess == null ? "guess为空" : guess.reason));
+            return;
+        }
+        int targetOrientation = targetOrientationForCandidate(guess.candidate);
+        String targetLabel = targetOrientationLabel(targetOrientation);
+        if (targetOrientation == getRequestedOrientation()) {
+            Log.d(DIRECTION_TAG, "RA_YR方向判断：Gsensor已符合" + targetLabel
+                    + "，但当前已经请求过该方向，不重复切换。candidate=" + guess.candidate
+                    + ", currentOrientation=" + currentOrientation
+                    + ", displayRotation=" + currentRotation);
+            return;
+        }
+        Log.d(DIRECTION_TAG, "RA_YR方向切换：Gsensor符合" + targetLabel
+                + "，准备主动调用setRequestedOrientation。x=" + formatFloat(x)
+                + ", y=" + formatFloat(y)
+                + ", z=" + formatFloat(z)
+                + ", candidate=" + guess.candidate
+                + ", currentOrientation=" + currentOrientation
+                + ", displayRotation=" + currentRotation
+                + ", requestedBefore=" + requestedOrientationLabel());
+        setRequestedOrientation(targetOrientation);
+        Log.d(DIRECTION_TAG, "RA_YR方向切换：已请求" + targetLabel
+                + "，requestedAfter=" + requestedOrientationLabel());
+    }
+
+    private int targetOrientationForCandidate(String candidate) {
+        if ("landscape-estimated".equals(candidate)) return ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+        if ("landscape-reverse-estimated".equals(candidate)) return ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
+        if ("portrait-reverse-estimated".equals(candidate)) return ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT;
+        return ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
+    }
+
+    private String targetOrientationLabel(int orientation) {
+        if (orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) return "横屏";
+        if (orientation == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE) return "反向横屏";
+        if (orientation == ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT) return "反向竖屏";
+        return "竖屏";
+    }
+
+    private String noRotateReason(RotationGuess guess, String currentOrientation) {
+        if ("unknown".equals(guess.candidate)) return guess.reason;
+        String candidateOrientation = guess.candidate.contains("landscape") ? "landscape" : "portrait";
+        if (candidateOrientation.equals(currentOrientation)) {
+            return "candidate matches current orientation; no Activity recreation/rotation expected.";
+        }
+        if (getRequestedOrientation() == ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR) {
+            return "Gsensor suggests " + candidateOrientation + "; Activity is fullSensor, so if UI does not rotate check system policy, flat/debounce timing, launcher/window mode, or OEM rotation lock.";
+        }
+        if (!isSystemAutoRotateEnabled()) {
+            return "system auto-rotate is off; fullSensor may still rotate, but OEM policy can still block it.";
+        }
+        return "Gsensor suggests " + candidateOrientation + "; waiting for Android orientation hysteresis/debounce to accept it.";
+    }
+
+    private boolean isSystemAutoRotateEnabled() {
+        try {
+            return Settings.System.getInt(getContentResolver(), Settings.System.ACCELEROMETER_ROTATION) == 1;
+        } catch (Exception error) {
+            Log.w(DIRECTION_TAG, "Cannot read system auto-rotate setting: " + error.getMessage());
+            return false;
+        }
+    }
+
+    private String currentResourceOrientationLabel() {
+        int orientation = getResources().getConfiguration().orientation;
+        if (orientation == Configuration.ORIENTATION_LANDSCAPE) return "landscape";
+        if (orientation == Configuration.ORIENTATION_PORTRAIT) return "portrait";
+        return "undefined";
+    }
+
+    private String displayRotationLabel() {
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        if (rotation == Surface.ROTATION_0) return "ROTATION_0";
+        if (rotation == Surface.ROTATION_90) return "ROTATION_90";
+        if (rotation == Surface.ROTATION_180) return "ROTATION_180";
+        if (rotation == Surface.ROTATION_270) return "ROTATION_270";
+        return "ROTATION_UNKNOWN(" + rotation + ")";
+    }
+
+    private String requestedOrientationLabel() {
+        int orientation = getRequestedOrientation();
+        if (orientation == ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR) return "fullSensor";
+        if (orientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR) return "sensor";
+        if (orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) return "unspecified";
+        if (orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) return "portrait";
+        if (orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) return "landscape";
+        if (orientation == ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT) return "reversePortrait";
+        if (orientation == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE) return "reverseLandscape";
+        if (orientation == ActivityInfo.SCREEN_ORIENTATION_LOCKED) return "locked";
+        return "value=" + orientation;
+    }
+
+    private String formatFloat(float value) {
+        return String.format(Locale.US, "%.2f", value);
     }
 
     private void applySystemBarInsets() {
@@ -364,6 +611,7 @@ public class MainActivity extends Activity {
 
     private void updateHomePromo() {
         if (homePromoTabs == null || homePromoCard == null || data == null) return;
+        mainHandler.removeCallbacks(promoTicker);
         homePromoTabs.removeAllViews();
         addPromoTab("最近发布", "latest");
         addPromoTab("点击最多", "views");
@@ -380,12 +628,16 @@ public class MainActivity extends Activity {
         setText(homePromoCard, R.id.home_promo_title, post.title);
         setText(homePromoCard, R.id.home_promo_summary, post.summary);
         homePromoCard.setOnClickListener(v -> openPostDetail(post));
+        if ("home".equals(currentPage) && data.posts.size() > 1) {
+            mainHandler.postDelayed(promoTicker, 4200);
+        }
     }
 
     private void addPromoTab(String label, String mode) {
         TextView tab = actionText(label, promoMode.equals(mode));
         tab.setOnClickListener(v -> {
             promoMode = mode;
+            promoIndex = 0;
             updateHomePromo();
         });
         homePromoTabs.addView(tab);
@@ -401,7 +653,8 @@ public class MainActivity extends Activity {
         } else {
             Collections.sort(sorted, postComparator());
         }
-        return sorted.get(0);
+        int index = Math.min(promoIndex, Math.min(5, sorted.size()) - 1);
+        return sorted.get(Math.max(0, index));
     }
 
     private String promoLabel() {
@@ -528,6 +781,48 @@ public class MainActivity extends Activity {
         });
         body.addView(like);
         renderMarkdown(body, post.content);
+        renderArticleMessages(body, post);
+    }
+
+    private void renderArticleMessages(LinearLayout parent, Post post) {
+        LinearLayout card = card();
+        card.addView(label("ARTICLE MESSAGES"));
+        card.addView(title("文章留言", 20));
+        EditText name = input("昵称，可留空");
+        EditText message = multiline("写下这篇文章的留言", 3);
+        TextView status = paragraph("正在同步留言...");
+        Button submit = primaryButton("发布留言");
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        card.addView(name);
+        card.addView(message);
+        card.addView(submit);
+        card.addView(status);
+        card.addView(list);
+        parent.addView(card);
+
+        runAsync(() -> repository.fetchMessages(post.slug), result -> {
+            status.setText(result.isEmpty() ? "还没有留言。" : "");
+            renderMessageList(list, result);
+        }, failure -> status.setText("留言同步失败：" + failure.getMessage()));
+
+        submit.setOnClickListener(v -> {
+            String cleanName = name.getText().toString().trim();
+            String cleanMessage = message.getText().toString().trim();
+            String validationError = validateMessage(cleanName, cleanMessage);
+            if (!validationError.isEmpty()) {
+                status.setText(validationError);
+                return;
+            }
+            status.setText("正在发布留言...");
+            hideKeyboard(message);
+            runAsync(() -> repository.createMessage(cleanName, cleanMessage, post.slug), result -> {
+                name.setText("");
+                message.setText("");
+                status.setText("留言已发布。");
+                renderMessageList(list, result);
+            }, failure -> status.setText("留言发布失败：" + failure.getMessage()));
+        });
     }
 
     private void renderProfile() {
@@ -626,13 +921,17 @@ public class MainActivity extends Activity {
     }
 
     private void renderMessageList(LinearLayout list) {
+        renderMessageList(list, guestMessages);
+    }
+
+    private void renderMessageList(LinearLayout list, List<GuestMessage> messages) {
         if (list == null) return;
         list.removeAllViews();
-        if (guestMessages == null || guestMessages.isEmpty()) {
+        if (messages == null || messages.isEmpty()) {
             list.addView(paragraph("暂无留言。"));
             return;
         }
-        for (GuestMessage item : guestMessages) {
+        for (GuestMessage item : messages) {
             LinearLayout block = new LinearLayout(this);
             block.setOrientation(LinearLayout.VERTICAL);
             block.setPadding(0, dp(10), 0, dp(10));
@@ -1107,6 +1406,7 @@ public class MainActivity extends Activity {
     }
 
     private void clear() {
+        mainHandler.removeCallbacks(promoTicker);
         content.removeAllViews();
         if (!"home".equals(currentPage)) {
             sortPanelOpen = false;
@@ -1404,6 +1704,20 @@ public class MainActivity extends Activity {
 
     private interface ErrorHandler {
         void onError(Exception error);
+    }
+
+    private static class RotationGuess {
+        final String candidate;
+        final String reason;
+        final float horizontalG;
+        final float totalG;
+
+        RotationGuess(String candidate, String reason, float horizontalG, float totalG) {
+            this.candidate = candidate;
+            this.reason = reason;
+            this.horizontalG = horizontalG;
+            this.totalG = totalG;
+        }
     }
 
     private abstract static class SimpleWatcher implements TextWatcher {

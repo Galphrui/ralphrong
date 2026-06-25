@@ -15,6 +15,7 @@ import java.net.HttpURLConnection;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
+import java.net.URLEncoder;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -96,15 +97,25 @@ public class BlogRepository {
     }
 
     public List<GuestMessage> fetchMessages() throws Exception {
-        JSONObject response = new JSONObject(request("GET", WORKER_BASE_URL + "/api/messages", null, null));
+        return fetchMessages("");
+    }
+
+    public List<GuestMessage> fetchMessages(String postSlug) throws Exception {
+        String suffix = postSlug == null || postSlug.isEmpty() ? "" : "?postSlug=" + URLEncoder.encode(postSlug, "UTF-8");
+        JSONObject response = new JSONObject(request("GET", WORKER_BASE_URL + "/api/messages" + suffix, null, null));
         if (!response.optBoolean("ok")) throw new IllegalStateException(response.optString("error", "读取留言失败"));
         return messagesFromResponse(response);
     }
 
     public List<GuestMessage> createMessage(String name, String message) throws Exception {
+        return createMessage(name, message, "");
+    }
+
+    public List<GuestMessage> createMessage(String name, String message, String postSlug) throws Exception {
         JSONObject body = new JSONObject();
         body.put("name", name);
         body.put("message", message);
+        body.put("postSlug", postSlug == null ? "" : postSlug);
         JSONObject response = new JSONObject(request("POST", WORKER_BASE_URL + "/api/messages", body, null));
         if (!response.optBoolean("ok")) throw new IllegalStateException(response.optString("error", "留言发布失败"));
         return messagesFromResponse(response);

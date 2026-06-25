@@ -111,7 +111,8 @@ async function readVisitStats(env) {
 }
 
 async function getMessages(request, env) {
-  const data = await readMessages(env);
+  const url = new URL(request.url);
+  const data = filterMessages(await readMessages(env), url.searchParams.get("postSlug") || "");
   return json({ ok: true, data }, request, env);
 }
 
@@ -125,13 +126,14 @@ async function createMessage(request, env) {
       id: `msg-${Date.now()}-${hex(crypto.getRandomValues(new Uint8Array(4)))}`,
       name: message.name,
       message: message.message,
+      postSlug: message.postSlug,
       createdAt: new Date().toISOString(),
       visitor: visitorHash.slice(0, 12),
     },
     ...messages,
   ].slice(0, 80);
   await writeMessages(env, next);
-  return json({ ok: true, data: next }, request, env);
+  return json({ ok: true, data: filterMessages(next, message.postSlug) }, request, env);
 }
 
 async function readMessages(env) {
@@ -208,19 +210,26 @@ function publicPostMetrics(metrics) {
 
 function normalizeSlug(value) {
   const slug = String(value || "").trim();
-  if (!/^[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]{1,180}$/.test(slug)) {
+  if (!slug || slug.length > 180 || /[\u0000-\u001f\u007f]/.test(slug)) {
     throw httpError(400, "文章标识无效。");
   }
   return slug;
 }
 
+function normalizeOptionalSlug(value) {
+  const slug = String(value || "").trim();
+  if (!slug) return "";
+  return normalizeSlug(slug);
+}
+
 function normalizeGuestMessage(body) {
   const name = normalizeText(body?.name || "陌生朋友").slice(0, 24) || "陌生朋友";
   const message = normalizeText(body?.message || "");
+  const postSlug = normalizeOptionalSlug(body?.postSlug || "");
   if (message.length < 2) throw httpError(400, "留言至少需要 2 个字。");
   if (message.length > 240) throw httpError(400, "留言最多 240 个字。");
   if (hasBlockedTerm(`${name} ${message}`)) throw httpError(400, "留言包含明显不友好的词汇，请调整后再发布。");
-  return { name, message };
+  return { name, message, postSlug };
 }
 
 function normalizeText(value) {
@@ -250,6 +259,14 @@ function hasBlockedTerm(value) {
     /赌博/i,
     /色情/i,
   ].some((pattern) => pattern.test(value));
+}
+
+function filterMessages(messages, postSlug) {
+  const cleanSlug = normalizeOptionalSlug(postSlug || "");
+  return messages.filter((message) => {
+    const itemSlug = String(message?.postSlug || "");
+    return cleanSlug ? itemSlug === cleanSlug : !itemSlug;
+  });
 }
 
 function normalizeVisitorId(value) {

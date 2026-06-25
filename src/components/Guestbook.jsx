@@ -11,7 +11,7 @@ function formatMessageTime(value) {
   }).format(new Date(value))
 }
 
-export default function Guestbook({ compact = false }) {
+export default function Guestbook({ compact = false, postSlug = '', title = '留言板' }) {
   const [messages, setMessages] = useState([])
   const [name, setName] = useState('')
   const [message, setMessage] = useState('')
@@ -20,7 +20,7 @@ export default function Guestbook({ compact = false }) {
 
   useEffect(() => {
     let cancelled = false
-    fetchMessages()
+    fetchMessages(postSlug)
       .then((items) => {
         if (!cancelled) {
           setMessages(items)
@@ -33,14 +33,14 @@ export default function Guestbook({ compact = false }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [postSlug])
 
   const submit = async (event) => {
     event.preventDefault()
     setSubmitting(true)
     setStatus('正在发布留言...')
     try {
-      const nextMessages = await createMessage({ name, message })
+      const nextMessages = await createMessage({ name, message, postSlug })
       setMessages(nextMessages)
       setName('')
       setMessage('')
@@ -59,7 +59,7 @@ export default function Guestbook({ compact = false }) {
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase text-primary-700">Ra Guestbook</p>
-          <h2 className="mt-1 text-base font-black text-slate-950">留言板</h2>
+          <h2 className="mt-1 text-base font-black text-slate-950">{title}</h2>
         </div>
         <span className="bg-primary-50 px-2 py-1 text-[11px] font-black text-primary-700">{messages.length}</span>
       </div>
@@ -78,7 +78,7 @@ export default function Guestbook({ compact = false }) {
           maxLength={240}
           rows={compact ? 3 : 4}
           className="w-full resize-none border border-slate-200 bg-white px-3 py-2 text-sm font-medium leading-6 text-slate-900 outline-none transition focus:border-primary-500"
-          placeholder="给 Ra 留句话"
+          placeholder={postSlug ? '写下这篇文章的留言' : '给 Ra 留句话'}
         />
         <button
           type="submit"

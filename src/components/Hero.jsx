@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useBlogStore } from '../store/useStore'
 
 const PROMO_TABS = [
@@ -15,17 +15,32 @@ function metricFor(metrics, slug) {
 export default function Hero() {
   const { posts, postMetrics } = useBlogStore()
   const [promoMode, setPromoMode] = useState('latest')
+  const [promoIndex, setPromoIndex] = useState(0)
 
-  const promotedPost = useMemo(() => {
-    if (!posts.length) return null
+  const promotedPosts = useMemo(() => {
+    if (!posts.length) return []
     const sorted = [...posts]
     if (promoMode === 'views') {
       sorted.sort((a, b) => metricFor(postMetrics, b.slug).views - metricFor(postMetrics, a.slug).views)
     } else if (promoMode === 'likes') {
       sorted.sort((a, b) => metricFor(postMetrics, b.slug).likes - metricFor(postMetrics, a.slug).likes)
     }
-    return sorted[0]
+    return sorted.slice(0, 5)
   }, [postMetrics, posts, promoMode])
+
+  useEffect(() => {
+    setPromoIndex(0)
+  }, [promoMode])
+
+  useEffect(() => {
+    if (promotedPosts.length <= 1) return undefined
+    const timer = window.setInterval(() => {
+      setPromoIndex((current) => (current + 1) % promotedPosts.length)
+    }, 4200)
+    return () => window.clearInterval(timer)
+  }, [promotedPosts.length])
+
+  const promotedPost = promotedPosts[promoIndex] || null
 
   const metrics = metricFor(postMetrics, promotedPost?.slug)
 
@@ -90,24 +105,46 @@ export default function Hero() {
               ))}
             </div>
             <button
+              key={`${promoMode}-${promotedPost.slug}`}
               type="button"
               onClick={() => {
                 window.location.hash = `post/${encodeURIComponent(promotedPost.slug)}`
               }}
-              className="block w-full border border-primary-100 bg-white/80 p-4 text-left transition hover:border-primary-300 hover:bg-white"
+              className="block w-full overflow-hidden border border-primary-100 bg-white/80 p-4 text-left transition hover:border-primary-300 hover:bg-white"
             >
-              <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-black uppercase text-primary-700">
+              <motion.div
+                initial={{ opacity: 0, x: 28 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.45, ease: 'easeOut' }}
+              >
+                <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-black uppercase text-primary-700">
                 <span>{PROMO_TABS.find((tab) => tab.key === promoMode)?.label}</span>
                 <span>{metrics.views || 0} 点击</span>
                 <span>{metrics.likes || 0} 赞</span>
-              </div>
-              <h2 className="line-clamp-2 text-xl font-black leading-tight text-slate-950 sm:text-2xl">
-                {promotedPost.title}
-              </h2>
-              <p className="mt-2 line-clamp-2 text-sm font-medium leading-6 text-slate-600">
-                {promotedPost.summary}
-              </p>
+                </div>
+                <h2 className="line-clamp-2 text-xl font-black leading-tight text-slate-950 sm:text-2xl">
+                  {promotedPost.title}
+                </h2>
+                <p className="mt-2 line-clamp-2 text-sm font-medium leading-6 text-slate-600">
+                  {promotedPost.summary}
+                </p>
+              </motion.div>
             </button>
+            {promotedPosts.length > 1 && (
+              <div className="mt-3 flex items-center gap-2">
+                {promotedPosts.map((post, index) => (
+                  <button
+                    key={post.slug}
+                    type="button"
+                    onClick={() => setPromoIndex(index)}
+                    className={`h-2 transition-all ${
+                      index === promoIndex ? 'w-8 bg-primary-700' : 'w-2 bg-primary-100 hover:bg-primary-300'
+                    }`}
+                    aria-label={`切换到第 ${index + 1} 篇推广文章`}
+                  />
+                ))}
+              </div>
+            )}
           </motion.div>
         )}
       </motion.div>

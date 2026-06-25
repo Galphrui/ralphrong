@@ -103,8 +103,9 @@ export const fetchTags = async () => {
   }
 }
 
-export const fetchMessages = async () => {
-  const response = await fetch(`${MESSAGE_API_BASE}/api/messages`, {
+export const fetchMessages = async (postSlug = '') => {
+  const query = postSlug ? `?postSlug=${encodeURIComponent(postSlug)}` : ''
+  const response = await fetch(`${MESSAGE_API_BASE}/api/messages${query}`, {
     cache: 'no-store',
     headers: { Accept: 'application/json' },
   })
@@ -115,14 +116,14 @@ export const fetchMessages = async () => {
   return Array.isArray(result.data) ? result.data : []
 }
 
-export const createMessage = async ({ name, message }) => {
+export const createMessage = async ({ name, message, postSlug = '' }) => {
   const validation = validateGuestMessage({ name, message })
   if (!validation.ok) throw new Error(validation.error)
 
   const response = await fetch(`${MESSAGE_API_BASE}/api/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(validation),
+    body: JSON.stringify({ ...validation, postSlug }),
   })
   const result = await response.json().catch(() => ({}))
   if (!response.ok || result.ok === false) {

@@ -113,7 +113,7 @@ async function handleApi(request, response) {
   }
 
   if (url.pathname === "/api/messages" && request.method === "GET") {
-    sendJson(response, 200, { ok: true, data: await readMessages() });
+    sendJson(response, 200, { ok: true, data: filterMessages(await readMessages(), url.searchParams.get("postSlug") || "") });
     return;
   }
 
@@ -330,22 +330,24 @@ async function addMessage(body, request) {
       id: `msg-${Date.now()}-${randomBytes(4).toString("hex")}`,
       name: message.name,
       message: message.message,
+      postSlug: message.postSlug,
       createdAt: new Date().toISOString(),
       visitor: createHash("sha1").update(request.socket.remoteAddress || "local").digest("hex").slice(0, 12),
     },
     ...messages,
   ].slice(0, 80);
   await writeMessages(next);
-  return next;
+  return filterMessages(next, message.postSlug);
 }
 
 function normalizeGuestMessage(body) {
   const name = normalizeText(body?.name || "陌生朋友").slice(0, 24) || "陌生朋友";
   const message = normalizeText(body?.message || "");
+  const postSlug = normalizeOptionalSlug(body?.postSlug || "");
   if (message.length < 2) throw httpError(400, "留言至少需要 2 个字。");
   if (message.length > 240) throw httpError(400, "留言最多 240 个字。");
   if (hasBlockedTerm(`${name} ${message}`)) throw httpError(400, "留言包含明显不友好的词汇，请调整后再发布。");
-  return { name, message };
+  return { name, message, postSlug };
 }
 
 function normalizeText(value) {
@@ -375,6 +377,14 @@ function hasBlockedTerm(value) {
     /赌博/i,
     /色情/i,
   ].some((pattern) => pattern.test(value));
+}
+
+function filterMessages(messages, postSlug) {
+  const cleanSlug = normalizeOptionalSlug(postSlug || "");
+  return messages.filter((message) => {
+    const itemSlug = String(message?.postSlug || "");
+    return cleanSlug ? itemSlug === cleanSlug : !itemSlug;
+  });
 }
 
 async function readPostMetrics() {
@@ -428,10 +438,16 @@ function publicPostMetrics(metrics) {
 
 function normalizeSlug(value) {
   const slug = String(value || "").trim();
-  if (!/^[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]{1,180}$/.test(slug)) {
+  if (!slug || slug.length > 180 || /[\u0000-\u001f\u007f]/.test(slug)) {
     throw httpError(400, "文章标识无效。");
   }
   return slug;
+}
+
+function normalizeOptionalSlug(value) {
+  const slug = String(value || "").trim();
+  if (!slug) return "";
+  return normalizeSlug(slug);
 }
 
 function normalizeVisitorId(value) {

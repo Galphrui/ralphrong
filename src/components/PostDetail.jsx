@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { useBlogStore } from '../store/useStore'
 import { likePost } from '../utils/api'
+import Guestbook from './Guestbook'
 
 function parseInline(text) {
   const parts = String(text).split(/(`[^`]+`)/g)
@@ -199,6 +200,10 @@ export default function PostDetail({ post }) {
 
       <div className="mt-8">
         <MarkdownContent content={post.content} />
+      </div>
+
+      <div className="mt-10">
+        <Guestbook postSlug={post.slug} title="文章留言" />
       </div>
     </motion.article>
   )
