@@ -8,29 +8,40 @@
 PROJECT_GUIDE.md
 ```
 
-## 本地预览
+## 本地开发
 
-前台 React/Vite 开发服务：
+项目本地开发依赖本地后台。直接用一条命令启动完整环境：
 
 ```bash
 npm run dev
 ```
 
-访问：
+这个命令会先运行配置校验，自动补齐缺失的本地数据文件和模块配置，然后同时启动：
 
-```text
-http://localhost:5173/
-```
+- 前台：`http://127.0.0.1:5173/`
+- 后台：`http://127.0.0.1:3001/login.html`
+- API：`http://127.0.0.1:3001/api`
 
-本地后台服务：
+只想检查配置是否完整：
 
 ```bash
-node local-admin-server.mjs
+npm run verify:config
 ```
 
-访问：
+校验脚本会检查并补齐：
 
-- 后台：`http://localhost:8080/admin.html`
+- `data/posts.json` 里的 `modules`、`repositories` 等结构。
+- `data/messages.json` 本地留言存储。
+- `data/post-metrics.json` 本地文章点击/点赞存储。
+- Android 和 iOS 内置离线数据。
+
+只启动前台 Vite 服务时使用：
+
+```bash
+npm run dev:web
+```
+
+注意：前台的 `/api` 会代理到 `http://localhost:3001`，所以完整功能仍需要本地后台运行。
 
 ## 后台账号体系
 
@@ -46,13 +57,13 @@ node local-admin-server.mjs
 本地启动后台：
 
 ```bash
-node local-admin-server.mjs
+npm run backend
 ```
 
 访问：
 
 ```text
-http://localhost:8080/admin.html
+http://127.0.0.1:3001/admin.html
 ```
 
 首次使用打开 `login.html` 点击“本地注册账号”。本地后台还提供账号管理，可以新增账号、重置密码、删除账号。账号数据会写入：

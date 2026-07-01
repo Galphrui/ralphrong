@@ -3,11 +3,15 @@
   "version": "2.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-local.mjs",
+    "predev:web": "node scripts/verify-config.mjs",
+    "dev:web": "vite",
+    "verify:config": "node scripts/verify-config.mjs",
+    "prebuild": "node scripts/verify-config.mjs",
     "build": "vite build",
     "build:backend": "echo 'Backend ready for Vercel'",
     "preview": "vite preview",
-    "backend": "node backend/app.js"
+    "backend": "node local-admin-server.mjs"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.5.1",

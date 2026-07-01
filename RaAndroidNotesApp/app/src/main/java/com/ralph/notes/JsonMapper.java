@@ -29,6 +29,13 @@ public final class JsonMapper {
                 if (item != null) data.posts.add(parsePost(item));
             }
         }
+        JSONArray repositories = root.optJSONArray("repositories");
+        if (repositories != null) {
+            for (int i = 0; i < repositories.length(); i++) {
+                JSONObject item = repositories.optJSONObject(i);
+                if (item != null) data.repositories.add(parseRepository(item));
+            }
+        }
 
         Collections.sort(data.posts, new Comparator<Post>() {
             @Override
@@ -37,6 +44,21 @@ public final class JsonMapper {
             }
         });
         return data;
+    }
+
+    public static CodeRepository parseRepository(JSONObject json) {
+        CodeRepository repo = new CodeRepository();
+        repo.id = json.optString("id", json.optString("slug", ""));
+        repo.name = json.optString("name", "未命名代码库");
+        repo.description = json.optString("description", "");
+        repo.language = json.optString("language", "Code");
+        repo.url = json.optString("url", "");
+        repo.sourcePath = json.optString("sourcePath", "");
+        repo.updatedAt = json.optString("updatedAt", json.optString("date", ""));
+        repo.snippet = json.optString("snippet", "");
+        repo.notes = json.optString("notes", "");
+        readStringArray(json.optJSONArray("tags"), repo.tags);
+        return repo;
     }
 
     public static Post parsePost(JSONObject json) {
@@ -49,8 +71,11 @@ public final class JsonMapper {
                 json.optString("modifiedAt", json.optString("lastModified", post.date)));
         post.summary = json.optString("summary", "");
         post.content = json.optString("content", "");
+        post.visibility = normalizeVisibility(json.optString("visibility", "public"));
+        post.accessPassword = json.optString("accessPassword", json.optString("password", ""));
         post.readingMinutes = json.optInt("readingMinutes", 3);
         readStringArray(json.optJSONArray("tags"), post.tags);
+        readAttachmentArray(json.optJSONArray("attachments"), post.attachments);
         return post;
     }
 
@@ -67,7 +92,22 @@ public final class JsonMapper {
             json.put("tags", tags);
             json.put("summary", post.summary);
             json.put("content", post.content);
+            json.put("visibility", normalizeVisibility(post.visibility));
+            json.put("accessPassword", "password".equals(normalizeVisibility(post.visibility)) ? post.accessPassword : "");
             json.put("readingMinutes", post.readingMinutes);
+            JSONArray attachments = new JSONArray();
+            for (PostAttachment attachment : post.attachments) {
+                JSONObject item = new JSONObject();
+                item.put("id", attachment.id);
+                item.put("name", attachment.name);
+                item.put("fileName", attachment.fileName);
+                item.put("mimeType", attachment.mimeType);
+                item.put("size", attachment.size);
+                item.put("url", attachment.url);
+                item.put("dataUrl", attachment.dataUrl);
+                attachments.put(item);
+            }
+            json.put("attachments", attachments);
             return json;
         } catch (Exception e) {
             throw new IllegalStateException("文章 JSON 生成失败", e);
@@ -143,6 +183,27 @@ public final class JsonMapper {
             String value = array.optString(i, "").trim();
             if (!value.isEmpty()) out.add(value);
         }
+    }
+
+    private static void readAttachmentArray(JSONArray array, List<PostAttachment> out) {
+        if (array == null) return;
+        for (int i = 0; i < array.length(); i++) {
+            JSONObject item = array.optJSONObject(i);
+            if (item == null) continue;
+            PostAttachment attachment = new PostAttachment();
+            attachment.id = item.optString("id", "");
+            attachment.name = item.optString("name", item.optString("fileName", "附件"));
+            attachment.fileName = item.optString("fileName", attachment.name);
+            attachment.mimeType = item.optString("mimeType", "application/octet-stream");
+            attachment.size = item.optInt("size", 0);
+            attachment.url = item.optString("url", "");
+            attachment.dataUrl = item.optString("dataUrl", "");
+            if (!attachment.url.isEmpty() || !attachment.dataUrl.isEmpty()) out.add(attachment);
+        }
+    }
+
+    private static String normalizeVisibility(String value) {
+        return "password".equals(value) || "private".equals(value) ? "password" : "public";
     }
 
     private static void readExperienceArray(JSONArray array, List<ExperienceItem> out) {

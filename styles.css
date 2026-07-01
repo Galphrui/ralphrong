@@ -38,6 +38,7 @@ a {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -246,6 +247,7 @@ label {
 }
 
 input,
+select,
 textarea {
   background: #fff;
   border: 1px solid var(--line);
@@ -257,6 +259,7 @@ textarea {
 }
 
 input:focus,
+select:focus,
 textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
@@ -1045,6 +1048,53 @@ textarea {
   color: var(--RaInk);
 }
 
+.RaAttachmentEditor,
+.RaCodeManager {
+  background: #f8fafc;
+  border: 1px solid var(--RaLine);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.RaAttachmentList {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.RaAttachmentItem {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--RaLine);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.RaAttachmentItem strong,
+.RaAttachmentItem small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.RaAttachmentItem small {
+  color: var(--RaMuted);
+  font-weight: 700;
+}
+
+.RaCodeManager {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
+  margin-bottom: 20px;
+}
+
+.RaCodeList {
+  max-height: 520px;
+}
+
 @media (max-width: 860px) {
   .RaTopbar,
   .RaNav {
@@ -1067,8 +1117,14 @@ textarea {
   }
 
   .RaFormGrid,
-  .RaAdminGrid {
+  .RaAdminGrid,
+  .RaCodeManager {
     grid-template-columns: 1fr;
+  }
+
+  .RaAttachmentItem {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .RaProfilePhotoEditor {

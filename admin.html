@@ -20,6 +20,7 @@
         <a class="RaTopLink" href="./index.html">前台</a>
         <div class="RaAdminTabs" role="tablist" aria-label="后台管理导航">
           <button class="RaTabButton RaActive" type="button" data-ra-admin-tab="posts">文章</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="code">代码库</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="site">站点</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="profile">简历</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="accounts" id="RaAccountsNavLink">账号</button>
@@ -79,6 +80,17 @@
                   标签，逗号分隔
                   <input id="RaTagsInput" placeholder="JavaScript, 架构" />
                 </label>
+                <label class="RaField">
+                  可见权限
+                  <select id="RaVisibilityInput">
+                    <option value="public">所有人可见</option>
+                    <option value="password">输入密码可见</option>
+                  </select>
+                </label>
+                <label class="RaField">
+                  访问密码
+                  <input id="RaAccessPasswordInput" type="password" autocomplete="new-password" placeholder="密码文章必填" />
+                </label>
                 <label class="RaField RaWide">
                   摘要
                   <textarea id="RaSummaryInput" rows="3"></textarea>
@@ -87,6 +99,20 @@
                   正文 Markdown
                   <textarea id="RaContentInput" rows="16"></textarea>
                 </label>
+                <div class="RaField RaWide">
+                  文章附件
+                  <div class="RaAttachmentEditor">
+                    <div class="RaActions RaCompactActions">
+                      <label class="RaFileButton">
+                        上传附件
+                        <input id="RaAttachmentFileInput" type="file" multiple />
+                      </label>
+                      <button id="RaClearAttachmentsButton" class="RaSecondaryButton" type="button">清空附件</button>
+                    </div>
+                    <div class="RaAttachmentList" id="RaAttachmentList"></div>
+                    <p class="RaHint">附件会保存到文章数据中，前台和 App 会在文章详情页提供下载或打开入口。建议单个附件控制在 2MB 内。</p>
+                  </div>
+                </div>
               </div>
               <div class="RaActions">
                 <button type="submit">保存到数据</button>
@@ -97,6 +123,81 @@
             <p class="RaStatus" id="RaStatusText" role="status"></p>
           </section>
         </section>
+      </section>
+
+      <section class="RaWorkspacePanel" id="RaCodePanel" data-ra-admin-panel="code" hidden>
+        <div class="RaPanel">
+          <div class="RaSectionHeading">
+            <p class="RaEyebrow">Code Library</p>
+            <h2>代码库与模块配置</h2>
+          </div>
+          <p class="RaHint">这里直接编辑结构化 JSON，适合先存放代码片段、仓库说明和模块显隐/排序配置；前台、Android、iOS 会读取同一份数据。</p>
+          <div class="RaCodeManager">
+            <aside>
+              <div class="RaSectionHeading RaCompactHeading">
+                <p class="RaEyebrow">Code Items</p>
+                <h3>代码条目</h3>
+              </div>
+              <div class="RaList RaCodeList" id="RaCodeList"></div>
+            </aside>
+            <section>
+              <div class="RaFormGrid">
+                <label class="RaField">
+                  名称
+                  <input id="RaCodeNameInput" placeholder="例如：闹钟状态排查脚本" />
+                </label>
+                <label class="RaField">
+                  语言 / 类型
+                  <input id="RaCodeLanguageInput" placeholder="Java / ADB / Shell" />
+                </label>
+                <label class="RaField">
+                  标签，逗号分隔
+                  <input id="RaCodeTagsInput" placeholder="Android, Debug" />
+                </label>
+                <label class="RaField">
+                  源路径
+                  <input id="RaCodePathInput" placeholder="snippets/android/debug.md" />
+                </label>
+                <label class="RaField RaWide">
+                  外部链接
+                  <input id="RaCodeUrlInput" placeholder="https://github.com/..." />
+                </label>
+                <label class="RaField RaWide">
+                  描述
+                  <textarea id="RaCodeDescriptionInput" rows="3"></textarea>
+                </label>
+                <label class="RaField RaWide">
+                  代码内容
+                  <textarea id="RaCodeSnippetInput" rows="12" spellcheck="false"></textarea>
+                </label>
+                <label class="RaField RaWide">
+                  备注
+                  <textarea id="RaCodeNotesInput" rows="3"></textarea>
+                </label>
+              </div>
+              <div class="RaActions">
+                <button id="RaNewCodeButton" class="RaSecondaryButton" type="button">新建代码条目</button>
+                <button id="RaSaveCodeItemButton" type="button">保存代码条目</button>
+                <button id="RaDeleteCodeItemButton" class="RaDangerButton" type="button">删除代码条目</button>
+              </div>
+            </section>
+          </div>
+          <div class="RaFormGrid">
+            <label class="RaField RaWide">
+              代码库 repositories
+              <textarea id="RaRepositoriesInput" rows="18" spellcheck="false"></textarea>
+            </label>
+            <label class="RaField RaWide">
+              模块配置 modules
+              <textarea id="RaModulesInput" rows="14" spellcheck="false"></textarea>
+            </label>
+          </div>
+          <div class="RaActions">
+            <button id="RaSaveCodeButton" type="button">保存代码库配置</button>
+            <button id="RaPublishCodeButton" class="RaPublishButton" type="button">保存并发布</button>
+          </div>
+          <p class="RaStatus" id="RaCodeStatusText" role="status"></p>
+        </div>
       </section>
 
       <section class="RaWorkspacePanel" id="RaSettingsPanel" data-ra-admin-panel="settings" hidden>

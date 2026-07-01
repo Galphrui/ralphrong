@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
-const port = Number(process.env.PORT || 8080);
+const port = Number(process.env.PORT || 3001);
 const usersPath = join(root, "data", "admin-users.json");
 const postsPath = join(root, "data", "posts.json");
 const messagesPath = join(root, "data", "messages.json");

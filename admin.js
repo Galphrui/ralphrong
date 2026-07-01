@@ -11,6 +11,8 @@ const RA_DEFAULT_PANEL = "posts";
 
 let RaData = getDefaultData();
 let RaSelectedSlug = "";
+let RaSelectedAttachments = [];
+let RaSelectedCodeId = "";
 let RaRemoteSha = "";
 let RaPostSearchQuery = "";
 let RaPostListCollapsed = false;
@@ -59,11 +61,33 @@ const RaEls = {
   slug: document.querySelector("#RaSlugInput"),
   date: document.querySelector("#RaDateInput"),
   tags: document.querySelector("#RaTagsInput"),
+  visibility: document.querySelector("#RaVisibilityInput"),
+  accessPassword: document.querySelector("#RaAccessPasswordInput"),
   summary: document.querySelector("#RaSummaryInput"),
   content: document.querySelector("#RaContentInput"),
+  attachmentFile: document.querySelector("#RaAttachmentFileInput"),
+  attachmentList: document.querySelector("#RaAttachmentList"),
+  clearAttachments: document.querySelector("#RaClearAttachmentsButton"),
   deletePost: document.querySelector("#RaDeletePostButton"),
   publish: document.querySelector("#RaPublishButton"),
   status: document.querySelector("#RaStatusText"),
+  codeList: document.querySelector("#RaCodeList"),
+  codeName: document.querySelector("#RaCodeNameInput"),
+  codeLanguage: document.querySelector("#RaCodeLanguageInput"),
+  codeTags: document.querySelector("#RaCodeTagsInput"),
+  codePath: document.querySelector("#RaCodePathInput"),
+  codeUrl: document.querySelector("#RaCodeUrlInput"),
+  codeDescription: document.querySelector("#RaCodeDescriptionInput"),
+  codeSnippet: document.querySelector("#RaCodeSnippetInput"),
+  codeNotes: document.querySelector("#RaCodeNotesInput"),
+  newCode: document.querySelector("#RaNewCodeButton"),
+  saveCodeItem: document.querySelector("#RaSaveCodeItemButton"),
+  deleteCodeItem: document.querySelector("#RaDeleteCodeItemButton"),
+  repositories: document.querySelector("#RaRepositoriesInput"),
+  modules: document.querySelector("#RaModulesInput"),
+  saveCode: document.querySelector("#RaSaveCodeButton"),
+  publishCode: document.querySelector("#RaPublishCodeButton"),
+  codeStatus: document.querySelector("#RaCodeStatusText"),
   deployStatus: document.querySelector("#RaDeployStatusText"),
   siteTitle: document.querySelector("#RaSiteTitleInput"),
   siteSubtitle: document.querySelector("#RaSiteSubtitleInput"),
@@ -111,6 +135,7 @@ async function initRaAdmin() {
   await loadInitialData();
   renderSiteForm();
   renderProfileForm();
+  renderCodeForm();
   renderPostList();
   selectPost(RaData.posts[0]?.slug || "");
   await loadRemoteData();
@@ -227,6 +252,7 @@ async function loadRemoteData() {
     saveLocalData();
     renderSiteForm();
     renderProfileForm();
+    renderCodeForm();
     selectPost(RaData.posts[0]?.slug || "");
     setStatus(RA_IS_LOCAL_ADMIN ? "已从本地后台读取数据。" : "已从外网后台读取 GitHub 数据。");
   } catch (error) {
@@ -395,7 +421,7 @@ function renderPostList() {
       (post) => `
         <div class="RaItem ${post.slug === RaSelectedSlug ? "RaActive" : ""}" data-RaSlug="${escapeAttr(post.slug)}">
           <strong>${escapeHtml(post.title)}</strong>
-          <small>${escapeHtml(post.date)} · ${escapeHtml(post.tags.join(", "))}</small>
+          <small>${escapeHtml(post.date)} · ${post.visibility === "password" ? "密码可见 · " : ""}${escapeHtml(post.tags.join(", "))}</small>
         </div>
       `,
     )
@@ -442,6 +468,219 @@ function renderProfileForm() {
   RaEls.profileSummary.value = profile.summary || "";
   updateProfilePhotoPreview();
   renderProfileSections(getProfileSections(profile));
+}
+
+function renderCodeForm() {
+  if (!RaEls.repositories || !RaEls.modules) return;
+  RaEls.repositories.value = JSON.stringify(RaData.repositories || [], null, 2);
+  RaEls.modules.value = JSON.stringify(RaData.modules || getDefaultModules(), null, 2);
+  renderCodeList();
+  selectCodeItem(RaSelectedCodeId || RaData.repositories?.[0]?.id || "");
+}
+
+function saveCodeConfig() {
+  try {
+    const repositories = JSON.parse(RaEls.repositories.value || "[]");
+    const modules = JSON.parse(RaEls.modules.value || "{}");
+    if (!Array.isArray(repositories)) throw new Error("repositories 必须是数组。");
+    if (!modules || !Array.isArray(modules.modules)) throw new Error("modules.modules 必须是数组。");
+    RaData.repositories = repositories;
+    RaData.modules = modules;
+    saveLocalData();
+    renderCodeForm();
+    setCodeStatus("代码库和模块配置已保存到本地数据。");
+    return true;
+  } catch (error) {
+    setCodeStatus(`保存失败：${error.message}`);
+    return false;
+  }
+}
+
+async function publishCodeConfig() {
+  if (saveCodeConfig()) await publishData("code");
+}
+
+function renderAttachmentList() {
+  if (!RaEls.attachmentList) return;
+  const attachments = normalizeAttachments(RaSelectedAttachments);
+  if (!attachments.length) {
+    RaEls.attachmentList.innerHTML = '<div class="RaEmptyState">暂无附件</div>';
+    return;
+  }
+  RaEls.attachmentList.innerHTML = attachments
+    .map(
+      (item, index) => `
+        <article class="RaAttachmentItem">
+          <div>
+            <strong>${escapeHtml(item.name || item.fileName || "附件")}</strong>
+            <small>${escapeHtml(item.fileName || "")}${item.size ? ` · ${formatBytes(item.size)}` : ""}</small>
+          </div>
+          <button class="RaDangerButton" type="button" data-ra-delete-attachment="${index}">删除</button>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+async function addAttachments(event) {
+  const files = [...(event.target.files || [])];
+  event.target.value = "";
+  if (!files.length) return;
+  try {
+    const next = [];
+    for (const file of files) {
+      if (file.size > 2 * 1024 * 1024) throw new Error(`${file.name} 超过 2MB，请压缩后再上传。`);
+      next.push(await fileToAttachment(file));
+    }
+    RaSelectedAttachments = [...normalizeAttachments(RaSelectedAttachments), ...next];
+    renderAttachmentList();
+    setStatus(`已添加 ${next.length} 个附件，保存文章后生效。`);
+  } catch (error) {
+    setStatus(`附件添加失败：${error.message}`);
+  }
+}
+
+function fileToAttachment(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("读取附件失败。"));
+    reader.onload = () => {
+      resolve({
+        id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: file.name,
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+        dataUrl: reader.result,
+        createdAt: new Date().toISOString(),
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function deleteAttachment(index) {
+  RaSelectedAttachments = normalizeAttachments(RaSelectedAttachments).filter((_, itemIndex) => itemIndex !== index);
+  renderAttachmentList();
+}
+
+function clearAttachments() {
+  RaSelectedAttachments = [];
+  renderAttachmentList();
+  setStatus("附件已清空，保存文章后生效。");
+}
+
+function normalizeAttachments(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((item) => ({
+      id: item.id || `att-${Math.random().toString(36).slice(2, 10)}`,
+      name: item.name || item.fileName || "附件",
+      fileName: item.fileName || item.name || "attachment",
+      mimeType: item.mimeType || item.type || "application/octet-stream",
+      size: Number(item.size || 0),
+      url: item.url || "",
+      dataUrl: item.dataUrl || "",
+      createdAt: item.createdAt || "",
+    }))
+    .filter((item) => item.url || item.dataUrl);
+}
+
+function renderCodeList() {
+  if (!RaEls.codeList) return;
+  const repositories = Array.isArray(RaData.repositories) ? RaData.repositories : [];
+  if (!repositories.length) {
+    RaEls.codeList.innerHTML = '<div class="RaEmptyState">暂无代码条目</div>';
+    return;
+  }
+  RaEls.codeList.innerHTML = repositories
+    .map(
+      (item) => `
+        <article class="RaItem ${item.id === RaSelectedCodeId ? "RaActive" : ""}" data-ra-code-id="${escapeAttr(item.id)}">
+          <strong>${escapeHtml(item.name || "未命名代码")}</strong>
+          <small>${escapeHtml(item.language || "Code")} · ${escapeHtml((item.tags || []).join(" / "))}</small>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function selectCodeItem(id) {
+  const repositories = Array.isArray(RaData.repositories) ? RaData.repositories : [];
+  const item = repositories.find((repo) => repo.id === id) || createEmptyCodeItem();
+  RaSelectedCodeId = item.id || "";
+  RaEls.codeName.value = item.name || "";
+  RaEls.codeLanguage.value = item.language || "";
+  RaEls.codeTags.value = (item.tags || []).join(", ");
+  RaEls.codePath.value = item.sourcePath || "";
+  RaEls.codeUrl.value = item.url || "";
+  RaEls.codeDescription.value = item.description || "";
+  RaEls.codeSnippet.value = item.snippet || "";
+  RaEls.codeNotes.value = item.notes || "";
+  renderCodeList();
+}
+
+function createEmptyCodeItem() {
+  return {
+    id: "",
+    name: "",
+    description: "",
+    language: "Code",
+    tags: [],
+    url: "",
+    sourcePath: "",
+    updatedAt: new Date().toISOString().slice(0, 10),
+    snippet: "",
+    notes: "",
+  };
+}
+
+function newCodeItem() {
+  RaSelectedCodeId = "";
+  selectCodeItem("");
+}
+
+function saveCodeItem() {
+  const now = new Date().toISOString().slice(0, 10);
+  const item = {
+    id: RaSelectedCodeId || slugify(RaEls.codeName.value || `code-${Date.now()}`),
+    name: RaEls.codeName.value.trim(),
+    description: RaEls.codeDescription.value.trim(),
+    language: RaEls.codeLanguage.value.trim() || "Code",
+    tags: RaEls.codeTags.value.split(",").map((tag) => tag.trim()).filter(Boolean),
+    url: RaEls.codeUrl.value.trim(),
+    sourcePath: RaEls.codePath.value.trim(),
+    updatedAt: now,
+    snippet: RaEls.codeSnippet.value,
+    notes: RaEls.codeNotes.value.trim(),
+  };
+  if (!item.name) {
+    setCodeStatus("代码条目名称必填。");
+    return;
+  }
+  if (!Array.isArray(RaData.repositories)) RaData.repositories = [];
+  const index = RaData.repositories.findIndex((repo) => repo.id === item.id);
+  if (index >= 0) RaData.repositories[index] = item;
+  else RaData.repositories.unshift(item);
+  RaSelectedCodeId = item.id;
+  saveLocalData();
+  renderCodeForm();
+  setCodeStatus("代码条目已保存。");
+}
+
+function deleteCodeItem() {
+  if (!RaSelectedCodeId || !Array.isArray(RaData.repositories)) return;
+  RaData.repositories = RaData.repositories.filter((repo) => repo.id !== RaSelectedCodeId);
+  RaSelectedCodeId = "";
+  saveLocalData();
+  renderCodeForm();
+  setCodeStatus("代码条目已删除。");
+}
+
+function formatBytes(size) {
+  const value = Number(size || 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function updateProfilePhotoPreview() {
@@ -599,8 +838,13 @@ function selectPost(slug) {
   RaEls.slug.value = post.slug;
   RaEls.date.value = post.date;
   RaEls.tags.value = post.tags.join(", ");
+  RaEls.visibility.value = normalizePostVisibility(post.visibility);
+  RaEls.accessPassword.value = post.accessPassword || "";
   RaEls.summary.value = post.summary;
   RaEls.content.value = post.content;
+  RaSelectedAttachments = normalizeAttachments(post.attachments);
+  renderAttachmentList();
+  updateAccessPasswordField();
   renderPostList();
 }
 
@@ -619,14 +863,24 @@ function saveCurrentPost(event) {
       .split(",")
       .map((tag) => tag.trim())
       .filter(Boolean),
+    visibility: normalizePostVisibility(RaEls.visibility.value),
+    accessPassword: RaEls.accessPassword.value.trim(),
     summary: RaEls.summary.value.trim(),
     content: RaEls.content.value.trim(),
     readingMinutes: estimateReadingMinutes(RaEls.content.value),
+    attachments: normalizeAttachments(RaSelectedAttachments),
   };
 
   if (!post.title || !post.slug) {
     setStatus("标题和 Slug 必填。");
     return false;
+  }
+  if (post.visibility === "password" && !post.accessPassword) {
+    setStatus("密码可见文章需要填写访问密码。");
+    return false;
+  }
+  if (post.visibility !== "password") {
+    post.accessPassword = "";
   }
 
   const index = RaData.posts.findIndex((item) => item.slug === RaSelectedSlug);
@@ -649,6 +903,7 @@ function hasEditablePostDraft() {
       RaEls.title.value.trim() ||
       RaEls.slug.value.trim() ||
       RaEls.tags.value.trim() ||
+      RaEls.accessPassword.value.trim() ||
       RaEls.summary.value.trim() ||
       RaEls.content.value.trim(),
   );
@@ -803,6 +1058,7 @@ function importJson(event) {
     saveLocalData();
     renderSiteForm();
     renderProfileForm();
+    renderCodeForm();
     selectPost(RaData.posts[0]?.slug || "");
     setStatus("JSON 已导入当前数据，点击发布写入后端。");
   };
@@ -1044,7 +1300,7 @@ function delay(ms) {
 }
 
 function setPublishing(isPublishing) {
-  [RaEls.publish, RaEls.publishSite, RaEls.publishProfile, RaEls.syncData].forEach((button) => {
+  [RaEls.publish, RaEls.publishSite, RaEls.publishProfile, RaEls.publishCode, RaEls.syncData].forEach((button) => {
     if (button) button.disabled = isPublishing;
   });
 }
@@ -1052,6 +1308,7 @@ function setPublishing(isPublishing) {
 function setTargetStatus(target, message) {
   if (target === "profile") setProfileStatus(message);
   if (target === "site") setSiteStatus(message);
+  if (target === "code") setCodeStatus(message);
 }
 
 function createEmptyPost() {
@@ -1066,6 +1323,9 @@ function createEmptyPost() {
     summary: "",
     content: "## 背景\n\n在这里写下问题背景。\n\n## 方案\n\n记录你的技术方案与取舍。\n",
     readingMinutes: 3,
+    visibility: "public",
+    accessPassword: "",
+    attachments: [],
   };
 }
 
@@ -1088,11 +1348,16 @@ function normalizeData(input) {
         createdAt: post.createdAt || post.date || "",
         updatedAt: post.updatedAt || post.modifiedAt || post.lastModified || post.date || "",
         tags: Array.isArray(post.tags) ? post.tags : [],
+        visibility: normalizePostVisibility(post.visibility),
+        accessPassword: post.accessPassword || post.password || "",
         summary: post.summary || "",
         content: post.content || "",
         readingMinutes: post.readingMinutes || estimateReadingMinutes(post.content || ""),
+        attachments: normalizeAttachments(post.attachments),
       })),
     ),
+    repositories: Array.isArray(input.repositories) ? input.repositories : [],
+    modules: input.modules || getDefaultModules(),
     profile: normalizeProfile(input.profile),
   };
 }
@@ -1109,7 +1374,23 @@ function getDefaultData() {
       },
     },
     posts: [],
+    repositories: [],
+    modules: getDefaultModules(),
     profile: getDefaultProfile(),
+  };
+}
+
+function getDefaultModules() {
+  return {
+    settings: { maxTopModules: 6 },
+    modules: [
+      { id: "posts", label: "文章", href: "#posts", enabled: true, order: 10, surface: "top" },
+      { id: "code", label: "代码库", href: "#code", enabled: true, order: 20, surface: "top" },
+      { id: "profile", label: "个人", href: "#profile", enabled: true, order: 30, surface: "top" },
+      { id: "guestbook", label: "留言", href: "#guestbook", enabled: true, order: 40, surface: "top" },
+      { id: "modules", label: "设置", href: "#modules", enabled: true, order: 90, surface: "top" },
+      { id: "admin", label: "管理", href: "./admin.html", enabled: true, order: 100, surface: "top", external: true },
+    ],
   };
 }
 
@@ -1177,6 +1458,16 @@ function estimateReadingMinutes(content) {
   return Math.max(1, Math.ceil(length / 500));
 }
 
+function normalizePostVisibility(value) {
+  return value === "password" || value === "private" ? "password" : "public";
+}
+
+function updateAccessPasswordField() {
+  const locked = RaEls.visibility.value === "password";
+  RaEls.accessPassword.disabled = !locked;
+  RaEls.accessPassword.placeholder = locked ? "密码文章必填，可发布后修改" : "公开文章不需要密码";
+}
+
 function setStatus(message) {
   RaEls.status.textContent = message;
 }
@@ -1191,6 +1482,10 @@ function setSiteStatus(message) {
 
 function setProfileStatus(message) {
   if (RaEls.profileStatus) RaEls.profileStatus.textContent = message;
+}
+
+function setCodeStatus(message) {
+  if (RaEls.codeStatus) RaEls.codeStatus.textContent = message;
 }
 
 function setAccountStatus(message) {
@@ -1247,10 +1542,25 @@ RaEls.adminPostList.addEventListener("click", (event) => {
 RaEls.newPost.addEventListener("click", createNewPost);
 RaEls.form.addEventListener("submit", saveCurrentPost);
 RaEls.deletePost.addEventListener("click", deleteSelectedPost);
+RaEls.attachmentFile.addEventListener("change", addAttachments);
+RaEls.clearAttachments.addEventListener("click", clearAttachments);
+RaEls.attachmentList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-ra-delete-attachment]");
+  if (button) deleteAttachment(Number(button.dataset.raDeleteAttachment));
+});
 RaEls.saveSite.addEventListener("click", saveSiteInfo);
 RaEls.publishSite.addEventListener("click", publishSiteInfo);
 RaEls.saveProfile.addEventListener("click", saveProfileInfo);
 RaEls.publishProfile.addEventListener("click", publishProfileInfo);
+RaEls.saveCode.addEventListener("click", saveCodeConfig);
+RaEls.publishCode.addEventListener("click", publishCodeConfig);
+RaEls.newCode.addEventListener("click", newCodeItem);
+RaEls.saveCodeItem.addEventListener("click", saveCodeItem);
+RaEls.deleteCodeItem.addEventListener("click", deleteCodeItem);
+RaEls.codeList.addEventListener("click", (event) => {
+  const item = event.target.closest("[data-ra-code-id]");
+  if (item) selectCodeItem(item.dataset.raCodeId);
+});
 RaEls.profilePhoto.addEventListener("input", updateProfilePhotoPreview);
 RaEls.profilePhotoFile.addEventListener("change", selectProfilePhoto);
 RaEls.clearProfilePhoto.addEventListener("click", clearProfilePhoto);
@@ -1263,6 +1573,7 @@ RaEls.profileSectionList.addEventListener("click", (event) => {
 RaEls.title.addEventListener("input", () => {
   if (!RaSelectedSlug) RaEls.slug.value = slugify(RaEls.title.value);
 });
+RaEls.visibility.addEventListener("change", updateAccessPasswordField);
 RaEls.createAccount.addEventListener("click", createAccount);
 RaEls.resetPassword.addEventListener("click", resetAccountPassword);
 RaEls.deleteAccount.addEventListener("click", deleteAccount);

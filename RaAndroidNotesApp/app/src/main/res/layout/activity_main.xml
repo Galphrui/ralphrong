@@ -90,6 +90,11 @@
                     android:text="文章" />
 
                 <TextView
+                    android:id="@+id/nav_code"
+                    style="@style/RaNavTab"
+                    android:text="代码" />
+
+                <TextView
                     android:id="@+id/nav_profile"
                     style="@style/RaNavTab"
                     android:text="简历" />
@@ -108,6 +113,11 @@
                     android:id="@+id/nav_admin"
                     style="@style/RaNavTab"
                     android:text="管理" />
+
+                <TextView
+                    android:id="@+id/nav_settings"
+                    style="@style/RaNavTab"
+                    android:text="设置" />
             </LinearLayout>
         </LinearLayout>
 

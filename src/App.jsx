@@ -4,6 +4,8 @@ import PostDetail from './components/PostDetail'
 import HomePage from './components/HomePage'
 import ProfilePage from './components/ProfilePage'
 import Guestbook from './components/Guestbook'
+import CodeRepositoryPage from './components/CodeRepositoryPage'
+import ModuleSettingsPage from './components/ModuleSettingsPage'
 import { useBlogStore } from './store/useStore'
 import { fetchPostMetrics, fetchSiteData, recordPostView } from './utils/api'
 
@@ -18,6 +20,12 @@ function getRoute() {
   if (hash === 'guestbook') {
     return { name: 'guestbook' }
   }
+  if (hash === 'code') {
+    return { name: 'code' }
+  }
+  if (hash === 'modules') {
+    return { name: 'modules' }
+  }
   return { name: 'home' }
 }
 
@@ -27,6 +35,8 @@ export default function App() {
     setPosts,
     setTotalPosts,
     setProfile,
+    setRepositories,
+    setModuleSettings,
     setPostMetrics,
     setAllTags,
     setIsLoading,
@@ -50,6 +60,8 @@ export default function App() {
         setPosts(data.posts)
         setTotalPosts(data.total)
         setProfile(data.profile)
+        setRepositories(data.repositories)
+        setModuleSettings(data.moduleSettings)
         const allTags = [...new Set(data.posts.flatMap((p) => p.tags || []))].sort()
         setAllTags(allTags)
         fetchPostMetrics().then(setPostMetrics).catch(() => {})
@@ -84,6 +96,10 @@ export default function App() {
           <div className="mx-auto max-w-2xl">
             <Guestbook />
           </div>
+        ) : route.name === 'code' ? (
+          <CodeRepositoryPage />
+        ) : route.name === 'modules' ? (
+          <ModuleSettingsPage />
         ) : route.name === 'post' ? (
           <PostDetail post={selectedPost} />
         ) : (

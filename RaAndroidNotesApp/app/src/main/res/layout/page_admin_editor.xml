@@ -70,6 +70,23 @@
             android:hint="标签，逗号分隔"
             tools:text="Android, Framework, Context" />
 
+        <CheckBox
+            android:id="@+id/editor_password_visible"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:buttonTint="@color/ra_primary"
+            android:text="输入密码可见"
+            android:textColor="@color/ra_text"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/editor_access_password"
+            style="@style/RaInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="访问密码（密码文章必填）"
+            android:inputType="textPassword" />
+
         <EditText
             android:id="@+id/editor_summary"
             style="@style/RaInput"

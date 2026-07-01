@@ -1,6 +1,8 @@
 package com.ralph.notes;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.hardware.Sensor;
@@ -18,6 +20,8 @@ import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
+import android.util.Base64;
+import android.net.Uri;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -27,6 +31,7 @@ import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
@@ -40,6 +45,8 @@ import org.json.JSONObject;
 
 import java.text.Collator;
 import java.text.SimpleDateFormat;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -55,6 +62,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
+    private static final String PREFS_NAME = "ra_app_settings";
+    private static final String KEY_ROTATION_ENABLED = "rotation_enabled";
+    private static final String KEY_PROFILE_VISIBLE = "profile_visible";
+    private static final String KEY_CODE_VISIBLE = "code_visible";
+    private static final String KEY_STATS_VISIBLE = "stats_visible";
+    private static final String KEY_MESSAGE_RECORDS_VISIBLE = "message_records_visible";
+    private static final String KEY_VOICE_MESSAGE_VISIBLE = "voice_message_visible";
     private static final String GSENSOR_TAG = "Ra_YR_GSENSER";
     private static final String DIRECTION_TAG = "Ra_YR_Direction";
     private static final long GSENSOR_LOG_INTERVAL_MS = 500L;
@@ -68,8 +82,10 @@ public class MainActivity extends Activity {
     private static final int LINE = Color.rgb(216, 228, 224);
 
     private BlogRepository repository;
+    private SharedPreferences appSettings;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final Set<String> unlockedPostSlugs = new LinkedHashSet<>();
 
     private View root;
     private LinearLayout content;
@@ -79,10 +95,12 @@ public class MainActivity extends Activity {
     private TextView floatingSortButton;
     private LinearLayout floatingSortPanel;
     private TextView navArticles;
+    private TextView navCode;
     private TextView navProfile;
     private TextView navGuestbook;
     private TextView navStats;
     private TextView navAdmin;
+    private TextView navSettings;
     private LinearLayout homePostList;
     private LinearLayout homeTagsRow;
     private TextView homeListTitle;
@@ -130,8 +148,10 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         repository = new BlogRepository(this);
+        appSettings = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         localCredentials = new LocalCredentialStore(this);
         deviceIdStore = new DeviceIdStore(this);
+        applyRotationPreference();
         initRotationDebugLogging();
         buildShell();
         loadPublicData();
@@ -140,7 +160,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        startRotationDebugLogging();
+        applyRotationPreference();
+        if (isRotationEnabled()) startRotationDebugLogging();
     }
 
     @Override
@@ -181,17 +202,21 @@ public class MainActivity extends Activity {
         floatingSortButton = findViewById(R.id.floating_sort_button);
         floatingSortPanel = findViewById(R.id.floating_sort_panel);
         navArticles = findViewById(R.id.nav_articles);
+        navCode = findViewById(R.id.nav_code);
         navProfile = findViewById(R.id.nav_profile);
         navGuestbook = findViewById(R.id.nav_guestbook);
         navStats = findViewById(R.id.nav_stats);
         navAdmin = findViewById(R.id.nav_admin);
+        navSettings = findViewById(R.id.nav_settings);
 
         findViewById(R.id.brand_area).setOnClickListener(v -> renderHome());
         navArticles.setOnClickListener(v -> renderHome());
+        navCode.setOnClickListener(v -> renderCodeRepository());
         navProfile.setOnClickListener(v -> renderProfile());
         navGuestbook.setOnClickListener(v -> renderGuestbook());
         navStats.setOnClickListener(v -> renderStats());
         navAdmin.setOnClickListener(v -> renderAdmin());
+        navSettings.setOnClickListener(v -> renderSettings());
         floatingSortButton.setOnClickListener(v -> {
             sortPanelOpen = !sortPanelOpen;
             updateFloatingSort();
@@ -231,7 +256,9 @@ public class MainActivity extends Activity {
 
             String currentOrientation = currentResourceOrientationLabel();
             String currentRotation = displayRotationLabel();
-            handleSensorDrivenOrientation(guess, currentOrientation, currentRotation, x, y, z);
+            if (isRotationEnabled()) {
+                handleSensorDrivenOrientation(guess, currentOrientation, currentRotation, x, y, z);
+            }
             Log.d(GSENSOR_TAG, "Gsensor x=" + formatFloat(x)
                     + ", y=" + formatFloat(y)
                     + ", z=" + formatFloat(z)
@@ -273,6 +300,10 @@ public class MainActivity extends Activity {
     }
 
     private void startRotationDebugLogging() {
+        if (!isRotationEnabled()) {
+            Log.d(DIRECTION_TAG, "Rotation debug not started: app rotation setting is off.");
+            return;
+        }
         if (sensorManager == null || accelerometerSensor == null) {
             Log.w(GSENSOR_TAG, "Rotation debug not started: accelerometer unavailable.");
             return;
@@ -323,6 +354,7 @@ public class MainActivity extends Activity {
     }
 
     private void handleSensorDrivenOrientation(RotationGuess guess, String currentOrientation, String currentRotation, float x, float y, float z) {
+        if (!isRotationEnabled()) return;
         if (guess == null || "unknown".equals(guess.candidate)) {
             Log.d(DIRECTION_TAG, "RA_YR方向判断：Gsensor暂不满足切屏条件，原因=" + (guess == null ? "guess为空" : guess.reason));
             return;
@@ -516,18 +548,22 @@ public class MainActivity extends Activity {
             renderHome();
             return;
         }
-        if ("profile".equals(targetPage)) {
+        if ("profile".equals(targetPage) && isProfileVisible()) {
             renderProfile();
+        } else if ("code".equals(targetPage) && isCodeVisible()) {
+            renderCodeRepository();
         } else if ("guestbook".equals(targetPage)) {
             renderGuestbook();
         } else if ("detail".equals(targetPage)) {
             Post post = findPost(targetSlug);
             if (post == null) renderHome();
             else renderPostDetail(post);
-        } else if ("stats".equals(targetPage) && backendAvailable && !data.offlineMode) {
+        } else if ("stats".equals(targetPage) && isStatsVisible() && backendAvailable && !data.offlineMode) {
             renderStats();
         } else if ("admin".equals(targetPage) && backendAvailable && !data.offlineMode) {
             renderAdmin();
+        } else if ("settings".equals(targetPage)) {
+            renderSettings();
         } else {
             renderHome();
         }
@@ -767,6 +803,10 @@ public class MainActivity extends Activity {
         setText(page, R.id.detail_summary, post.summary);
         LinearLayout body = page.findViewById(R.id.detail_body);
         body.removeAllViews();
+        if (isPasswordPost(post) && !unlockedPostSlugs.contains(post.slug)) {
+            renderPostUnlock(body, post);
+            return;
+        }
         Button like = primaryButton("点赞 " + metric.likes);
         like.setOnClickListener(v -> {
             if (!backendAvailable) {
@@ -781,7 +821,90 @@ public class MainActivity extends Activity {
         });
         body.addView(like);
         renderMarkdown(body, post.content);
-        renderArticleMessages(body, post);
+        renderAttachments(body, post);
+        if (isMessageRecordsVisible()) renderArticleMessages(body, post);
+    }
+
+    private void renderAttachments(LinearLayout parent, Post post) {
+        if (post == null || post.attachments.isEmpty()) return;
+        LinearLayout card = card();
+        card.addView(label("RA ATTACHMENTS"));
+        card.addView(title("文章附件", 20));
+        for (PostAttachment attachment : post.attachments) {
+            LinearLayout item = card();
+            item.addView(title(attachment.name == null || attachment.name.isEmpty() ? attachment.fileName : attachment.name, 16));
+            item.addView(paragraph((attachment.fileName == null ? "" : attachment.fileName)
+                    + (attachment.size > 0 ? " · " + formatBytes(attachment.size) : "")));
+            Button open = primaryButton(attachment.url == null || attachment.url.isEmpty() ? "保存附件" : "打开附件");
+            open.setOnClickListener(v -> openAttachment(attachment));
+            item.addView(open);
+            card.addView(item);
+        }
+        parent.addView(card);
+    }
+
+    private void openAttachment(PostAttachment attachment) {
+        try {
+            if (attachment.url != null && !attachment.url.isEmpty()) {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(attachment.url)));
+                return;
+            }
+            File file = saveDataUrlAttachment(attachment);
+            toast("附件已保存：" + file.getAbsolutePath());
+        } catch (Exception error) {
+            toast("附件处理失败：" + error.getMessage());
+        }
+    }
+
+    private File saveDataUrlAttachment(PostAttachment attachment) throws Exception {
+        String dataUrl = attachment.dataUrl == null ? "" : attachment.dataUrl;
+        int comma = dataUrl.indexOf(',');
+        if (!dataUrl.startsWith("data:") || comma < 0) throw new IllegalArgumentException("附件数据无效");
+        byte[] bytes = Base64.decode(dataUrl.substring(comma + 1), Base64.DEFAULT);
+        File dir = new File(getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS), "attachments");
+        if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("无法创建附件目录");
+        String cleanName = sanitizeFileName(attachment.fileName == null || attachment.fileName.isEmpty() ? attachment.name : attachment.fileName);
+        File file = new File(dir, cleanName);
+        try (FileOutputStream output = new FileOutputStream(file)) {
+            output.write(bytes);
+        }
+        return file;
+    }
+
+    private String sanitizeFileName(String value) {
+        String clean = String.valueOf(value == null ? "attachment" : value).replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+        return clean.isEmpty() ? "attachment" : clean;
+    }
+
+    private String formatBytes(int size) {
+        if (size < 1024) return size + " B";
+        if (size < 1024 * 1024) return String.format(Locale.US, "%.1f KB", size / 1024f);
+        return String.format(Locale.US, "%.1f MB", size / 1024f / 1024f);
+    }
+
+    private boolean isPasswordPost(Post post) {
+        return post != null && "password".equals(post.visibility);
+    }
+
+    private void renderPostUnlock(LinearLayout body, Post post) {
+        LinearLayout card = card();
+        card.addView(title("这篇文章需要密码授权", 20));
+        card.addView(paragraph("输入发布者设置的访问密码后，可以在本次打开 App 期间阅读正文。"));
+        EditText password = input("访问密码");
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        card.addView(password);
+        Button unlock = primaryButton("授权阅读");
+        unlock.setOnClickListener(v -> {
+            if (!password.getText().toString().equals(post.accessPassword)) {
+                toast("密码不正确，请重新输入。");
+                return;
+            }
+            unlockedPostSlugs.add(post.slug);
+            hideKeyboard(password);
+            renderPostDetail(post);
+        });
+        card.addView(unlock);
+        body.addView(card);
     }
 
     private void renderArticleMessages(LinearLayout parent, Post post) {
@@ -825,9 +948,55 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void renderCodeRepository() {
+        currentPage = "code";
+        currentDetailSlug = "";
+        if (!isCodeVisible()) {
+            renderHiddenModule("代码库模块已在设置中关闭。");
+            return;
+        }
+        selectTab(navCode);
+        clear();
+
+        LinearLayout page = card();
+        page.addView(label("RA CODE LIBRARY"));
+        page.addView(title("代码库", 24));
+        page.addView(paragraph("存放可复用代码片段、排查脚本、工程模板和项目仓库说明。"));
+        if (data == null || data.repositories.isEmpty()) {
+            page.addView(paragraph("暂无代码库内容。"));
+            content.addView(page);
+            updateFloatingSort();
+            return;
+        }
+
+        for (CodeRepository repo : data.repositories) {
+            LinearLayout item = card();
+            item.addView(label(repo.language == null || repo.language.isEmpty() ? "CODE" : repo.language));
+            item.addView(title(repo.name, 20));
+            if (repo.updatedAt != null && !repo.updatedAt.isEmpty()) item.addView(paragraph("更新：" + repo.updatedAt));
+            if (repo.description != null && !repo.description.isEmpty()) item.addView(paragraph(repo.description));
+            if (repo.sourcePath != null && !repo.sourcePath.isEmpty()) item.addView(paragraph("路径：" + repo.sourcePath));
+            if (repo.snippet != null && !repo.snippet.isEmpty()) {
+                TextView snippet = paragraph(repo.snippet);
+                snippet.setTypeface(Typeface.MONOSPACE);
+                snippet.setTextColor(TEXT);
+                snippet.setBackgroundColor(Color.rgb(241, 245, 249));
+                snippet.setPadding(dp(12), dp(10), dp(12), dp(10));
+                item.addView(snippet);
+            }
+            page.addView(item);
+        }
+        content.addView(page);
+        updateFloatingSort();
+    }
+
     private void renderProfile() {
         currentPage = "profile";
         currentDetailSlug = "";
+        if (!isProfileVisible()) {
+            renderHiddenModule("简历模块已在设置中关闭。");
+            return;
+        }
         selectTab(navProfile);
         clear();
         if (data == null) {
@@ -870,12 +1039,27 @@ public class MainActivity extends Activity {
     private void renderGuestbook() {
         currentPage = "guestbook";
         currentDetailSlug = "";
+        if (!isAnyGuestbookFeatureVisible()) {
+            renderHiddenModule("留言记录和语音留言都已在设置中关闭。");
+            return;
+        }
         selectTab(navGuestbook);
         clear();
 
         LinearLayout composer = card();
         composer.addView(label("RA GUESTBOOK"));
         composer.addView(title("留言板", 24));
+        if (isVoiceMessageVisible()) {
+            LinearLayout voiceZone = card();
+            voiceZone.addView(label("VOICE MESSAGE"));
+            voiceZone.addView(title("语音留言专区", 22));
+            voiceZone.addView(paragraph("录制 16KHz 语音留言，支持本地播放和导出。"));
+            Button voiceButton = primaryButton("进入语音留言");
+            voiceButton.setOnClickListener(v -> startActivity(new Intent(this, VoiceMessageActivity.class)));
+            voiceZone.addView(voiceButton);
+            content.addView(voiceZone);
+        }
+
         EditText name = input("昵称，可留空");
         EditText message = multiline("给 Ra 留句话", 4);
         TextView status = paragraph("正在同步留言...");
@@ -886,19 +1070,25 @@ public class MainActivity extends Activity {
         composer.addView(status);
         content.addView(composer);
 
-        LinearLayout listCard = card();
-        listCard.addView(label("PUBLIC MESSAGES"));
         LinearLayout list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
-        listCard.addView(list);
-        content.addView(listCard);
+        if (isMessageRecordsVisible()) {
+            LinearLayout listCard = card();
+            listCard.addView(label("PUBLIC MESSAGES"));
+            listCard.addView(list);
+            content.addView(listCard);
+        }
 
-        renderMessageList(list);
-        runAsync(() -> repository.fetchMessages(), result -> {
-            guestMessages = result;
-            status.setText(result.isEmpty() ? "还没有留言，欢迎写下第一条。" : "留言已同步。");
+        if (isMessageRecordsVisible()) {
             renderMessageList(list);
-        }, failure -> status.setText("留言同步失败：" + failure.getMessage()));
+            runAsync(() -> repository.fetchMessages(), result -> {
+                guestMessages = result;
+                status.setText(result.isEmpty() ? "还没有留言，欢迎写下第一条。" : "留言已同步。");
+                renderMessageList(list);
+            }, failure -> status.setText("留言同步失败：" + failure.getMessage()));
+        } else {
+            status.setText("留言记录显示已在设置中关闭。");
+        }
 
         submit.setOnClickListener(v -> {
             String cleanName = name.getText().toString().trim();
@@ -915,7 +1105,7 @@ public class MainActivity extends Activity {
                 name.setText("");
                 message.setText("");
                 status.setText("留言已发布，全站可见。");
-                renderMessageList(list);
+                if (isMessageRecordsVisible()) renderMessageList(list);
             }, failure -> status.setText("留言发布失败：" + failure.getMessage()));
         });
     }
@@ -958,6 +1148,10 @@ public class MainActivity extends Activity {
     private void renderStats() {
         currentPage = "stats";
         currentDetailSlug = "";
+        if (!isStatsVisible()) {
+            renderHiddenModule("统计模块已在设置中关闭。");
+            return;
+        }
         if (data != null && (data.offlineMode || !backendAvailable)) {
             renderHome();
             return;
@@ -995,6 +1189,41 @@ public class MainActivity extends Activity {
             setText(page, R.id.stats_last_visit, "-\n最近访问时间");
             setText(page, R.id.stats_device, deviceIdStore.visitorId() + "\n本机访客标识");
         });
+    }
+
+    private void renderSettings() {
+        currentPage = "settings";
+        currentDetailSlug = "";
+        selectTab(navSettings);
+        clear();
+
+        LinearLayout page = card();
+        page.addView(label("APP SETTINGS"));
+        page.addView(title("设置", 24));
+        page.addView(paragraph("控制 App 旋转和各个模块是否显示。"));
+        page.addView(settingCheckBox("允许 App 旋转", KEY_ROTATION_ENABLED, true, checked -> {
+            applyRotationPreference();
+            toast(checked ? "已允许 App 旋转。" : "已锁定为竖屏。");
+        }));
+        page.addView(settingCheckBox("显示代码库模块", KEY_CODE_VISIBLE, true, checked -> updateNavigation()));
+        page.addView(settingCheckBox("显示简历模块", KEY_PROFILE_VISIBLE, true, checked -> updateNavigation()));
+        page.addView(settingCheckBox("显示统计模块", KEY_STATS_VISIBLE, true, checked -> updateNavigation()));
+        page.addView(settingCheckBox("显示留言记录", KEY_MESSAGE_RECORDS_VISIBLE, true, checked -> updateNavigation()));
+        page.addView(settingCheckBox("显示语音留言", KEY_VOICE_MESSAGE_VISIBLE, true, checked -> updateNavigation()));
+        content.addView(page);
+    }
+
+    private void renderHiddenModule(String message) {
+        selectTab(navSettings);
+        clear();
+        LinearLayout page = card();
+        page.addView(label("MODULE HIDDEN"));
+        page.addView(title("模块已关闭", 22));
+        page.addView(paragraph(message));
+        Button settings = primaryButton("前往设置");
+        settings.setOnClickListener(v -> renderSettings());
+        page.addView(settings);
+        content.addView(page);
     }
 
     private void renderAdmin() {
@@ -1106,15 +1335,24 @@ public class MainActivity extends Activity {
         EditText title = page.findViewById(R.id.editor_title);
         EditText date = page.findViewById(R.id.editor_date);
         EditText tags = page.findViewById(R.id.editor_tags);
+        CheckBox passwordVisible = page.findViewById(R.id.editor_password_visible);
+        EditText accessPassword = page.findViewById(R.id.editor_access_password);
         EditText summary = page.findViewById(R.id.editor_summary);
         EditText contentText = page.findViewById(R.id.editor_content);
         if (selectedAdminPost != null) {
             title.setText(selectedAdminPost.title);
             date.setText(selectedAdminPost.date);
             tags.setText(TextTools.join(selectedAdminPost.tags, ", "));
+            passwordVisible.setChecked("password".equals(selectedAdminPost.visibility));
+            accessPassword.setText(selectedAdminPost.accessPassword);
+            accessPassword.setEnabled(passwordVisible.isChecked());
             summary.setText(selectedAdminPost.summary);
             contentText.setText(selectedAdminPost.content);
         }
+        passwordVisible.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            accessPassword.setEnabled(isChecked);
+            if (!isChecked) accessPassword.setText("");
+        });
 
         postSearch.addTextChangedListener(new SimpleWatcher() {
             @Override
@@ -1159,6 +1397,12 @@ public class MainActivity extends Activity {
             post.updatedAt = TextTools.nowIso();
             post.tags.clear();
             post.tags.addAll(TextTools.splitTags(tags.getText().toString()));
+            post.visibility = passwordVisible.isChecked() ? "password" : "public";
+            post.accessPassword = passwordVisible.isChecked() ? accessPassword.getText().toString().trim() : "";
+            if ("password".equals(post.visibility) && post.accessPassword.isEmpty()) {
+                toast("密码可见文章需要填写访问密码。");
+                return;
+            }
             post.summary = summary.getText().toString();
             post.content = contentText.getText().toString();
             post.readingMinutes = Math.max(1, Math.round(post.content.length() / 500f));
@@ -1575,6 +1819,23 @@ public class MainActivity extends Activity {
         return button;
     }
 
+    private CheckBox settingCheckBox(String label, String key, boolean defaultValue, SettingChangeHandler handler) {
+        CheckBox box = new CheckBox(this);
+        box.setText(label);
+        box.setTextColor(TEXT);
+        box.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        box.setTextSize(16);
+        box.setButtonTintList(android.content.res.ColorStateList.valueOf(PRIMARY));
+        box.setPadding(0, dp(8), 0, dp(8));
+        box.setChecked(settingEnabled(key, defaultValue));
+        box.setLayoutParams(margins(new LinearLayout.LayoutParams(-1, -2), 0, 2, 0, 2));
+        box.setOnCheckedChangeListener((buttonView, checked) -> {
+            appSettings.edit().putBoolean(key, checked).apply();
+            if (handler != null) handler.onChanged(checked);
+        });
+        return box;
+    }
+
     private TextView chip(String label, boolean selected, View.OnClickListener listener) {
         TextView chip = (TextView) LayoutInflater.from(this).inflate(R.layout.view_tag_chip, content, false);
         chip.setText(label);
@@ -1585,7 +1846,7 @@ public class MainActivity extends Activity {
     }
 
     private void selectTab(TextView active) {
-        TextView[] tabs = new TextView[]{navArticles, navProfile, navGuestbook, navStats, navAdmin};
+        TextView[] tabs = new TextView[]{navArticles, navCode, navProfile, navGuestbook, navStats, navAdmin, navSettings};
         for (TextView tab : tabs) {
             if (tab == null) continue;
             boolean selected = tab == active;
@@ -1596,8 +1857,56 @@ public class MainActivity extends Activity {
 
     private void updateNavigation() {
         boolean readOnly = data != null && (data.offlineMode || !backendAvailable);
-        if (navStats != null) navStats.setVisibility(readOnly ? View.GONE : View.VISIBLE);
+        if (navCode != null) navCode.setVisibility(isCodeVisible() ? View.VISIBLE : View.GONE);
+        if (navProfile != null) navProfile.setVisibility(isProfileVisible() ? View.VISIBLE : View.GONE);
+        if (navStats != null) navStats.setVisibility(!readOnly && isStatsVisible() ? View.VISIBLE : View.GONE);
         if (navAdmin != null) navAdmin.setVisibility(readOnly ? View.GONE : View.VISIBLE);
+        if (navGuestbook != null) navGuestbook.setVisibility(isAnyGuestbookFeatureVisible() ? View.VISIBLE : View.GONE);
+        if ("code".equals(currentPage) && !isCodeVisible()) renderHome();
+        if ("profile".equals(currentPage) && !isProfileVisible()) renderHome();
+        if ("stats".equals(currentPage) && (!isStatsVisible() || readOnly)) renderHome();
+        if ("guestbook".equals(currentPage) && !isAnyGuestbookFeatureVisible()) renderHome();
+    }
+
+    private boolean settingEnabled(String key, boolean defaultValue) {
+        return appSettings == null || appSettings.getBoolean(key, defaultValue);
+    }
+
+    private boolean isRotationEnabled() {
+        return settingEnabled(KEY_ROTATION_ENABLED, true);
+    }
+
+    private boolean isProfileVisible() {
+        return settingEnabled(KEY_PROFILE_VISIBLE, true);
+    }
+
+    private boolean isCodeVisible() {
+        return settingEnabled(KEY_CODE_VISIBLE, true);
+    }
+
+    private boolean isStatsVisible() {
+        return settingEnabled(KEY_STATS_VISIBLE, true);
+    }
+
+    private boolean isMessageRecordsVisible() {
+        return settingEnabled(KEY_MESSAGE_RECORDS_VISIBLE, true);
+    }
+
+    private boolean isVoiceMessageVisible() {
+        return settingEnabled(KEY_VOICE_MESSAGE_VISIBLE, true);
+    }
+
+    private boolean isAnyGuestbookFeatureVisible() {
+        return isMessageRecordsVisible() || isVoiceMessageVisible();
+    }
+
+    private void applyRotationPreference() {
+        if (isRotationEnabled()) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR);
+        } else {
+            stopRotationDebugLogging();
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        }
     }
 
     private void updateHomeSourceHint() {
@@ -1704,6 +2013,10 @@ public class MainActivity extends Activity {
 
     private interface ErrorHandler {
         void onError(Exception error);
+    }
+
+    private interface SettingChangeHandler {
+        void onChanged(boolean checked);
     }
 
     private static class RotationGuess {

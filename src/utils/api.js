@@ -1,6 +1,7 @@
 import { sortPosts } from './postSort'
 import { validateGuestMessage } from './moderation'
 import { visitorId } from './visitor'
+import { mergeSiteModuleSettings, readModulePreferences } from './moduleConfig'
 
 const DATA_PATH = 'data/posts.json'
 const DATA_URL = `${import.meta.env.BASE_URL}${DATA_PATH}`
@@ -23,11 +24,13 @@ export const fetchSiteData = async () => {
   if (!response.ok) throw new Error('Failed to fetch site data')
 
   const data = await response.json()
-  const posts = sortPosts(data.posts || [])
+  const posts = sortPosts((data.posts || []).map(normalizePostAccess))
 
   return {
     site: data.site || {},
     profile: data.profile || null,
+    repositories: Array.isArray(data.repositories) ? data.repositories.map(normalizeRepository) : [],
+    moduleSettings: mergeSiteModuleSettings(data.modules, readModulePreferences()),
     posts,
     total: posts.length,
   }
@@ -102,6 +105,41 @@ export const fetchTags = async () => {
     return []
   }
 }
+
+const normalizePostAccess = (post) => ({
+  ...post,
+  visibility: post.visibility === 'password' || post.visibility === 'private' ? 'password' : 'public',
+  accessPassword: post.accessPassword || post.password || '',
+  attachments: normalizeAttachments(post.attachments),
+})
+
+const normalizeAttachments = (attachments) =>
+  (Array.isArray(attachments) ? attachments : [])
+    .map((item) => ({
+      id: item.id || item.fileName || item.name || `att-${Math.random().toString(36).slice(2)}`,
+      name: item.name || item.fileName || '附件',
+      fileName: item.fileName || item.name || 'attachment',
+      mimeType: item.mimeType || 'application/octet-stream',
+      size: Number(item.size || 0),
+      url: item.url || '',
+      dataUrl: item.dataUrl || '',
+      createdAt: item.createdAt || '',
+    }))
+    .filter((item) => item.url || item.dataUrl)
+
+const normalizeRepository = (repo) => ({
+  id: repo.id || repo.slug || repo.name || `repo-${Math.random().toString(36).slice(2)}`,
+  name: repo.name || '未命名代码库',
+  description: repo.description || '',
+  language: repo.language || 'Code',
+  tags: Array.isArray(repo.tags) ? repo.tags : [],
+  url: repo.url || '',
+  sourcePath: repo.sourcePath || '',
+  updatedAt: repo.updatedAt || repo.date || '',
+  snippet: repo.snippet || '',
+  notes: repo.notes || '',
+  visibility: repo.visibility === 'private' ? 'private' : 'public',
+})
 
 export const fetchMessages = async (postSlug = '') => {
   const query = postSlug ? `?postSlug=${encodeURIComponent(postSlug)}` : ''

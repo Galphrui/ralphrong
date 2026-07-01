@@ -11,6 +11,9 @@ public class Post {
     public String updatedAt = "";
     public String summary = "";
     public String content = "";
+    public String visibility = "public";
+    public String accessPassword = "";
     public int readingMinutes = 3;
     public final List<String> tags = new ArrayList<>();
+    public final List<PostAttachment> attachments = new ArrayList<>();
 }

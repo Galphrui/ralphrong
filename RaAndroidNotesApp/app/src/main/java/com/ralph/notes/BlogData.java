@@ -11,6 +11,7 @@ public class BlogData {
     public String subtitle = "工程实践与调试笔记";
     public Profile profile = new Profile();
     public final List<Post> posts = new ArrayList<>();
+    public final List<CodeRepository> repositories = new ArrayList<>();
     public boolean offlineMode;
     public boolean fromCache;
     public String sourceMessage = "";

@@ -8,6 +8,8 @@ export default function PostCard({ post, onClick }) {
   const updatedAt = postUpdatedAt(post)
   const showUpdatedAt = updatedAt && updatedAt !== post.date
   const metrics = postMetrics?.[post.slug] || { views: 0, likes: 0 }
+  const isPasswordProtected = post.visibility === 'password'
+  const attachmentCount = post.attachments?.length || 0
 
   const onLike = async (event) => {
     event.stopPropagation()
@@ -35,6 +37,8 @@ export default function PostCard({ post, onClick }) {
         <span>{post.readingMinutes || 3} 分钟阅读</span>
         <span>{metrics.views || 0} 点击</span>
         <span>{metrics.likes || 0} 赞</span>
+        {isPasswordProtected && <span>密码可见</span>}
+        {attachmentCount > 0 && <span>{attachmentCount} 个附件</span>}
         {showUpdatedAt && <span>修改 {updatedAt.slice(0, 10)}</span>}
       </div>
 
@@ -59,6 +63,11 @@ export default function PostCard({ post, onClick }) {
           ))}
           {post.tags?.length > 3 && (
             <span className="py-1 text-xs text-slate-500">+{post.tags.length - 3}</span>
+          )}
+          {isPasswordProtected && (
+            <span className="inline-block bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+              需授权
+            </span>
           )}
         </div>
         <button

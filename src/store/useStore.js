@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { normalizeModuleSettings } from '../utils/moduleConfig'
 
 export const useBlogStore = create((set) => ({
   // Posts state
@@ -7,6 +8,8 @@ export const useBlogStore = create((set) => ({
   currentPage: 1,
   postsPerPage: 20,
   profile: null,
+  repositories: [],
+  moduleSettings: normalizeModuleSettings(),
   postMetrics: {},
 
   // Search and filter
@@ -23,6 +26,8 @@ export const useBlogStore = create((set) => ({
   setPosts: (posts) => set({ posts }),
   setTotalPosts: (total) => set({ totalPosts: total }),
   setProfile: (profile) => set({ profile }),
+  setRepositories: (repositories) => set({ repositories }),
+  setModuleSettings: (moduleSettings) => set({ moduleSettings: normalizeModuleSettings(moduleSettings, moduleSettings?.modules) }),
   setPostMetrics: (postMetrics) => set({ postMetrics }),
   setCurrentPage: (page) => set({ currentPage: page }),
   setSearchQuery: (query) => set({ searchQuery: query }),
