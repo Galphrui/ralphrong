@@ -19,9 +19,40 @@
   },
   "posts": [
     {
+      "title": "Android文件挂载失败",
+      "slug": "目录-datauser0pkg-没有被-pmsinstalld-正确创建或绑定问题",
+      "date": "2026-07-01",
+      "createdAt": "2026-07-01T09:04:16.816Z",
+      "updatedAt": "2026-07-01T09:04:19.155Z",
+      "tags": [
+        "directBootAware"
+      ],
+      "summary": "SharedPreferencesImpl: Couldn't create directory for SharedPreferences file /data/user/0/com.sohu.inputmethod.sogou/shared_prefs/com.sohu.inputmethod.sogou_preferences.xml  异常\ndirectBootAware=true属性",
+      "content": "## Bug 总结\n\n这个 bug 的本质是：**Netcenter 被错误标记为 Direct Boot 可运行应用，导致它在用户 CE 存储未完全就绪时提前启动业务链路，间接拉起其他普通应用，最终普通应用访问 `/data/user/0/<pkg>` 时目录不存在，出现 SharedPreferences/MMKV 创建失败。**\n\n本次最关键的错误修改是 Manifest 里新增的：\n\n```xml\nandroid:directBootAware=\"true\"\n```\n\n尤其是加在 `<application>` 上，并且它和原有的：\n\n```xml\nandroid:persistent=\"true\"\nandroid:defaultToDeviceProtectedStorage=\"true\"\n```\n\n组合在一起后风险非常高。patch 中确实新增了 application 级 `directBootAware=true`，同时还给 `BootReceiver` 和 `TimeCalibrationReceiver` 增加了 `directBootAware=true`。\n\n---\n\n## 一、现象\n\n日志现象类似：\n\n```text\nSharedPreferencesImpl: Couldn't create directory for SharedPreferences file /data/user/0/com.sohu.inputmethod.sogou/shared_prefs/xxx.xml\nMMKV: file not valid\n```\n\n表现特征：\n\n```text\n1. 不是单个 App 报错，而是多个 App 都可能报类似问题\n2. 报错路径集中在 /data/user/0/<package>/\n3. SharedPreferences、MMKV、SQLite、文件缓存都可能异常\n4. 设备开机早期更容易出现\n5. 第三方输入法、系统服务关联 App、开机自启 App 更容易先暴露\n```\n\n重点是 `/data/user/0/<pkg>`，这是 **CE 用户加密区**。如果用户数据区还没有完成准备，普通 App 写 SharedPreferences 就会失败。\n\n---\n\n## 二、直接原因\n\n直接原因是这次提交把 Netcenter 改成了 Direct Boot 可运行：\n\n```diff\n<application\n    android:allowBackup=\"true\"\n    android:icon=\"@drawable/ic_launcher\"\n    android:label=\"@string/app_name\"\n+   android:directBootAware=\"true\"\n    android:persistent=\"true\"\n    android:defaultToDeviceProtectedStorage=\"true\"\n    android:usesCleartextTraffic=\"true\"\n    android:theme=\"@style/AppTheme\">\n```\n\n同时还改了：\n\n```diff\n<receiver android:name=\"com.sgtc.netcenter.receiver.BootReceiver\"\n+   android:directBootAware=\"true\"\n    android:exported=\"true\">\n```\n\n以及：\n\n```diff\n<receiver android:name=\"com.sgtc.netcenter.receiver.TimeCalibrationReceiver\"\n    android:exported=\"true\"\n+   android:directBootAware=\"true\">\n```\n\n这些改动让 Netcenter 在 **LOCKED_BOOT_COMPLETED 阶段** 就可能被启动。PMS 代码里也能看到，系统会先投递 `LOCKED_BOOT_COMPLETED`，而 `BOOT_COMPLETED` 只有在用户解锁或正在解锁后才投递。\n\n---\n\n## 三、根因链路\n\n完整链路是：\n\n```text\n开机\n  ↓\n系统进入 Direct Boot 阶段\n  ↓\n用户 CE 存储 /data/user/0 还没有完全可用\n  ↓\nNetcenter 因为 persistent + directBootAware 被提前拉起\n  ↓\nBootReceiver / TimeCalibrationReceiver / Netcenter 初始化逻辑开始执行\n  ↓\n业务逻辑可能注册服务、发广播、权限控制、网络校时、拉起关联组件\n  ↓\n间接导致普通 App 或输入法提前启动\n  ↓\n普通 App 写 SharedPreferences/MMKV\n  ↓\n访问 /data/user/0/<pkg>/shared_prefs\n  ↓\n目录不存在或不可用\n  ↓\nCouldn't create directory / MMKV file not valid\n```\n\n所以真正的问题不是：\n\n```text\nSharedPreferences 写法错误\nMMKV 本身损坏\ncom.sohu.inputmethod.sogou 自己异常\n某一个普通 App 权限错误\n```\n\n而是：\n\n```text\n系统启动阶段顺序被破坏：Direct Boot 阶段启动了不应该启动的完整业务链路。\n```\n\n---\n\n## 四、错误原因\n\n### 1. 错误地把整个 application 标记为 directBootAware\n\n`android:directBootAware=\"true\"` 不应该随便加在 `<application>` 上。\n\n加在 application 上的含义是：**整个 App 的组件都被认为可以在用户未解锁阶段运行**。这对普通业务型系统 App 非常危险。\n\n正确做法应该是：只给极少数真正需要 Direct Boot 的 Receiver 单独加，并且 Receiver 内只能做 DE 安全逻辑。\n\n---\n\n### 2. 忽略了 `persistent=true` 的启动放大效应\n\nNetcenter 原本就是：\n\n```xml\nandroid:persistent=\"true\"\n```\n\n这意味着它是 persistent 系统进程，系统倾向于尽早拉起。再加上：\n\n```xml\nandroid:directBootAware=\"true\"\n```\n\n就变成：\n\n```text\n开机早期 + 用户未解锁 + CE 未就绪 + persistent 进程提前启动\n```\n\n这个组合非常容易引发全局启动时序问题。\n\n---\n\n### 3. 混淆了 DE 和 CE 存储\n\nManifest 里已有：\n\n```xml\nandroid:defaultToDeviceProtectedStorage=\"true\"\n```\n\n它只保证 Netcenter 自己默认使用 DE 存储，不代表它可以安全访问或拉起其他普通 App。\n\n普通 App 的 SharedPreferences 默认路径仍然是：\n\n```text\n/data/user/0/<pkg>/shared_prefs/\n```\n\n也就是 CE 区。Netcenter 自己用 DE，不代表被它间接拉起的其他 App 也能安全运行。\n\n---\n\n### 4. Direct Boot 阶段执行了完整业务，而不是最小逻辑\n\nDirect Boot 阶段只能做非常有限的事情，例如：\n\n```text\n读取 DE 存储\n设置闹钟\n等待用户解锁\n做极少量系统初始化\n```\n\n不能做：\n\n```text\n启动普通业务服务\n拉起第三方应用\n发权限控制广播\n访问普通 SharedPreferences\n访问 /data/user/0\n初始化大量业务模块\n启动输入法、运动、权限、网络、协议解析链路\n```\n\n---\n\n## 五、解决方案\n\n### 方案 1：最小修复，直接回退 Manifest 修改\n\n优先采用这个方案。\n\n```diff\ndiff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml\n@@\n         android:allowBackup=\"true\"\n         android:icon=\"@drawable/ic_launcher\"\n         android:label=\"@string/app_name\"\n-        android:directBootAware=\"true\"\n         android:persistent=\"true\"\n         android:defaultToDeviceProtectedStorage=\"true\"\n         android:usesCleartextTraffic=\"true\"\n         android:theme=\"@style/AppTheme\">\n@@\n         <receiver android:name=\"com.sgtc.netcenter.receiver.BootReceiver\"\n-            android:directBootAware=\"true\"\n             android:exported=\"true\">\n@@\n         <receiver android:name=\"com.sgtc.netcenter.receiver.TimeCalibrationReceiver\"\n-            android:exported=\"true\"\n-            android:directBootAware=\"true\">\n+            android:exported=\"true\">\n```\n\n这是最直接、最安全的修复。\n\n---\n\n### 方案 2：如果必须保留 LOCKED_BOOT_COMPLETED\n\n不要给整个 application 加 `directBootAware=true`。\n\n只允许给单独 Receiver 加：\n\n```xml\n<receiver\n    android:name=\"com.sgtc.netcenter.receiver.BootReceiver\"\n    android:exported=\"true\"\n    android:directBootAware=\"true\">\n    <intent-filter>\n        <action android:name=\"android.intent.action.LOCKED_BOOT_COMPLETED\" />\n    </intent-filter>\n</receiver>\n```\n\n但 Receiver 里必须加判断：\n\n```java\nUserManager userManager = (UserManager) context.getSystemService(Context.USER_SERVICE);\nif (userManager != null && !userManager.isUserUnlocked()) {\n    Log.i(TAG, \"User locked, only Direct Boot safe logic is allowed\");\n    return;\n}\n```\n\n如果收到的是 `LOCKED_BOOT_COMPLETED`，只允许做 DE 安全初始化。完整业务必须等：\n\n```text\nandroid.intent.action.USER_UNLOCKED\n```\n\n或：\n\n```text\nandroid.intent.action.BOOT_COMPLETED\n```\n\n之后再执行。\n\n---\n\n### 方案 3：拆分启动逻辑\n\n建议拆成两个阶段：\n\n```text\nLOCKED_BOOT_COMPLETED：\n    只做最小 DE 初始化\n    不启动业务 Service\n    不访问 /data/user/0\n    不拉起其他 App\n    不发权限控制广播\n\nUSER_UNLOCKED / BOOT_COMPLETED：\n    初始化完整业务\n    启动网络、协议、权限控制、数据库、SP、MMKV 等模块\n```\n\n示例：\n\n```java\n@Override\npublic void onReceive(Context context, Intent intent) {\n    String action = intent.getAction();\n\n    UserManager userManager = (UserManager) context.getSystemService(Context.USER_SERVICE);\n    boolean unlocked = userManager != null && userManager.isUserUnlocked();\n\n    if (Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(action)) {\n        Log.i(TAG, \"LOCKED_BOOT_COMPLETED, userUnlocked=\" + unlocked);\n\n        // 只能做 Direct Boot 安全逻辑\n        doDeviceProtectedMinimalInit(context);\n        return;\n    }\n\n    if (Intent.ACTION_USER_UNLOCKED.equals(action)\n            || Intent.ACTION_BOOT_COMPLETED.equals(action)) {\n        Log.i(TAG, \"User unlocked or boot completed, start full business\");\n        doFullBusinessInit(context);\n    }\n}\n```\n\n---\n\n## 六、排查路径\n\n### 第一步：看日志路径\n\n看到：\n\n```text\n/data/user/0/<pkg>/shared_prefs\n```\n\n先判断这是 CE 区问题，不是普通文件权限问题。\n\n如果是：\n\n```text\n/data/user_de/0/<pkg>\n```\n\n才是 DE 区问题。\n\n---\n\n### 第二步：确认是否发生在开机早期\n\n抓日志：\n\n```bash\nadb logcat -b all | grep -E \"LOCKED_BOOT_COMPLETED|BOOT_COMPLETED|USER_UNLOCKED|SharedPreferencesImpl|MMKV|Netcenter|BootReceiver|TimeCalibrationReceiver\"\n```\n\n如果 SharedPreferences 报错出现在 `USER_UNLOCKED` 前面，基本就是 Direct Boot 时序问题。\n\n---\n\n### 第三步：检查最近 Manifest 修改\n\n重点搜索：\n\n```bash\ngrep -R \"directBootAware\" -n app/src/main/AndroidManifest.xml\ngrep -R \"persistent\" -n app/src/main/AndroidManifest.xml\ngrep -R \"defaultToDeviceProtectedStorage\" -n app/src/main/AndroidManifest.xml\ngrep -R \"LOCKED_BOOT_COMPLETED\" -n app/src/main/AndroidManifest.xml\n```\n\n这次就是 Manifest 修改直接命中：\n\n```text\napplication directBootAware=true\nBootReceiver directBootAware=true\nTimeCalibrationReceiver directBootAware=true\npersistent=true\ndefaultToDeviceProtectedStorage=true\nLOCKED_BOOT_COMPLETED\n```\n\n---\n\n### 第四步：验证是否是 Netcenter 提前拉起链路\n\n抓启动链路：\n\n```bash\nadb logcat -b all | grep -E \"ActivityManager|BroadcastQueue|Netcenter|BootReceiver|TimeCalibrationReceiver|Permission|PackageInstaller|com.sohu.inputmethod.sogou\"\n```\n\n关注顺序：\n\n```text\nLOCKED_BOOT_COMPLETED\nNetcenter 启动\nNetcenter Receiver 执行\n其他 App 被启动\nSharedPreferencesImpl 报错\nUSER_UNLOCKED\nBOOT_COMPLETED\n```\n\n如果顺序符合，就能确认是 Direct Boot 提前启动导致。\n\n---\n\n### 第五步：做 A/B 验证\n\n只回退 Manifest 的 `directBootAware=true`，不要动其他 Java 逻辑。\n\n验证命令：\n\n```bash\nadb logcat -c\nadb reboot\nadb logcat | grep -E \"SharedPreferencesImpl|Couldn't create directory|MMKV|Netcenter|LOCKED_BOOT_COMPLETED|USER_UNLOCKED|BOOT_COMPLETED\"\n```\n\n如果回退后错误消失，说明根因确认。\n\n---\n\n## 七、最终修复建议\n\n最终建议按这个优先级处理：\n\n```text\n1. 删除 application 级 android:directBootAware=\"true\"\n2. 删除 TimeCalibrationReceiver 的 android:directBootAware=\"true\"\n3. BootReceiver 如无强需求，也删除 android:directBootAware=\"true\"\n4. 如果必须接收 LOCKED_BOOT_COMPLETED，则只保留 BootReceiver 单点支持\n5. BootReceiver 内未解锁阶段直接 return，不执行完整业务\n6. 完整业务延后到 USER_UNLOCKED / BOOT_COMPLETED 后执行\n```\n\n推荐最终 Manifest：\n\n```xml\n<application\n    android:allowBackup=\"true\"\n    android:icon=\"@drawable/ic_launcher\"\n    android:label=\"@string/app_name\"\n    android:persistent=\"true\"\n    android:defaultToDeviceProtectedStorage=\"true\"\n    android:usesCleartextTraffic=\"true\"\n    android:theme=\"@style/AppTheme\">\n\n    <receiver\n        android:name=\"com.sgtc.netcenter.receiver.BootReceiver\"\n        android:exported=\"true\">\n        <intent-filter android:priority=\"1000\">\n            <action android:name=\"android.intent.action.BOOT_COMPLETED\" />\n            <action android:name=\"android.intent.action.USER_UNLOCKED\" />\n        </intent-filter>\n    </receiver>\n\n</application>\n```\n\n如果必须保留 `LOCKED_BOOT_COMPLETED`，则：\n\n```xml\n<receiver\n    android:name=\"com.sgtc.netcenter.receiver.BootReceiver\"\n    android:exported=\"true\"\n    android:directBootAware=\"true\">\n    <intent-filter android:priority=\"1000\">\n        <action android:name=\"android.intent.action.LOCKED_BOOT_COMPLETED\" />\n        <action android:name=\"android.intent.action.USER_UNLOCKED\" />\n        <action android:name=\"android.intent.action.BOOT_COMPLETED\" />\n    </intent-filter>\n</receiver>\n```\n\n但代码必须严格区分 locked/unlocked。\n\n---\n\n## 八、预防步骤\n\n以后遇到系统 App、persistent App、开机广播相关改动，必须按下面规则检查。\n\n### 1. 禁止随意给 application 加 directBootAware\n\n高风险组合：\n\n```xml\nandroid:directBootAware=\"true\"\nandroid:persistent=\"true\"\nandroid:defaultToDeviceProtectedStorage=\"true\"\n```\n\n尤其是系统 App、常驻 App、开机自启 App，不能直接加 application 级 Direct Boot。\n\n---\n\n### 2. Direct Boot 组件必须做用户解锁判断\n\n所有接收 `LOCKED_BOOT_COMPLETED` 的 Receiver，入口必须有：\n\n```java\nUserManager userManager = (UserManager) context.getSystemService(Context.USER_SERVICE);\nif (userManager != null && !userManager.isUserUnlocked()) {\n    return;\n}\n```\n\n除非这个分支只做 DE 安全逻辑。\n\n---\n\n### 3. Direct Boot 阶段禁止访问 CE 路径\n\n禁止访问：\n\n```text\n/data/user/0/<pkg>\ncontext.getFilesDir()\ncontext.getSharedPreferences()\nMMKV 默认目录\nSQLite 默认目录\n普通业务数据库\n```\n\n允许访问：\n\n```text\n/data/user_de/0/<pkg>\ncontext.createDeviceProtectedStorageContext()\n```\n\n---\n\n### 4. 开机广播必须分层\n\n```text\nLOCKED_BOOT_COMPLETED：最小 DE 逻辑\nUSER_UNLOCKED：CE 数据可用后恢复业务\nBOOT_COMPLETED：完整系统启动后执行业务\n```\n\n不要把所有逻辑都塞进 BootReceiver。\n\n---\n\n### 5. 提交前必须做冷启动验证\n\n每次修改以下内容后都必须重启验证：\n\n```text\nAndroidManifest.xml\ndirectBootAware\npersistent\nBOOT_COMPLETED\nLOCKED_BOOT_COMPLETED\nUSER_UNLOCKED\ndefaultToDeviceProtectedStorage\n开机 Receiver\n系统常驻 Service\n权限控制广播\n```\n\n验证命令：\n\n```bash\nadb logcat -c\nadb reboot\nadb logcat | grep -E \"SharedPreferencesImpl|Couldn't create directory|MMKV|LOCKED_BOOT_COMPLETED|USER_UNLOCKED|BOOT_COMPLETED|Netcenter\"\n```\n\n---\n\n## 九、最终定性\n\n这个 bug 的错误原因不是 PMS 创建目录逻辑本身，也不是普通 App 自己写 SharedPreferences 错误，而是：\n\n```text\nManifest 错误配置 Direct Boot 能力\n  +\npersistent 常驻进程提前启动\n  +\n开机早期执行业务链路\n  +\n用户 CE 存储未就绪\n  =\n多个 App /data/user/0 访问失败\n```\n\n最应该回退的就是：\n\n```xml\n<application android:directBootAware=\"true\">\n```\n\n其次回退：\n\n```xml\nBootReceiver android:directBootAware=\"true\"\nTimeCalibrationReceiver android:directBootAware=\"true\"\n```\n\n根治原则：**Direct Boot 阶段只做 DE 安全最小逻辑，完整业务必须等 USER_UNLOCKED / BOOT_COMPLETED。**",
+      "readingMinutes": 20
+    },
+    {
+      "title": "ubantu端使用命令直接在Windows端打开文件或目录",
+      "slug": "fw命令",
+      "date": "2026-07-01",
+      "createdAt": "2026-07-01T09:58:17.115Z",
+      "updatedAt": "2026-07-01T10:03:52.759Z",
+      "tags": [
+        "window",
+        "Linux",
+        "#C语言",
+        "#python"
+      ],
+      "summary": "ubantu通过IP地址以及指定端口向Windows端发送命令，Windows端用python 脚本监听端口变化，收到ubantu发来的指令后去执行对应指令。实现该功能的代码主要是面相过程的风格。",
+      "content": "# Ubuntu 端命令打开 Windows 端文件/目录：完整实现步骤与代码\n\n> 目标：在 Ubuntu 终端执行 `fw` 命令，把 Ubuntu 当前目录或指定文件路径转换成 Windows 可访问的 Samba 网络路径，然后通知 Windows 端自动打开对应文件或目录。\n>\n> 本文档提供一套原创可运行实现，不依赖第三方 Python 库。\n\n---\n\n## 1. 最终效果\n\nUbuntu 端执行：\n\n```bash\nfw\n```\n\n效果：Windows 自动打开 Ubuntu 当前目录对应的网络共享目录。\n\nUbuntu 端执行：\n\n```bash\nfw AndroidManifest.xml\n```\n\n效果：Windows 自动打开对应文件。\n\nUbuntu 端执行：\n\n```bash\nfw --select AndroidManifest.xml\n```\n\n效果：Windows 资源管理器打开文件所在目录，并选中文件。\n\n---\n\n## 2. 整体架构\n\n```text\nUbuntu 终端\n   |\n   | 1. 执行 fw 命令\n   v\nfw 脚本解析本地路径\n   |\n   | 2. /mnt/ruiao/project/a.txt\n   v\n转换成 Windows UNC 路径\n   |\n   | 3. \\\\Ubuntu_IP\\ruiao\\project\\a.txt\n   v\nHTTP POST 发送给 Windows:6666\n   |\n   | 4. Windows Python 服务接收路径\n   v\nWindows 打开文件 / 目录 / 选中文件\n```\n\n核心分为两端：\n\n| 端 | 作用 |\n|---|---|\n| Windows 端 | 运行 Python 服务，监听 `6666` 端口，收到路径后打开 |\n| Ubuntu 端 | 提供 `fw` 命令，负责路径转换和发送请求 |\n| Samba | 让 Windows 能访问 Ubuntu 文件路径 |\n\n---\n\n## 3. 前置条件\n\n### 3.1 Windows 端要求\n\n需要安装：\n\n- Windows 10 / Windows 11\n- Python 3.8 或以上\n- Windows 能访问 Ubuntu 的 Samba 共享路径\n\n检查 Python：\n\n```bat\npython --version\n```\n\n如果希望后台无窗口运行，需要确认 `pythonw.exe` 可用：\n\n```bat\nwhere pythonw\n```\n\n---\n\n### 3.2 Ubuntu 端要求\n\n需要安装：\n\n```bash\nsudo apt update\nsudo apt install -y python3 curl samba\n```\n\n检查 Python：\n\n```bash\npython3 --version\n```\n\n---\n\n## 4. 配置 Ubuntu Samba 共享\n\n> 如果你的 Ubuntu 目录已经能在 Windows 通过 `\\\\Ubuntu_IP\\共享名` 打开，可以跳过本节。\n\n### 4.1 查看 Ubuntu IP\n\n```bash\nhostname -I | awk '{print $1}'\n```\n\n假设输出为：\n\n```text\n192.168.1.20\n```\n\n后续 Windows 访问路径就是类似：\n\n```text\n\\\\192.168.1.20\\ruiao\n```\n\n---\n\n### 4.2 编辑 Samba 配置\n\n```bash\nsudo nano /etc/samba/smb.conf\n```\n\n在文件末尾添加一个共享配置。\n\n如果你要共享 `/mnt/ruiao`：\n\n```ini\n[ruiao]\n   path = /mnt/ruiao\n   browseable = yes\n   writable = yes\n   read only = no\n   guest ok = no\n   create mask = 0775\n   directory mask = 0775\n```\n\n如果你要共享自己的 home 目录，例如 `/home/ruiao`：\n\n```ini\n[home_ruiao]\n   path = /home/ruiao\n   browseable = yes\n   writable = yes\n   read only = no\n   guest ok = no\n   create mask = 0775\n   directory mask = 0775\n```\n\n---\n\n### 4.3 设置 Samba 密码\n\n```bash\nsudo smbpasswd -a $USER\n```\n\n输入两次密码。\n\n---\n\n### 4.4 重启 Samba\n\n```bash\nsudo systemctl restart smbd\n```\n\n如果系统没有 `systemctl`，可以用：\n\n```bash\nsudo service smbd restart\n```\n\n---\n\n### 4.5 Windows 测试 Samba 是否可访问\n\n在 Windows 文件资源管理器地址栏输入：\n\n```text\n\\\\192.168.1.20\\ruiao\n```\n\n能打开目录，说明 Samba 配置正常。\n\n如果不能打开，先不要继续做 `fw` 脚本，先把 Samba 访问问题解决。\n\n---\n\n## 5. Windows 端代码\n\n建议创建目录：\n\n```text\nD:\\Tools\\OpenRemotePath\n```\n\n目录结构：\n\n```text\nD:\\Tools\\OpenRemotePath\n ├─ open_remote_path_server.py\n ├─ open_remote_path_config.ini\n ├─ start_server.bat\n ├─ install_startup.bat\n └─ uninstall_startup.bat\n```\n\n---\n\n## 6. Windows 端配置文件\n\n文件名：\n\n```text\nopen_remote_path_config.ini\n```\n\n完整内容：\n\n```ini\n[server]\nhost = 0.0.0.0\nport = 6666\n\n; 建议修改成你自己的随机字符串。\n; Ubuntu 端配置的 token 必须和这里一致。\n; 如果留空，则不校验 token，不推荐。\ntoken = change-this-token\n\n[open]\n; 文件默认打开方式：\n; 1. 留空：使用 Windows 默认程序打开\n; 2. 填写编辑器 exe 路径：使用指定编辑器打开文件\n;\n; 示例：\n; file_app = C:\\Users\\YourName\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe\n; file_app = D:\\Tools\\Sublime Text\\sublime_text.exe\nfile_app =\n\n; 日志文件路径。留空则使用脚本同目录下的 open_remote_path.log\nlog_file =\n```\n\n---\n\n## 7. Windows 端 Python 服务完整代码\n\n文件名：\n\n```text\nopen_remote_path_server.py\n```\n\n完整代码：\n\n```python\n#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n\"\"\"\nWindows 端路径打开服务。\n\n功能：\n1. 监听 HTTP 端口，默认 6666。\n2. 接收 Ubuntu 端发送过来的 Windows UNC 路径。\n3. 根据 action 打开目录、打开文件、或在资源管理器中选中文件。\n4. 支持 token 校验，避免局域网其他机器误调用。\n5. 支持日志文件。\n\n接口：\nGET  /health\nPOST /open\n\nPOST /open JSON 示例：\n{\n    \"path\": \"\\\\\\\\192.168.1.20\\\\ruiao\\\\project\\\\AndroidManifest.xml\",\n    \"action\": \"open\"\n}\n\naction 支持：\n- open：打开文件或目录\n- explorer：强制用资源管理器打开目录；如果是文件，则打开所在目录\n- select：在资源管理器中选中文件\n\"\"\"\n\nimport configparser\nimport json\nimport logging\nimport os\nimport subprocess\nimport sys\nfrom http.server import BaseHTTPRequestHandler, ThreadingHTTPServer\nfrom logging.handlers import RotatingFileHandler\nfrom pathlib import Path\nfrom typing import Any, Dict, Optional, Tuple\n\nBASE_DIR = Path(__file__).resolve().parent\nCONFIG_FILE = BASE_DIR / \"open_remote_path_config.ini\"\nDEFAULT_PORT = 6666\n\n\ndef load_config() -> configparser.ConfigParser:\n    config = configparser.ConfigParser()\n\n    if not CONFIG_FILE.exists():\n        CONFIG_FILE.write_text(\n            \"\"\"[server]\\n\"\n            \"host = 0.0.0.0\\n\"\n            \"port = 6666\\n\"\n            \"token = change-this-token\\n\\n\"\n            \"[open]\\n\"\n            \"file_app =\\n\"\n            \"log_file =\\n\"\n            \"\"\",\n            encoding=\"utf-8\",\n        )\n\n    config.read(CONFIG_FILE, encoding=\"utf-8\")\n    return config\n\n\ndef setup_logger(config: configparser.ConfigParser) -> logging.Logger:\n    log_file = config.get(\"open\", \"log_file\", fallback=\"\").strip()\n    if not log_file:\n        log_file = str(BASE_DIR / \"open_remote_path.log\")\n\n    logger = logging.getLogger(\"open_remote_path\")\n    logger.setLevel(logging.INFO)\n\n    if logger.handlers:\n        return logger\n\n    formatter = logging.Formatter(\n        fmt=\"%(asctime)s [%(levelname)s] %(message)s\",\n        datefmt=\"%Y-%m-%d %H:%M:%S\",\n    )\n\n    file_handler = RotatingFileHandler(\n        log_file,\n        maxBytes=1024 * 1024,\n        backupCount=5,\n        encoding=\"utf-8\",\n    )\n    file_handler.setFormatter(formatter)\n    logger.addHandler(file_handler)\n\n    console_handler = logging.StreamHandler(sys.stdout)\n    console_handler.setFormatter(formatter)\n    logger.addHandler(console_handler)\n\n    return logger\n\n\nCONFIG = load_config()\nLOGGER = setup_logger(CONFIG)\n\n\ndef json_response(handler: BaseHTTPRequestHandler, status: int, data: Dict[str, Any]) -> None:\n    body = json.dumps(data, ensure_ascii=False).encode(\"utf-8\")\n    handler.send_response(status)\n    handler.send_header(\"Content-Type\", \"application/json; charset=utf-8\")\n    handler.send_header(\"Content-Length\", str(len(body)))\n    handler.end_headers()\n    handler.wfile.write(body)\n\n\ndef get_config_token() -> str:\n    return CONFIG.get(\"server\", \"token\", fallback=\"\").strip()\n\n\ndef check_token(handler: BaseHTTPRequestHandler) -> Tuple[bool, str]:\n    expected = get_config_token()\n    if not expected:\n        return True, \"token disabled\"\n\n    actual = handler.headers.get(\"X-FW-Token\", \"\").strip()\n    if actual != expected:\n        return False, \"invalid token\"\n\n    return True, \"ok\"\n\n\ndef read_json_body(handler: BaseHTTPRequestHandler) -> Dict[str, Any]:\n    content_length = int(handler.headers.get(\"Content-Length\", \"0\") or \"0\")\n    if content_length <= 0:\n        raise ValueError(\"empty request body\")\n\n    if content_length > 64 * 1024:\n        raise ValueError(\"request body too large\")\n\n    raw = handler.rfile.read(content_length)\n    if not raw:\n        raise ValueError(\"empty request body\")\n\n    try:\n        return json.loads(raw.decode(\"utf-8\"))\n    except json.JSONDecodeError as exc:\n        raise ValueError(f\"invalid json: {exc}\") from exc\n\n\ndef normalize_path(raw_path: str) -> str:\n    path = (raw_path or \"\").strip().strip('\"')\n\n    # Windows 能识别 UNC 路径中的反斜杠。\n    # 如果 Ubuntu 端误传了 //192.168.1.20/share/path，也尽量修正成 \\\\192.168.1.20\\share\\path。\n    if path.startswith(\"//\"):\n        path = \"\\\\\\\\\" + path[2:].replace(\"/\", \"\\\\\")\n\n    return path\n\n\ndef path_exists(path: str) -> bool:\n    try:\n        return os.path.exists(path)\n    except OSError:\n        return False\n\n\ndef is_directory(path: str) -> bool:\n    try:\n        return os.path.isdir(path)\n    except OSError:\n        return False\n\n\ndef get_file_app() -> str:\n    return CONFIG.get(\"open\", \"file_app\", fallback=\"\").strip().strip('\"')\n\n\ndef open_by_default(path: str) -> None:\n    # os.startfile 仅 Windows 可用。\n    os.startfile(path)  # type: ignore[attr-defined]\n\n\ndef open_file(path: str) -> None:\n    file_app = get_file_app()\n    if file_app:\n        if not os.path.exists(file_app):\n            raise FileNotFoundError(f\"file_app not found: {file_app}\")\n        subprocess.Popen([file_app, path], close_fds=True)\n    else:\n        open_by_default(path)\n\n\ndef open_directory(path: str) -> None:\n    subprocess.Popen([\"explorer\", path], close_fds=True)\n\n\ndef select_in_explorer(path: str) -> None:\n    if is_directory(path):\n        open_directory(path)\n    else:\n        subprocess.Popen([\"explorer\", \"/select,\", path], close_fds=True)\n\n\ndef open_target(path: str, action: str) -> str:\n    action = (action or \"open\").strip().lower()\n\n    if not path:\n        raise ValueError(\"path is empty\")\n\n    if not path_exists(path):\n        raise FileNotFoundError(f\"path not found: {path}\")\n\n    if action == \"select\":\n        select_in_explorer(path)\n        return \"selected\"\n\n    if action == \"explorer\":\n        if is_directory(path):\n            open_directory(path)\n        else:\n            open_directory(str(Path(path).parent))\n        return \"opened_by_explorer\"\n\n    if action == \"open\":\n        if is_directory(path):\n            open_directory(path)\n        else:\n            open_file(path)\n        return \"opened\"\n\n    raise ValueError(f\"unsupported action: {action}\")\n\n\nclass OpenRemotePathHandler(BaseHTTPRequestHandler):\n    server_version = \"OpenRemotePathServer/1.0\"\n\n    def log_message(self, fmt: str, *args: Any) -> None:\n        # 关闭默认 stderr 日志，统一走 LOGGER。\n        LOGGER.info(\"%s - %s\", self.client_address[0], fmt % args)\n\n    def do_GET(self) -> None:\n        if self.path == \"/health\":\n            json_response(\n                self,\n                200,\n                {\n                    \"ok\": True,\n                    \"service\": \"open_remote_path_server\",\n                    \"message\": \"running\",\n                },\n            )\n            return\n\n        json_response(self, 404, {\"ok\": False, \"error\": \"not found\"})\n\n    def do_POST(self) -> None:\n        if self.path != \"/open\":\n            json_response(self, 404, {\"ok\": False, \"error\": \"not found\"})\n            return\n\n        ok, reason = check_token(self)\n        if not ok:\n            LOGGER.warning(\"reject request from %s: %s\", self.client_address[0], reason)\n            json_response(self, 403, {\"ok\": False, \"error\": reason})\n            return\n\n        try:\n            body = read_json_body(self)\n            raw_path = str(body.get(\"path\", \"\"))\n            action = str(body.get(\"action\", \"open\"))\n            path = normalize_path(raw_path)\n\n            LOGGER.info(\n                \"request from=%s action=%s path=%s\",\n                self.client_address[0],\n                action,\n                path,\n            )\n\n            result = open_target(path, action)\n            json_response(\n                self,\n                200,\n                {\n                    \"ok\": True,\n                    \"result\": result,\n                    \"path\": path,\n                },\n            )\n        except Exception as exc:\n            LOGGER.exception(\"open failed\")\n            json_response(\n                self,\n                500,\n                {\n                    \"ok\": False,\n                    \"error\": str(exc),\n                },\n            )\n\n\ndef main() -> None:\n    host = CONFIG.get(\"server\", \"host\", fallback=\"0.0.0.0\").strip() or \"0.0.0.0\"\n    port = CONFIG.getint(\"server\", \"port\", fallback=DEFAULT_PORT)\n\n    LOGGER.info(\"config file: %s\", CONFIG_FILE)\n    LOGGER.info(\"server listening on %s:%s\", host, port)\n    LOGGER.info(\"token enabled: %s\", \"yes\" if get_config_token() else \"no\")\n\n    httpd = ThreadingHTTPServer((host, port), OpenRemotePathHandler)\n    try:\n        httpd.serve_forever()\n    except KeyboardInterrupt:\n        LOGGER.info(\"server stopped by KeyboardInterrupt\")\n    finally:\n        httpd.server_close()\n\n\nif __name__ == \"__main__\":\n    if os.name != \"nt\":\n        print(\"This script is intended to run on Windows.\", file=sys.stderr)\n    main()\n```\n\n---\n\n## 8. Windows 手动启动脚本\n\n文件名：\n\n```text\nstart_server.bat\n```\n\n完整内容：\n\n```bat\n@echo off\ncd /d %~dp0\npython open_remote_path_server.py\npause\n```\n\n双击 `start_server.bat`，看到类似日志说明启动成功：\n\n```text\nserver listening on 0.0.0.0:6666\n```\n\n---\n\n## 9. Windows 设置开机自启动\n\n文件名：\n\n```text\ninstall_startup.bat\n```\n\n完整内容：\n\n```bat\n@echo off\nsetlocal\n\nset \"TASK_NAME=OpenRemotePathServer\"\nset \"SCRIPT=%~dp0open_remote_path_server.py\"\n\nset \"PYTHONW=\"\nfor /f \"delims=\" %%i in ('where pythonw 2^>nul') do (\n    if not defined PYTHONW set \"PYTHONW=%%i\"\n)\n\nif not defined PYTHONW (\n    echo pythonw.exe not found, fallback to python.exe\n    for /f \"delims=\" %%i in ('where python 2^>nul') do (\n        if not defined PYTHONW set \"PYTHONW=%%i\"\n    )\n)\n\nif not defined PYTHONW (\n    echo Python not found. Please install Python and add it to PATH.\n    pause\n    exit /b 1\n)\n\necho Python: %PYTHONW%\necho Script: %SCRIPT%\n\nschtasks /Create /TN \"%TASK_NAME%\" /SC ONLOGON /TR \"\\\"%PYTHONW%\\\" \\\"%SCRIPT%\\\"\" /F\n\nif %ERRORLEVEL% neq 0 (\n    echo Failed to create scheduled task.\n    pause\n    exit /b 1\n)\n\necho Scheduled task installed: %TASK_NAME%\npause\n```\n\n右键以普通用户身份运行即可。\n\n如果失败，可以用管理员身份运行。\n\n---\n\n## 10. Windows 取消开机自启动\n\n文件名：\n\n```text\nuninstall_startup.bat\n```\n\n完整内容：\n\n```bat\n@echo off\nsetlocal\n\nset \"TASK_NAME=OpenRemotePathServer\"\nschtasks /Delete /TN \"%TASK_NAME%\" /F\n\nif %ERRORLEVEL% neq 0 (\n    echo Failed to delete scheduled task or task does not exist.\n    pause\n    exit /b 1\n)\n\necho Scheduled task deleted: %TASK_NAME%\npause\n```\n\n---\n\n## 11. Windows 防火墙放行端口\n\nWindows 端监听 `6666` 端口，如果 Ubuntu 访问失败，需要放行端口。\n\n使用管理员 PowerShell 执行：\n\n```powershell\nNew-NetFirewallRule `\n  -DisplayName \"OpenRemotePathServer 6666\" `\n  -Direction Inbound `\n  -Protocol TCP `\n  -LocalPort 6666 `\n  -Action Allow\n```\n\n检查端口是否监听：\n\n```bat\nnetstat -ano | findstr :6666\n```\n\n正常会看到类似：\n\n```text\nTCP    0.0.0.0:6666    0.0.0.0:0    LISTENING    12345\n```\n\n---\n\n## 12. Ubuntu 端配置文件\n\n创建配置文件：\n\n```bash\nnano ~/.fw.conf\n```\n\n完整示例：\n\n```ini\n[server]\n; Windows 端 IP。\n; 如果你是从 Windows SSH 到 Ubuntu，可以写 auto，脚本会优先取 SSH_CLIENT 里的 Windows IP。\n; 如果 auto 不稳定，建议直接写固定 IP，例如 192.168.1.10。\nhost = auto\nport = 6666\ntoken = change-this-token\n\n[default]\n; 默认动作：open / explorer / select\naction = open\n\n[mapping]\n; 左边是 Ubuntu 本地路径前缀。\n; 右边是 Windows 能访问的 UNC 共享路径前缀。\n;\n; 示例 1：Ubuntu /mnt/ruiao 共享为 Windows \\\\192.168.1.20\\ruiao\n/mnt/ruiao = \\\\192.168.1.20\\ruiao\n\n; 示例 2：Ubuntu /home/ruiao 共享为 Windows \\\\192.168.1.20\\home_ruiao\n; /home/ruiao = \\\\192.168.1.20\\home_ruiao\n```\n\n注意：\n\n- `token` 必须和 Windows 端 `open_remote_path_config.ini` 中的 token 一致。\n- `[mapping]` 左边必须是 Ubuntu 实际路径。\n- `[mapping]` 右边必须是 Windows 文件资源管理器能打开的路径。\n\n---\n\n## 13. Ubuntu 端 fw 命令完整代码\n\n创建文件：\n\n```bash\nmkdir -p ~/bin\nnano ~/bin/fw\n```\n\n完整代码：\n\n```python\n#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n\"\"\"\nUbuntu 端 fw 命令。\n\n功能：\n1. 接收本地文件或目录路径。\n2. 根据 ~/.fw.conf 中的 [mapping] 把 Linux 路径转换成 Windows UNC 路径。\n3. 通过 HTTP POST 通知 Windows 端打开路径。\n\n用法：\nfw\nfw .\nfw AndroidManifest.xml\nfw --select AndroidManifest.xml\nfw --explorer /mnt/ruiao/project\nfw --dry-run AndroidManifest.xml\n\"\"\"\n\nimport argparse\nimport configparser\nimport json\nimport os\nimport socket\nimport sys\nimport urllib.error\nimport urllib.request\nfrom pathlib import Path\nfrom typing import Dict, List, Tuple\n\nCONFIG_FILE = Path.home() / \".fw.conf\"\nDEFAULT_PORT = 6666\n\n\ndef die(message: str, code: int = 1) -> None:\n    print(f\"fw: {message}\", file=sys.stderr)\n    sys.exit(code)\n\n\ndef load_config() -> configparser.ConfigParser:\n    if not CONFIG_FILE.exists():\n        CONFIG_FILE.write_text(\n            \"\"\"[server]\\n\"\n            \"host = auto\\n\"\n            \"port = 6666\\n\"\n            \"token = change-this-token\\n\\n\"\n            \"[default]\\n\"\n            \"action = open\\n\\n\"\n            \"[mapping]\\n\"\n            \"/mnt/ruiao = \\\\\\\\192.168.1.20\\\\ruiao\\n\"\n            \"\"\",\n            encoding=\"utf-8\",\n        )\n        die(f\"config file created: {CONFIG_FILE}. Please edit it first.\")\n\n    config = configparser.ConfigParser()\n    config.optionxform = str  # 保留 [mapping] 中路径大小写\n    config.read(CONFIG_FILE, encoding=\"utf-8\")\n    return config\n\n\ndef get_windows_host(config: configparser.ConfigParser, cli_host: str) -> str:\n    host = (cli_host or \"\").strip()\n    if not host:\n        host = config.get(\"server\", \"host\", fallback=\"auto\").strip()\n\n    if host and host.lower() != \"auto\":\n        return host\n\n    # 从 Windows SSH 到 Ubuntu 时，SSH_CLIENT 第一个字段通常是客户端 IP。\n    ssh_client = os.environ.get(\"SSH_CLIENT\", \"\").strip()\n    if ssh_client:\n        parts = ssh_client.split()\n        if parts:\n            return parts[0]\n\n    # 某些环境可能只有 SSH_CONNECTION。\n    ssh_connection = os.environ.get(\"SSH_CONNECTION\", \"\").strip()\n    if ssh_connection:\n        parts = ssh_connection.split()\n        if parts:\n            return parts[0]\n\n    die(\"Windows host is auto, but SSH_CLIENT is empty. Please set host in ~/.fw.conf\")\n    return \"\"\n\n\ndef normalize_linux_path(path_arg: str) -> str:\n    target = path_arg or \".\"\n    path = Path(target).expanduser()\n\n    # strict=False：目标不存在时也尽量解析父路径，方便提示映射结果。\n    try:\n        resolved = path.resolve(strict=False)\n    except RuntimeError:\n        resolved = Path(os.path.abspath(str(path)))\n\n    return str(resolved)\n\n\ndef load_mappings(config: configparser.ConfigParser) -> List[Tuple[str, str]]:\n    if not config.has_section(\"mapping\"):\n        die(\"missing [mapping] section in ~/.fw.conf\")\n\n    mappings: List[Tuple[str, str]] = []\n    for linux_prefix, windows_prefix in config.items(\"mapping\"):\n        lp = str(Path(linux_prefix).expanduser().resolve(strict=False)).rstrip(\"/\")\n        wp = windows_prefix.strip().rstrip(\"\\\\/\")\n        if lp and wp:\n            mappings.append((lp, wp))\n\n    if not mappings:\n        die(\"no valid mapping found in ~/.fw.conf\")\n\n    # 最长前缀优先，避免 /mnt 和 /mnt/ruiao 同时存在时匹配错。\n    mappings.sort(key=lambda item: len(item[0]), reverse=True)\n    return mappings\n\n\ndef linux_to_windows_path(linux_path: str, mappings: List[Tuple[str, str]]) -> str:\n    normalized = linux_path.rstrip(\"/\")\n\n    for linux_prefix, windows_prefix in mappings:\n        if normalized == linux_prefix:\n            return windows_prefix\n\n        prefix_with_sep = linux_prefix + os.sep\n        if normalized.startswith(prefix_with_sep):\n            rel = os.path.relpath(normalized, linux_prefix)\n            rel_win = rel.replace(\"/\", \"\\\\\")\n            return windows_prefix + \"\\\\\" + rel_win\n\n    mapping_text = \"\\n\".join([f\"  {lp} -> {wp}\" for lp, wp in mappings])\n    die(\n        \"path does not match any mapping:\\n\"\n        f\"  path: {linux_path}\\n\"\n        f\"mappings:\\n{mapping_text}\"\n    )\n    return \"\"\n\n\ndef http_post_json(url: str, token: str, data: Dict[str, str], timeout: float = 5.0) -> Dict[str, object]:\n    body = json.dumps(data, ensure_ascii=False).encode(\"utf-8\")\n    headers = {\n        \"Content-Type\": \"application/json; charset=utf-8\",\n        \"User-Agent\": \"fw-ubuntu-client/1.0\",\n    }\n    if token:\n        headers[\"X-FW-Token\"] = token\n\n    request = urllib.request.Request(url, data=body, headers=headers, method=\"POST\")\n\n    try:\n        with urllib.request.urlopen(request, timeout=timeout) as response:\n            raw = response.read().decode(\"utf-8\", errors=\"replace\")\n            try:\n                return json.loads(raw)\n            except json.JSONDecodeError:\n                return {\"ok\": False, \"error\": f\"invalid response: {raw}\"}\n    except urllib.error.HTTPError as exc:\n        raw = exc.read().decode(\"utf-8\", errors=\"replace\")\n        try:\n            return json.loads(raw)\n        except json.JSONDecodeError:\n            return {\"ok\": False, \"error\": f\"http {exc.code}: {raw}\"}\n    except urllib.error.URLError as exc:\n        return {\"ok\": False, \"error\": f\"connect failed: {exc}\"}\n    except socket.timeout:\n        return {\"ok\": False, \"error\": \"connect timeout\"}\n\n\ndef build_arg_parser() -> argparse.ArgumentParser:\n    parser = argparse.ArgumentParser(description=\"Open Ubuntu file/directory on Windows\")\n    parser.add_argument(\"path\", nargs=\"?\", default=\".\", help=\"file or directory path, default: current directory\")\n    parser.add_argument(\"--host\", default=\"\", help=\"Windows host/IP, override ~/.fw.conf\")\n    parser.add_argument(\"--port\", type=int, default=0, help=\"Windows server port, override ~/.fw.conf\")\n    parser.add_argument(\"--token\", default=\"\", help=\"token, override ~/.fw.conf\")\n    parser.add_argument(\"--action\", choices=[\"open\", \"explorer\", \"select\"], default=\"\", help=\"open action\")\n    parser.add_argument(\"--open\", action=\"store_true\", help=\"open file or directory\")\n    parser.add_argument(\"--explorer\", action=\"store_true\", help=\"open directory by explorer\")\n    parser.add_argument(\"--select\", action=\"store_true\", help=\"select file in explorer\")\n    parser.add_argument(\"--dry-run\", action=\"store_true\", help=\"only print converted path, do not send request\")\n    parser.add_argument(\"--show-config\", action=\"store_true\", help=\"print config file path\")\n    return parser\n\n\ndef choose_action(args: argparse.Namespace, config: configparser.ConfigParser) -> str:\n    if args.select:\n        return \"select\"\n    if args.explorer:\n        return \"explorer\"\n    if args.open:\n        return \"open\"\n    if args.action:\n        return args.action\n    return config.get(\"default\", \"action\", fallback=\"open\").strip() or \"open\"\n\n\ndef main() -> None:\n    args = build_arg_parser().parse_args()\n\n    if args.show_config:\n        print(CONFIG_FILE)\n        return\n\n    config = load_config()\n    mappings = load_mappings(config)\n\n    linux_path = normalize_linux_path(args.path)\n    windows_path = linux_to_windows_path(linux_path, mappings)\n\n    action = choose_action(args, config)\n    host = get_windows_host(config, args.host)\n    port = args.port or config.getint(\"server\", \"port\", fallback=DEFAULT_PORT)\n    token = args.token if args.token else config.get(\"server\", \"token\", fallback=\"\").strip()\n\n    print(f\"Linux : {linux_path}\")\n    print(f\"Windows: {windows_path}\")\n    print(f\"Action : {action}\")\n    print(f\"Server : {host}:{port}\")\n\n    if args.dry_run:\n        return\n\n    url = f\"http://{host}:{port}/open\"\n    result = http_post_json(\n        url=url,\n        token=token,\n        data={\n            \"path\": windows_path,\n            \"action\": action,\n        },\n    )\n\n    if result.get(\"ok\") is True:\n        print(f\"OK: {result.get('result', 'success')}\")\n    else:\n        die(f\"Windows open failed: {result.get('error', result)}\")\n\n\nif __name__ == \"__main__\":\n    main()\n```\n\n给脚本增加执行权限：\n\n```bash\nchmod +x ~/bin/fw\n```\n\n---\n\n## 14. 配置 Ubuntu PATH\n\n如果 `~/bin` 还不在 PATH 中，编辑：\n\n```bash\nnano ~/.bashrc\n```\n\n追加：\n\n```bash\nexport PATH=\"$HOME/bin:$PATH\"\n```\n\n重新加载：\n\n```bash\nsource ~/.bashrc\n```\n\n检查：\n\n```bash\nwhich fw\n```\n\n正常输出：\n\n```text\n/home/你的用户名/bin/fw\n```\n\n---\n\n## 15. Ubuntu 端使用方式\n\n### 15.1 打开当前目录\n\n```bash\nfw\n```\n\n### 15.2 打开指定目录\n\n```bash\nfw /mnt/ruiao/Android8.1_ALL/Android8.1_368448/frameworks/base\n```\n\n### 15.3 打开指定文件\n\n```bash\nfw /mnt/ruiao/Android8.1_ALL/Android8.1_368448/frameworks/base/core/res/AndroidManifest.xml\n```\n\n### 15.4 在 Windows 资源管理器中选中文件\n\n```bash\nfw --select /mnt/ruiao/Android8.1_ALL/Android8.1_368448/frameworks/base/core/res/AndroidManifest.xml\n```\n\n### 15.5 只查看路径转换结果，不真正打开\n\n```bash\nfw --dry-run .\n```\n\n### 15.6 指定 Windows IP\n\n```bash\nfw --host 192.168.1.10 .\n```\n\n### 15.7 指定动作\n\n```bash\nfw --action select AndroidManifest.xml\n```\n\n---\n\n## 16. 联调测试流程\n\n### 16.1 Windows 启动服务\n\n双击：\n\n```text\nstart_server.bat\n```\n\n或者命令行执行：\n\n```bat\ncd /d D:\\Tools\\OpenRemotePath\npython open_remote_path_server.py\n```\n\n---\n\n### 16.2 Ubuntu 测试 Windows 服务是否可达\n\n假设 Windows IP 是 `192.168.1.10`：\n\n```bash\ncurl http://192.168.1.10:6666/health\n```\n\n正常返回：\n\n```json\n{\"ok\": true, \"service\": \"open_remote_path_server\", \"message\": \"running\"}\n```\n\n---\n\n### 16.3 Ubuntu 测试 fw 映射\n\n```bash\nfw --dry-run .\n```\n\n你应该看到类似：\n\n```text\nLinux : /mnt/ruiao/Android8.1_ALL\nWindows: \\\\192.168.1.20\\ruiao\\Android8.1_ALL\nAction : open\nServer : 192.168.1.10:6666\n```\n\n---\n\n### 16.4 Ubuntu 正式打开\n\n```bash\nfw .\n```\n\n如果 Windows 自动弹出资源管理器，说明成功。\n\n---\n\n## 17. 常见问题排查\n\n### 17.1 报错：connect failed\n\n现象：\n\n```text\nfw: Windows open failed: connect failed\n```\n\n排查：\n\n1. Windows 服务是否启动：\n\n```bat\nnetstat -ano | findstr :6666\n```\n\n2. Ubuntu 是否能访问 Windows 端口：\n\n```bash\ncurl http://Windows_IP:6666/health\n```\n\n3. Windows 防火墙是否放行 `6666`。\n\n4. `~/.fw.conf` 中 `host` 是否写对。\n\n---\n\n### 17.2 报错：invalid token\n\n说明 Ubuntu 端和 Windows 端 token 不一致。\n\n检查：\n\nWindows：\n\n```text\nopen_remote_path_config.ini\n```\n\nUbuntu：\n\n```bash\ncat ~/.fw.conf\n```\n\n确保两边：\n\n```ini\ntoken = change-this-token\n```\n\n完全一致。\n\n---\n\n### 17.3 报错：path not found\n\n说明 Windows 收到了路径，但是 Windows 无法访问该路径。\n\n重点检查：\n\n1. `~/.fw.conf` 中 `[mapping]` 是否正确。\n2. Windows 文件资源管理器能否手动打开对应 UNC 路径。\n3. Samba 是否配置正确。\n4. Windows 是否保存了 Samba 登录凭据。\n\n例如 `fw --dry-run` 输出：\n\n```text\nWindows: \\\\192.168.1.20\\ruiao\\project\n```\n\n那就在 Windows 资源管理器手动输入：\n\n```text\n\\\\192.168.1.20\\ruiao\\project\n```\n\n如果手动都打不开，问题在 Samba 或网络共享，不在脚本。\n\n---\n\n### 17.4 报错：path does not match any mapping\n\n说明 Ubuntu 当前路径没有命中 `~/.fw.conf` 的 `[mapping]`。\n\n例如当前路径是：\n\n```text\n/mnt/ruiao/Android8.1_ALL\n```\n\n那么配置里必须有：\n\n```ini\n[mapping]\n/mnt/ruiao = \\\\192.168.1.20\\ruiao\n```\n\n不能只写：\n\n```ini\n/home/ruiao = \\\\192.168.1.20\\home_ruiao\n```\n\n---\n\n### 17.5 Windows 能打开目录，但不能打开文件\n\n可能原因：\n\n1. 文件扩展名没有默认打开程序。\n2. `file_app` 配置的编辑器路径错误。\n3. Windows 对 Samba 文件权限不足。\n\n建议先把 Windows 配置中的 `file_app` 留空，让系统默认打开：\n\n```ini\n[open]\nfile_app =\n```\n\n如果需要强制用 VS Code：\n\n```ini\n[open]\nfile_app = C:\\Users\\YourName\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe\n```\n\n---\n\n### 17.6 从 Windows SSH 到 Ubuntu 时 host=auto 不生效\n\n`host = auto` 依赖环境变量：\n\n```bash\necho $SSH_CLIENT\n```\n\n如果为空，就必须手动写 Windows IP：\n\n```ini\n[server]\nhost = 192.168.1.10\nport = 6666\ntoken = change-this-token\n```\n\n---\n\n## 18. 推荐配置示例\n\n你的 Android 源码通常在 `/mnt/ruiao` 下，可以按下面配置。\n\n### 18.1 Ubuntu Samba\n\n```ini\n[ruiao]\n   path = /mnt/ruiao\n   browseable = yes\n   writable = yes\n   read only = no\n   guest ok = no\n   create mask = 0775\n   directory mask = 0775\n```\n\n### 18.2 Ubuntu ~/.fw.conf\n\n假设：\n\n- Windows IP：`192.168.1.10`\n- Ubuntu IP：`192.168.1.20`\n- Samba 共享名：`ruiao`\n- Windows 服务端口：`6666`\n\n```ini\n[server]\nhost = 192.168.1.10\nport = 6666\ntoken = ruiao-open-path-2026\n\n[default]\naction = open\n\n[mapping]\n/mnt/ruiao = \\\\192.168.1.20\\ruiao\n```\n\n### 18.3 Windows open_remote_path_config.ini\n\n```ini\n[server]\nhost = 0.0.0.0\nport = 6666\ntoken = ruiao-open-path-2026\n\n[open]\nfile_app =\nlog_file =\n```\n\n---\n\n## 19. 一键验证命令\n\nWindows 启动服务后，Ubuntu 执行：\n\n```bash\nfw --dry-run .\nfw .\nfw --select ./AndroidManifest.xml\n```\n\n如果当前目录没有 `AndroidManifest.xml`，换成实际存在的文件：\n\n```bash\nfw --select services/core/java/com/android/server/pm/PackageManagerService.java\n```\n\n---\n\n## 20. 安全建议\n\n因为 Windows 端开放了一个本地局域网端口，所以建议：\n\n1. 必须配置 token。\n2. 不要把端口暴露到公网。\n3. Windows 防火墙只允许当前局域网访问。\n4. 如果公司网络复杂，建议把端口改成非默认值。\n5. 不建议允许陌生机器访问该服务。\n\n---\n\n## 21. 最终文件清单\n\nWindows 端：\n\n```text\nD:\\Tools\\OpenRemotePath\n ├─ open_remote_path_server.py\n ├─ open_remote_path_config.ini\n ├─ start_server.bat\n ├─ install_startup.bat\n └─ uninstall_startup.bat\n```\n\nUbuntu 端：\n\n```text\n~/.fw.conf\n~/bin/fw\n```\n\n验证命令：\n\n```bash\nfw --dry-run .\nfw .\nfw --select 文件路径\n```\n\n---\n\n## 22. 总结\n\n这套方案的关键点只有三个：\n\n1. Windows 必须能手动打开 Ubuntu Samba 路径。\n2. Ubuntu `~/.fw.conf` 中的路径映射必须正确。\n3. Windows Python 服务必须启动并放行端口。\n\n只要这三点满足，Ubuntu 端执行 `fw` 就可以让 Windows 自动打开对应文件或目录。",
+      "readingMinutes": 42
+    },
+    {
       "title": "AlarmStateManager 的FIRED_STATE 解析",
       "slug": "fired-state",
       "date": "2026-06-25",
+      "createdAt": "2026-06-25",
+      "updatedAt": "2026-06-25",
       "tags": [
         "闹钟"
       ],
@@ -33,6 +64,8 @@
       "title": "系统闹钟为何在触发的时候只响铃无UI界面",
       "slug": "系统闹钟为何在触发的时候只响铃无ui界面",
       "date": "2026-06-25",
+      "createdAt": "2026-06-25",
+      "updatedAt": "2026-06-25",
       "tags": [],
       "summary": "设备正常开机状态下，普通闹钟/起床闹钟触发时铃声和 UI 都正常。\n\n设备关机后由闹钟触发开机时，铃声正常播放，`SgtcAlarmActivity` 也能启动，但 UI 只闪一下就消失，最终停留在 Launcher，表现为“只响铃无 UI”。",
       "content": "**复现步骤**\n\n1. 设置普通闹钟或起床闹钟。\n2. 设备关机。\n3. 等待闹钟触发并拉起开机。\n4. 开机后到闹钟触发时间，铃声播放。\n5. `SgtcAlarmActivity` 短暂闪现后消失，无法稳定显示闹钟 UI。\n\n**排查逻辑**\n\n先确认 Activity 是否没启动，日志证明不是：\n\n- `SgtcAlarmActivity onCreate`\n- `SgtcAlarmActivity onStart`\n- `SgtcAlarmActivity onResume`\n\n说明 UI 链路已经被拉起。\n\n随后确认是否被 Keyguard/Launcher 覆盖，日志显示 Activity 曾经在 top task，但马上 `onPause finishing=true`，说明不是单纯被盖住，而是 Activity 已经进入 finish 流程。\n\n关键日志最终落在状态机：\n\n```text\nIntentId: 28 GlobalId: 29 AlarmState: 5\nIgnoring old Intent\n```\n\n`AlarmStateManager` 把切换到 `FIRED_STATE` 的状态变更 Intent 判定为旧 Intent 并丢弃。铃声仍然播放，但 `AlarmInstance` 的状态没有稳定更新到 `FIRED_STATE`。\n\n**问题定位**\n\n根因在 [SgtcAlarmActivity.java](F:/Sgtc_APP_ALL/SgtcDeskClock20/app/src/main/java/com/sgtc/alarmclock/SgtcAlarmActivity.java:317) 的 `onResume()`：\n\n原逻辑会重新查询 `AlarmInstance`，如果发现：\n\n```java\nmAlarmInstance.mAlarmState != AlarmInstance.FIRED_STATE\n```\n\n就直接 `finish()`。\n\n关机闹钟开机阶段，状态变更 Intent 被 `Ignoring old Intent` 丢弃后，铃声已响，但 provider 中的 instance 状态可能还不是 `FIRED_STATE`。于是 Activity 自己判断“不是 fired，不该显示”，直接关闭，造成 UI 闪一下消失。\n\n**最终原因**\n\n这是一个关机闹钟开机阶段的状态同步时序问题：\n\n- 铃声链路已经执行。\n- Activity 启动链路已经执行。\n- 但 `AlarmStateManager` 的 `FIRED_STATE` 状态变更被旧 Intent 判断拦截。\n- `SgtcAlarmActivity.onResume()` 依赖 provider 状态强校验，状态未同步就主动 `finish()`。\n- 所以最终现象是“只响铃，UI 闪退”。\n\n**修复内容**\n\n1. `SgtcAlarmActivity.onResume()` 中，`mAlarmState != FIRED_STATE` 时不再直接关闭 UI，而是继续显示闹钟页面。\n2. `mAlarmInstance == null` 时不立即 finish，短延迟重拉 UI，避免开机早期 provider 短暂不可用。\n3. 移除 Activity 内主动发送 `ACTION_CLOSE_SYSTEM_DIALOGS`，避免开机阶段额外干扰前台切换。\n4. `onUserLeaveHint()` 不再自动 dismiss。\n5. Activity 未处理闹钟却被压后台时，短延迟重新拉回前台。\n6. Manifest 中让 `SgtcAlarmActivity` 更贴近系统闹钟 UI 配置：`singleTop`、空 `taskAffinity`、`showWhenLocked`、`turnScreenOn`、`resizeableActivity=false`。",
@@ -42,6 +75,8 @@
       "title": "Android权限控制",
       "slug": "android81权限控制逻辑",
       "date": "2026-06-24",
+      "createdAt": "2026-06-24",
+      "updatedAt": "2026-06-24",
       "tags": [
         "frameworks"
       ],
@@ -53,6 +88,8 @@
       "title": "Android Context：理解组件运行环境的入口",
       "slug": "android-context-core",
       "date": "2026-06-23",
+      "createdAt": "2026-06-23",
+      "updatedAt": "2026-06-23",
       "tags": [
         "Android",
         "Framework",
@@ -66,6 +103,8 @@
       "title": "Android CE 与 DE：Direct Boot 场景下的数据放在哪里",
       "slug": "android-ce-de-direct-boot",
       "date": "2026-06-22",
+      "createdAt": "2026-06-22",
+      "updatedAt": "2026-06-22",
       "tags": [
         "Android",
         "存储",
@@ -79,6 +118,8 @@
       "title": "Android 数据存储：SharedPreferences、ContentProvider 与 Cursor 的边界",
       "slug": "android-storage-sharedpreferences-contentprovider-cursor",
       "date": "2026-06-21",
+      "createdAt": "2026-06-21",
+      "updatedAt": "2026-06-21",
       "tags": [
         "Android",
         "数据存储",
@@ -92,6 +133,8 @@
       "title": "Activity 跳转、返回结果与启动模式排查",
       "slug": "android-activity-navigation-result",
       "date": "2026-06-20",
+      "createdAt": "2026-06-20",
+      "updatedAt": "2026-06-20",
       "tags": [
         "Android",
         "Activity",
@@ -105,6 +148,8 @@
       "title": "Android UI 实战：RecyclerView、主题、屏幕尺寸与弹窗",
       "slug": "android-ui-recyclerview-theme-screen",
       "date": "2026-06-19",
+      "createdAt": "2026-06-19",
+      "updatedAt": "2026-06-19",
       "tags": [
         "Android",
         "UI",
@@ -118,6 +163,8 @@
       "title": "动画、Unicode 与资源引用：小问题也要可复用",
       "slug": "android-animation-unicode-resource",
       "date": "2026-06-18",
+      "createdAt": "2026-06-18",
+      "updatedAt": "2026-06-18",
       "tags": [
         "Android",
         "动画",
@@ -131,6 +178,8 @@
       "title": "Android 构建与发布：重签名、打包命名和混淆定位",
       "slug": "android-build-sign-package",
       "date": "2026-06-17",
+      "createdAt": "2026-06-17",
+      "updatedAt": "2026-06-17",
       "tags": [
         "Android",
         "构建",
@@ -144,6 +193,8 @@
       "title": "Android 调试手册：ADB、日志、包名与子线程",
       "slug": "android-debug-adb-log-thread",
       "date": "2026-06-16",
+      "createdAt": "2026-06-16",
+      "updatedAt": "2026-06-16",
       "tags": [
         "Android",
         "ADB",
@@ -157,6 +208,8 @@
       "title": "广播、反射与 SystemProperties：系统能力调用的边界感",
       "slug": "android-broadcast-reflection-systemproperties",
       "date": "2026-06-15",
+      "createdAt": "2026-06-15",
+      "updatedAt": "2026-06-15",
       "tags": [
         "Android",
         "广播",
@@ -170,6 +223,8 @@
       "title": "Git 与 Linux 开发效率笔记：stash、批量拉取和空间排查",
       "slug": "git-linux-efficiency-notes",
       "date": "2026-06-14",
+      "createdAt": "2026-06-14",
+      "updatedAt": "2026-06-14",
       "tags": [
         "Git",
         "Linux",
@@ -183,6 +238,8 @@
       "title": "Android Studio 快捷键与日常工作流整理",
       "slug": "android-studio-shortcuts-workflow",
       "date": "2026-06-13",
+      "createdAt": "2026-06-13",
+      "updatedAt": "2026-06-13",
       "tags": [
         "Android Studio",
         "效率",
@@ -196,6 +253,8 @@
       "title": "XML、资源文本与批处理：降低重复修改成本",
       "slug": "xml-resource-batch-processing",
       "date": "2026-06-12",
+      "createdAt": "2026-06-12",
+      "updatedAt": "2026-06-12",
       "tags": [
         "Android",
         "XML",
@@ -209,6 +268,8 @@
       "title": "Android 问题排查清单：从现象到定位的固定路线",
       "slug": "android-problem-checklist",
       "date": "2026-06-11",
+      "createdAt": "2026-06-11",
+      "updatedAt": "2026-06-11",
       "tags": [
         "Android",
         "排查",
@@ -222,6 +283,8 @@
       "title": "Ra PDF记录：Android基础（安卓开发记录）",
       "slug": "pdf-安卓开发记录-android基础",
       "date": "2026-06-10",
+      "createdAt": "2026-06-10",
+      "updatedAt": "2026-06-10",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -236,6 +299,8 @@
       "title": "Ra PDF记录：Android基础（开发记录 2）",
       "slug": "pdf-开发记录-android基础",
       "date": "2026-06-10",
+      "createdAt": "2026-06-10",
+      "updatedAt": "2026-06-10",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -250,6 +315,8 @@
       "title": "Ra PDF记录：Android当中单独控制文字",
       "slug": "pdf-安卓开发记录-android当中单独控制文字",
       "date": "2026-06-10",
+      "createdAt": "2026-06-10",
+      "updatedAt": "2026-06-10",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -263,6 +330,8 @@
       "title": "Ra PDF记录：Android当中设置日期",
       "slug": "pdf-安卓开发记录-android当中设置日期",
       "date": "2026-06-09",
+      "createdAt": "2026-06-09",
+      "updatedAt": "2026-06-09",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -277,6 +346,8 @@
       "title": "Ra PDF记录：App功能配置说明",
       "slug": "pdf-开发记录-app功能配置说明",
       "date": "2026-06-09",
+      "createdAt": "2026-06-09",
+      "updatedAt": "2026-06-09",
       "tags": [
         "PDF导入",
         "Ra记录"
@@ -289,6 +360,8 @@
       "title": "Ra PDF记录：Drawable文件",
       "slug": "pdf-安卓开发记录-drawable文件",
       "date": "2026-06-09",
+      "createdAt": "2026-06-09",
+      "updatedAt": "2026-06-09",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -302,6 +375,8 @@
       "title": "Ra PDF记录：Java代码基础",
       "slug": "pdf-开发记录-java代码基础",
       "date": "2026-06-08",
+      "createdAt": "2026-06-08",
+      "updatedAt": "2026-06-08",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -316,6 +391,8 @@
       "title": "Ra PDF记录：代码优化",
       "slug": "pdf-pdf-e382ad93",
       "date": "2026-06-08",
+      "createdAt": "2026-06-08",
+      "updatedAt": "2026-06-08",
       "tags": [
         "PDF导入",
         "Ra记录"
@@ -328,6 +405,8 @@
       "title": "Ra PDF记录：代码基础（自总结）",
       "slug": "pdf-pdf-69f79120",
       "date": "2026-06-08",
+      "createdAt": "2026-06-08",
+      "updatedAt": "2026-06-08",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -341,6 +420,8 @@
       "title": "Ra PDF记录：判断圆屏utils",
       "slug": "pdf-安卓开发记录-判断圆屏utils",
       "date": "2026-06-07",
+      "createdAt": "2026-06-07",
+      "updatedAt": "2026-06-07",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -354,6 +435,8 @@
       "title": "Ra PDF记录：动态表盘（数字加指针）",
       "slug": "pdf-pdf-74456e1a",
       "date": "2026-06-07",
+      "createdAt": "2026-06-07",
+      "updatedAt": "2026-06-07",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -367,6 +450,8 @@
       "title": "Ra PDF记录：命令",
       "slug": "pdf-pdf-7cd6e32e",
       "date": "2026-06-07",
+      "createdAt": "2026-06-07",
+      "updatedAt": "2026-06-07",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -380,6 +465,8 @@
       "title": "Ra PDF记录：基础配置",
       "slug": "pdf-pdf-0193e7fa",
       "date": "2026-06-06",
+      "createdAt": "2026-06-06",
+      "updatedAt": "2026-06-06",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -393,6 +480,8 @@
       "title": "Ra PDF记录：常用（开发记录）",
       "slug": "pdf-pdf-1d16ba4c",
       "date": "2026-06-06",
+      "createdAt": "2026-06-06",
+      "updatedAt": "2026-06-06",
       "tags": [
         "PDF导入",
         "Ra记录"
@@ -405,6 +494,8 @@
       "title": "Ra PDF记录：常用（开发记录 2）",
       "slug": "pdf-pdf-1d16ba4c-2",
       "date": "2026-06-06",
+      "createdAt": "2026-06-06",
+      "updatedAt": "2026-06-06",
       "tags": [
         "PDF导入",
         "Ra记录"
@@ -417,6 +508,8 @@
       "title": "Ra PDF记录：快捷选择",
       "slug": "pdf-pdf-9448c36c",
       "date": "2026-06-05",
+      "createdAt": "2026-06-05",
+      "updatedAt": "2026-06-05",
       "tags": [
         "PDF导入",
         "Ra记录"
@@ -429,6 +522,8 @@
       "title": "Ra PDF记录：想在锁屏页面显示Activity",
       "slug": "pdf-安卓开发记录-想在锁屏页面显示activity",
       "date": "2026-06-05",
+      "createdAt": "2026-06-05",
+      "updatedAt": "2026-06-05",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -442,6 +537,8 @@
       "title": "Ra PDF记录：数据库处理",
       "slug": "pdf-pdf-bb34844c",
       "date": "2026-06-05",
+      "createdAt": "2026-06-05",
+      "updatedAt": "2026-06-05",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -455,6 +552,8 @@
       "title": "Ra PDF记录：编版本",
       "slug": "pdf-pdf-516ee03a",
       "date": "2026-06-04",
+      "createdAt": "2026-06-04",
+      "updatedAt": "2026-06-04",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -468,6 +567,8 @@
       "title": "Ra PDF记录：自定义控件：跑马灯效果",
       "slug": "pdf-pdf-d5e24ae9",
       "date": "2026-06-04",
+      "createdAt": "2026-06-04",
+      "updatedAt": "2026-06-04",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -481,6 +582,8 @@
       "title": "Ra PDF记录：表盘参记",
       "slug": "pdf-pdf-b64179fb",
       "date": "2026-06-04",
+      "createdAt": "2026-06-04",
+      "updatedAt": "2026-06-04",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -494,6 +597,8 @@
       "title": "Ra PDF记录：表盘指针表盘（静态）",
       "slug": "pdf-pdf-ebdf72f8",
       "date": "2026-06-03",
+      "createdAt": "2026-06-03",
+      "updatedAt": "2026-06-03",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -507,6 +612,8 @@
       "title": "Ra PDF记录：表盘数字表盘（静态）",
       "slug": "pdf-pdf-a16fc926",
       "date": "2026-06-03",
+      "createdAt": "2026-06-03",
+      "updatedAt": "2026-06-03",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -520,6 +627,8 @@
       "title": "Ra PDF记录：解决native层报错，后台的堆栈信息能不能正常获取到",
       "slug": "pdf-开发记录-解决native层报错-后台的堆栈信息能不能正常获取到",
       "date": "2026-06-03",
+      "createdAt": "2026-06-03",
+      "updatedAt": "2026-06-03",
       "tags": [
         "PDF导入",
         "Ra记录",
