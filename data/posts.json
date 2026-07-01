@@ -19,9 +19,24 @@
   },
   "posts": [
     {
+      "title": "Android文件挂载失败",
+      "slug": "目录-datauser0pkg-没有被-pmsinstalld-正确创建或绑定问题",
+      "date": "2026-07-01",
+      "createdAt": "2026-07-01T09:04:16.816Z",
+      "updatedAt": "2026-07-01T09:04:19.155Z",
+      "tags": [
+        "directBootAware"
+      ],
+      "summary": "SharedPreferencesImpl: Couldn't create directory for SharedPreferences file /data/user/0/com.sohu.inputmethod.sogou/shared_prefs/com.sohu.inputmethod.sogou_preferences.xml  异常\ndirectBootAware=true属性",
+      "content": "## Bug 总结\n\n这个 bug 的本质是：**Netcenter 被错误标记为 Direct Boot 可运行应用，导致它在用户 CE 存储未完全就绪时提前启动业务链路，间接拉起其他普通应用，最终普通应用访问 `/data/user/0/<pkg>` 时目录不存在，出现 SharedPreferences/MMKV 创建失败。**\n\n本次最关键的错误修改是 Manifest 里新增的：\n\n```xml\nandroid:directBootAware=\"true\"\n```\n\n尤其是加在 `<application>` 上，并且它和原有的：\n\n```xml\nandroid:persistent=\"true\"\nandroid:defaultToDeviceProtectedStorage=\"true\"\n```\n\n组合在一起后风险非常高。patch 中确实新增了 application 级 `directBootAware=true`，同时还给 `BootReceiver` 和 `TimeCalibrationReceiver` 增加了 `directBootAware=true`。\n\n---\n\n## 一、现象\n\n日志现象类似：\n\n```text\nSharedPreferencesImpl: Couldn't create directory for SharedPreferences file /data/user/0/com.sohu.inputmethod.sogou/shared_prefs/xxx.xml\nMMKV: file not valid\n```\n\n表现特征：\n\n```text\n1. 不是单个 App 报错，而是多个 App 都可能报类似问题\n2. 报错路径集中在 /data/user/0/<package>/\n3. SharedPreferences、MMKV、SQLite、文件缓存都可能异常\n4. 设备开机早期更容易出现\n5. 第三方输入法、系统服务关联 App、开机自启 App 更容易先暴露\n```\n\n重点是 `/data/user/0/<pkg>`，这是 **CE 用户加密区**。如果用户数据区还没有完成准备，普通 App 写 SharedPreferences 就会失败。\n\n---\n\n## 二、直接原因\n\n直接原因是这次提交把 Netcenter 改成了 Direct Boot 可运行：\n\n```diff\n<application\n    android:allowBackup=\"true\"\n    android:icon=\"@drawable/ic_launcher\"\n    android:label=\"@string/app_name\"\n+   android:directBootAware=\"true\"\n    android:persistent=\"true\"\n    android:defaultToDeviceProtectedStorage=\"true\"\n    android:usesCleartextTraffic=\"true\"\n    android:theme=\"@style/AppTheme\">\n```\n\n同时还改了：\n\n```diff\n<receiver android:name=\"com.sgtc.netcenter.receiver.BootReceiver\"\n+   android:directBootAware=\"true\"\n    android:exported=\"true\">\n```\n\n以及：\n\n```diff\n<receiver android:name=\"com.sgtc.netcenter.receiver.TimeCalibrationReceiver\"\n    android:exported=\"true\"\n+   android:directBootAware=\"true\">\n```\n\n这些改动让 Netcenter 在 **LOCKED_BOOT_COMPLETED 阶段** 就可能被启动。PMS 代码里也能看到，系统会先投递 `LOCKED_BOOT_COMPLETED`，而 `BOOT_COMPLETED` 只有在用户解锁或正在解锁后才投递。\n\n---\n\n## 三、根因链路\n\n完整链路是：\n\n```text\n开机\n  ↓\n系统进入 Direct Boot 阶段\n  ↓\n用户 CE 存储 /data/user/0 还没有完全可用\n  ↓\nNetcenter 因为 persistent + directBootAware 被提前拉起\n  ↓\nBootReceiver / TimeCalibrationReceiver / Netcenter 初始化逻辑开始执行\n  ↓\n业务逻辑可能注册服务、发广播、权限控制、网络校时、拉起关联组件\n  ↓\n间接导致普通 App 或输入法提前启动\n  ↓\n普通 App 写 SharedPreferences/MMKV\n  ↓\n访问 /data/user/0/<pkg>/shared_prefs\n  ↓\n目录不存在或不可用\n  ↓\nCouldn't create directory / MMKV file not valid\n```\n\n所以真正的问题不是：\n\n```text\nSharedPreferences 写法错误\nMMKV 本身损坏\ncom.sohu.inputmethod.sogou 自己异常\n某一个普通 App 权限错误\n```\n\n而是：\n\n```text\n系统启动阶段顺序被破坏：Direct Boot 阶段启动了不应该启动的完整业务链路。\n```\n\n---\n\n## 四、错误原因\n\n### 1. 错误地把整个 application 标记为 directBootAware\n\n`android:directBootAware=\"true\"` 不应该随便加在 `<application>` 上。\n\n加在 application 上的含义是：**整个 App 的组件都被认为可以在用户未解锁阶段运行**。这对普通业务型系统 App 非常危险。\n\n正确做法应该是：只给极少数真正需要 Direct Boot 的 Receiver 单独加，并且 Receiver 内只能做 DE 安全逻辑。\n\n---\n\n### 2. 忽略了 `persistent=true` 的启动放大效应\n\nNetcenter 原本就是：\n\n```xml\nandroid:persistent=\"true\"\n```\n\n这意味着它是 persistent 系统进程，系统倾向于尽早拉起。再加上：\n\n```xml\nandroid:directBootAware=\"true\"\n```\n\n就变成：\n\n```text\n开机早期 + 用户未解锁 + CE 未就绪 + persistent 进程提前启动\n```\n\n这个组合非常容易引发全局启动时序问题。\n\n---\n\n### 3. 混淆了 DE 和 CE 存储\n\nManifest 里已有：\n\n```xml\nandroid:defaultToDeviceProtectedStorage=\"true\"\n```\n\n它只保证 Netcenter 自己默认使用 DE 存储，不代表它可以安全访问或拉起其他普通 App。\n\n普通 App 的 SharedPreferences 默认路径仍然是：\n\n```text\n/data/user/0/<pkg>/shared_prefs/\n```\n\n也就是 CE 区。Netcenter 自己用 DE，不代表被它间接拉起的其他 App 也能安全运行。\n\n---\n\n### 4. Direct Boot 阶段执行了完整业务，而不是最小逻辑\n\nDirect Boot 阶段只能做非常有限的事情，例如：\n\n```text\n读取 DE 存储\n设置闹钟\n等待用户解锁\n做极少量系统初始化\n```\n\n不能做：\n\n```text\n启动普通业务服务\n拉起第三方应用\n发权限控制广播\n访问普通 SharedPreferences\n访问 /data/user/0\n初始化大量业务模块\n启动输入法、运动、权限、网络、协议解析链路\n```\n\n---\n\n## 五、解决方案\n\n### 方案 1：最小修复，直接回退 Manifest 修改\n\n优先采用这个方案。\n\n```diff\ndiff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml\n@@\n         android:allowBackup=\"true\"\n         android:icon=\"@drawable/ic_launcher\"\n         android:label=\"@string/app_name\"\n-        android:directBootAware=\"true\"\n         android:persistent=\"true\"\n         android:defaultToDeviceProtectedStorage=\"true\"\n         android:usesCleartextTraffic=\"true\"\n         android:theme=\"@style/AppTheme\">\n@@\n         <receiver android:name=\"com.sgtc.netcenter.receiver.BootReceiver\"\n-            android:directBootAware=\"true\"\n             android:exported=\"true\">\n@@\n         <receiver android:name=\"com.sgtc.netcenter.receiver.TimeCalibrationReceiver\"\n-            android:exported=\"true\"\n-            android:directBootAware=\"true\">\n+            android:exported=\"true\">\n```\n\n这是最直接、最安全的修复。\n\n---\n\n### 方案 2：如果必须保留 LOCKED_BOOT_COMPLETED\n\n不要给整个 application 加 `directBootAware=true`。\n\n只允许给单独 Receiver 加：\n\n```xml\n<receiver\n    android:name=\"com.sgtc.netcenter.receiver.BootReceiver\"\n    android:exported=\"true\"\n    android:directBootAware=\"true\">\n    <intent-filter>\n        <action android:name=\"android.intent.action.LOCKED_BOOT_COMPLETED\" />\n    </intent-filter>\n</receiver>\n```\n\n但 Receiver 里必须加判断：\n\n```java\nUserManager userManager = (UserManager) context.getSystemService(Context.USER_SERVICE);\nif (userManager != null && !userManager.isUserUnlocked()) {\n    Log.i(TAG, \"User locked, only Direct Boot safe logic is allowed\");\n    return;\n}\n```\n\n如果收到的是 `LOCKED_BOOT_COMPLETED`，只允许做 DE 安全初始化。完整业务必须等：\n\n```text\nandroid.intent.action.USER_UNLOCKED\n```\n\n或：\n\n```text\nandroid.intent.action.BOOT_COMPLETED\n```\n\n之后再执行。\n\n---\n\n### 方案 3：拆分启动逻辑\n\n建议拆成两个阶段：\n\n```text\nLOCKED_BOOT_COMPLETED：\n    只做最小 DE 初始化\n    不启动业务 Service\n    不访问 /data/user/0\n    不拉起其他 App\n    不发权限控制广播\n\nUSER_UNLOCKED / BOOT_COMPLETED：\n    初始化完整业务\n    启动网络、协议、权限控制、数据库、SP、MMKV 等模块\n```\n\n示例：\n\n```java\n@Override\npublic void onReceive(Context context, Intent intent) {\n    String action = intent.getAction();\n\n    UserManager userManager = (UserManager) context.getSystemService(Context.USER_SERVICE);\n    boolean unlocked = userManager != null && userManager.isUserUnlocked();\n\n    if (Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(action)) {\n        Log.i(TAG, \"LOCKED_BOOT_COMPLETED, userUnlocked=\" + unlocked);\n\n        // 只能做 Direct Boot 安全逻辑\n        doDeviceProtectedMinimalInit(context);\n        return;\n    }\n\n    if (Intent.ACTION_USER_UNLOCKED.equals(action)\n            || Intent.ACTION_BOOT_COMPLETED.equals(action)) {\n        Log.i(TAG, \"User unlocked or boot completed, start full business\");\n        doFullBusinessInit(context);\n    }\n}\n```\n\n---\n\n## 六、排查路径\n\n### 第一步：看日志路径\n\n看到：\n\n```text\n/data/user/0/<pkg>/shared_prefs\n```\n\n先判断这是 CE 区问题，不是普通文件权限问题。\n\n如果是：\n\n```text\n/data/user_de/0/<pkg>\n```\n\n才是 DE 区问题。\n\n---\n\n### 第二步：确认是否发生在开机早期\n\n抓日志：\n\n```bash\nadb logcat -b all | grep -E \"LOCKED_BOOT_COMPLETED|BOOT_COMPLETED|USER_UNLOCKED|SharedPreferencesImpl|MMKV|Netcenter|BootReceiver|TimeCalibrationReceiver\"\n```\n\n如果 SharedPreferences 报错出现在 `USER_UNLOCKED` 前面，基本就是 Direct Boot 时序问题。\n\n---\n\n### 第三步：检查最近 Manifest 修改\n\n重点搜索：\n\n```bash\ngrep -R \"directBootAware\" -n app/src/main/AndroidManifest.xml\ngrep -R \"persistent\" -n app/src/main/AndroidManifest.xml\ngrep -R \"defaultToDeviceProtectedStorage\" -n app/src/main/AndroidManifest.xml\ngrep -R \"LOCKED_BOOT_COMPLETED\" -n app/src/main/AndroidManifest.xml\n```\n\n这次就是 Manifest 修改直接命中：\n\n```text\napplication directBootAware=true\nBootReceiver directBootAware=true\nTimeCalibrationReceiver directBootAware=true\npersistent=true\ndefaultToDeviceProtectedStorage=true\nLOCKED_BOOT_COMPLETED\n```\n\n---\n\n### 第四步：验证是否是 Netcenter 提前拉起链路\n\n抓启动链路：\n\n```bash\nadb logcat -b all | grep -E \"ActivityManager|BroadcastQueue|Netcenter|BootReceiver|TimeCalibrationReceiver|Permission|PackageInstaller|com.sohu.inputmethod.sogou\"\n```\n\n关注顺序：\n\n```text\nLOCKED_BOOT_COMPLETED\nNetcenter 启动\nNetcenter Receiver 执行\n其他 App 被启动\nSharedPreferencesImpl 报错\nUSER_UNLOCKED\nBOOT_COMPLETED\n```\n\n如果顺序符合，就能确认是 Direct Boot 提前启动导致。\n\n---\n\n### 第五步：做 A/B 验证\n\n只回退 Manifest 的 `directBootAware=true`，不要动其他 Java 逻辑。\n\n验证命令：\n\n```bash\nadb logcat -c\nadb reboot\nadb logcat | grep -E \"SharedPreferencesImpl|Couldn't create directory|MMKV|Netcenter|LOCKED_BOOT_COMPLETED|USER_UNLOCKED|BOOT_COMPLETED\"\n```\n\n如果回退后错误消失，说明根因确认。\n\n---\n\n## 七、最终修复建议\n\n最终建议按这个优先级处理：\n\n```text\n1. 删除 application 级 android:directBootAware=\"true\"\n2. 删除 TimeCalibrationReceiver 的 android:directBootAware=\"true\"\n3. BootReceiver 如无强需求，也删除 android:directBootAware=\"true\"\n4. 如果必须接收 LOCKED_BOOT_COMPLETED，则只保留 BootReceiver 单点支持\n5. BootReceiver 内未解锁阶段直接 return，不执行完整业务\n6. 完整业务延后到 USER_UNLOCKED / BOOT_COMPLETED 后执行\n```\n\n推荐最终 Manifest：\n\n```xml\n<application\n    android:allowBackup=\"true\"\n    android:icon=\"@drawable/ic_launcher\"\n    android:label=\"@string/app_name\"\n    android:persistent=\"true\"\n    android:defaultToDeviceProtectedStorage=\"true\"\n    android:usesCleartextTraffic=\"true\"\n    android:theme=\"@style/AppTheme\">\n\n    <receiver\n        android:name=\"com.sgtc.netcenter.receiver.BootReceiver\"\n        android:exported=\"true\">\n        <intent-filter android:priority=\"1000\">\n            <action android:name=\"android.intent.action.BOOT_COMPLETED\" />\n            <action android:name=\"android.intent.action.USER_UNLOCKED\" />\n        </intent-filter>\n    </receiver>\n\n</application>\n```\n\n如果必须保留 `LOCKED_BOOT_COMPLETED`，则：\n\n```xml\n<receiver\n    android:name=\"com.sgtc.netcenter.receiver.BootReceiver\"\n    android:exported=\"true\"\n    android:directBootAware=\"true\">\n    <intent-filter android:priority=\"1000\">\n        <action android:name=\"android.intent.action.LOCKED_BOOT_COMPLETED\" />\n        <action android:name=\"android.intent.action.USER_UNLOCKED\" />\n        <action android:name=\"android.intent.action.BOOT_COMPLETED\" />\n    </intent-filter>\n</receiver>\n```\n\n但代码必须严格区分 locked/unlocked。\n\n---\n\n## 八、预防步骤\n\n以后遇到系统 App、persistent App、开机广播相关改动，必须按下面规则检查。\n\n### 1. 禁止随意给 application 加 directBootAware\n\n高风险组合：\n\n```xml\nandroid:directBootAware=\"true\"\nandroid:persistent=\"true\"\nandroid:defaultToDeviceProtectedStorage=\"true\"\n```\n\n尤其是系统 App、常驻 App、开机自启 App，不能直接加 application 级 Direct Boot。\n\n---\n\n### 2. Direct Boot 组件必须做用户解锁判断\n\n所有接收 `LOCKED_BOOT_COMPLETED` 的 Receiver，入口必须有：\n\n```java\nUserManager userManager = (UserManager) context.getSystemService(Context.USER_SERVICE);\nif (userManager != null && !userManager.isUserUnlocked()) {\n    return;\n}\n```\n\n除非这个分支只做 DE 安全逻辑。\n\n---\n\n### 3. Direct Boot 阶段禁止访问 CE 路径\n\n禁止访问：\n\n```text\n/data/user/0/<pkg>\ncontext.getFilesDir()\ncontext.getSharedPreferences()\nMMKV 默认目录\nSQLite 默认目录\n普通业务数据库\n```\n\n允许访问：\n\n```text\n/data/user_de/0/<pkg>\ncontext.createDeviceProtectedStorageContext()\n```\n\n---\n\n### 4. 开机广播必须分层\n\n```text\nLOCKED_BOOT_COMPLETED：最小 DE 逻辑\nUSER_UNLOCKED：CE 数据可用后恢复业务\nBOOT_COMPLETED：完整系统启动后执行业务\n```\n\n不要把所有逻辑都塞进 BootReceiver。\n\n---\n\n### 5. 提交前必须做冷启动验证\n\n每次修改以下内容后都必须重启验证：\n\n```text\nAndroidManifest.xml\ndirectBootAware\npersistent\nBOOT_COMPLETED\nLOCKED_BOOT_COMPLETED\nUSER_UNLOCKED\ndefaultToDeviceProtectedStorage\n开机 Receiver\n系统常驻 Service\n权限控制广播\n```\n\n验证命令：\n\n```bash\nadb logcat -c\nadb reboot\nadb logcat | grep -E \"SharedPreferencesImpl|Couldn't create directory|MMKV|LOCKED_BOOT_COMPLETED|USER_UNLOCKED|BOOT_COMPLETED|Netcenter\"\n```\n\n---\n\n## 九、最终定性\n\n这个 bug 的错误原因不是 PMS 创建目录逻辑本身，也不是普通 App 自己写 SharedPreferences 错误，而是：\n\n```text\nManifest 错误配置 Direct Boot 能力\n  +\npersistent 常驻进程提前启动\n  +\n开机早期执行业务链路\n  +\n用户 CE 存储未就绪\n  =\n多个 App /data/user/0 访问失败\n```\n\n最应该回退的就是：\n\n```xml\n<application android:directBootAware=\"true\">\n```\n\n其次回退：\n\n```xml\nBootReceiver android:directBootAware=\"true\"\nTimeCalibrationReceiver android:directBootAware=\"true\"\n```\n\n根治原则：**Direct Boot 阶段只做 DE 安全最小逻辑，完整业务必须等 USER_UNLOCKED / BOOT_COMPLETED。**",
+      "readingMinutes": 20
+    },
+    {
       "title": "AlarmStateManager 的FIRED_STATE 解析",
       "slug": "fired-state",
       "date": "2026-06-25",
+      "createdAt": "2026-06-25",
+      "updatedAt": "2026-06-25",
       "tags": [
         "闹钟"
       ],
@@ -33,6 +48,8 @@
       "title": "系统闹钟为何在触发的时候只响铃无UI界面",
       "slug": "系统闹钟为何在触发的时候只响铃无ui界面",
       "date": "2026-06-25",
+      "createdAt": "2026-06-25",
+      "updatedAt": "2026-06-25",
       "tags": [],
       "summary": "设备正常开机状态下，普通闹钟/起床闹钟触发时铃声和 UI 都正常。\n\n设备关机后由闹钟触发开机时，铃声正常播放，`SgtcAlarmActivity` 也能启动，但 UI 只闪一下就消失，最终停留在 Launcher，表现为“只响铃无 UI”。",
       "content": "**复现步骤**\n\n1. 设置普通闹钟或起床闹钟。\n2. 设备关机。\n3. 等待闹钟触发并拉起开机。\n4. 开机后到闹钟触发时间，铃声播放。\n5. `SgtcAlarmActivity` 短暂闪现后消失，无法稳定显示闹钟 UI。\n\n**排查逻辑**\n\n先确认 Activity 是否没启动，日志证明不是：\n\n- `SgtcAlarmActivity onCreate`\n- `SgtcAlarmActivity onStart`\n- `SgtcAlarmActivity onResume`\n\n说明 UI 链路已经被拉起。\n\n随后确认是否被 Keyguard/Launcher 覆盖，日志显示 Activity 曾经在 top task，但马上 `onPause finishing=true`，说明不是单纯被盖住，而是 Activity 已经进入 finish 流程。\n\n关键日志最终落在状态机：\n\n```text\nIntentId: 28 GlobalId: 29 AlarmState: 5\nIgnoring old Intent\n```\n\n`AlarmStateManager` 把切换到 `FIRED_STATE` 的状态变更 Intent 判定为旧 Intent 并丢弃。铃声仍然播放，但 `AlarmInstance` 的状态没有稳定更新到 `FIRED_STATE`。\n\n**问题定位**\n\n根因在 [SgtcAlarmActivity.java](F:/Sgtc_APP_ALL/SgtcDeskClock20/app/src/main/java/com/sgtc/alarmclock/SgtcAlarmActivity.java:317) 的 `onResume()`：\n\n原逻辑会重新查询 `AlarmInstance`，如果发现：\n\n```java\nmAlarmInstance.mAlarmState != AlarmInstance.FIRED_STATE\n```\n\n就直接 `finish()`。\n\n关机闹钟开机阶段，状态变更 Intent 被 `Ignoring old Intent` 丢弃后，铃声已响，但 provider 中的 instance 状态可能还不是 `FIRED_STATE`。于是 Activity 自己判断“不是 fired，不该显示”，直接关闭，造成 UI 闪一下消失。\n\n**最终原因**\n\n这是一个关机闹钟开机阶段的状态同步时序问题：\n\n- 铃声链路已经执行。\n- Activity 启动链路已经执行。\n- 但 `AlarmStateManager` 的 `FIRED_STATE` 状态变更被旧 Intent 判断拦截。\n- `SgtcAlarmActivity.onResume()` 依赖 provider 状态强校验，状态未同步就主动 `finish()`。\n- 所以最终现象是“只响铃，UI 闪退”。\n\n**修复内容**\n\n1. `SgtcAlarmActivity.onResume()` 中，`mAlarmState != FIRED_STATE` 时不再直接关闭 UI，而是继续显示闹钟页面。\n2. `mAlarmInstance == null` 时不立即 finish，短延迟重拉 UI，避免开机早期 provider 短暂不可用。\n3. 移除 Activity 内主动发送 `ACTION_CLOSE_SYSTEM_DIALOGS`，避免开机阶段额外干扰前台切换。\n4. `onUserLeaveHint()` 不再自动 dismiss。\n5. Activity 未处理闹钟却被压后台时，短延迟重新拉回前台。\n6. Manifest 中让 `SgtcAlarmActivity` 更贴近系统闹钟 UI 配置：`singleTop`、空 `taskAffinity`、`showWhenLocked`、`turnScreenOn`、`resizeableActivity=false`。",
@@ -42,6 +59,8 @@
       "title": "Android权限控制",
       "slug": "android81权限控制逻辑",
       "date": "2026-06-24",
+      "createdAt": "2026-06-24",
+      "updatedAt": "2026-06-24",
       "tags": [
         "frameworks"
       ],
@@ -53,6 +72,8 @@
       "title": "Android Context：理解组件运行环境的入口",
       "slug": "android-context-core",
       "date": "2026-06-23",
+      "createdAt": "2026-06-23",
+      "updatedAt": "2026-06-23",
       "tags": [
         "Android",
         "Framework",
@@ -66,6 +87,8 @@
       "title": "Android CE 与 DE：Direct Boot 场景下的数据放在哪里",
       "slug": "android-ce-de-direct-boot",
       "date": "2026-06-22",
+      "createdAt": "2026-06-22",
+      "updatedAt": "2026-06-22",
       "tags": [
         "Android",
         "存储",
@@ -79,6 +102,8 @@
       "title": "Android 数据存储：SharedPreferences、ContentProvider 与 Cursor 的边界",
       "slug": "android-storage-sharedpreferences-contentprovider-cursor",
       "date": "2026-06-21",
+      "createdAt": "2026-06-21",
+      "updatedAt": "2026-06-21",
       "tags": [
         "Android",
         "数据存储",
@@ -92,6 +117,8 @@
       "title": "Activity 跳转、返回结果与启动模式排查",
       "slug": "android-activity-navigation-result",
       "date": "2026-06-20",
+      "createdAt": "2026-06-20",
+      "updatedAt": "2026-06-20",
       "tags": [
         "Android",
         "Activity",
@@ -105,6 +132,8 @@
       "title": "Android UI 实战：RecyclerView、主题、屏幕尺寸与弹窗",
       "slug": "android-ui-recyclerview-theme-screen",
       "date": "2026-06-19",
+      "createdAt": "2026-06-19",
+      "updatedAt": "2026-06-19",
       "tags": [
         "Android",
         "UI",
@@ -118,6 +147,8 @@
       "title": "动画、Unicode 与资源引用：小问题也要可复用",
       "slug": "android-animation-unicode-resource",
       "date": "2026-06-18",
+      "createdAt": "2026-06-18",
+      "updatedAt": "2026-06-18",
       "tags": [
         "Android",
         "动画",
@@ -131,6 +162,8 @@
       "title": "Android 构建与发布：重签名、打包命名和混淆定位",
       "slug": "android-build-sign-package",
       "date": "2026-06-17",
+      "createdAt": "2026-06-17",
+      "updatedAt": "2026-06-17",
       "tags": [
         "Android",
         "构建",
@@ -144,6 +177,8 @@
       "title": "Android 调试手册：ADB、日志、包名与子线程",
       "slug": "android-debug-adb-log-thread",
       "date": "2026-06-16",
+      "createdAt": "2026-06-16",
+      "updatedAt": "2026-06-16",
       "tags": [
         "Android",
         "ADB",
@@ -157,6 +192,8 @@
       "title": "广播、反射与 SystemProperties：系统能力调用的边界感",
       "slug": "android-broadcast-reflection-systemproperties",
       "date": "2026-06-15",
+      "createdAt": "2026-06-15",
+      "updatedAt": "2026-06-15",
       "tags": [
         "Android",
         "广播",
@@ -170,6 +207,8 @@
       "title": "Git 与 Linux 开发效率笔记：stash、批量拉取和空间排查",
       "slug": "git-linux-efficiency-notes",
       "date": "2026-06-14",
+      "createdAt": "2026-06-14",
+      "updatedAt": "2026-06-14",
       "tags": [
         "Git",
         "Linux",
@@ -183,6 +222,8 @@
       "title": "Android Studio 快捷键与日常工作流整理",
       "slug": "android-studio-shortcuts-workflow",
       "date": "2026-06-13",
+      "createdAt": "2026-06-13",
+      "updatedAt": "2026-06-13",
       "tags": [
         "Android Studio",
         "效率",
@@ -196,6 +237,8 @@
       "title": "XML、资源文本与批处理：降低重复修改成本",
       "slug": "xml-resource-batch-processing",
       "date": "2026-06-12",
+      "createdAt": "2026-06-12",
+      "updatedAt": "2026-06-12",
       "tags": [
         "Android",
         "XML",
@@ -209,6 +252,8 @@
       "title": "Android 问题排查清单：从现象到定位的固定路线",
       "slug": "android-problem-checklist",
       "date": "2026-06-11",
+      "createdAt": "2026-06-11",
+      "updatedAt": "2026-06-11",
       "tags": [
         "Android",
         "排查",
@@ -222,6 +267,8 @@
       "title": "Ra PDF记录：Android基础（安卓开发记录）",
       "slug": "pdf-安卓开发记录-android基础",
       "date": "2026-06-10",
+      "createdAt": "2026-06-10",
+      "updatedAt": "2026-06-10",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -236,6 +283,8 @@
       "title": "Ra PDF记录：Android基础（开发记录 2）",
       "slug": "pdf-开发记录-android基础",
       "date": "2026-06-10",
+      "createdAt": "2026-06-10",
+      "updatedAt": "2026-06-10",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -250,6 +299,8 @@
       "title": "Ra PDF记录：Android当中单独控制文字",
       "slug": "pdf-安卓开发记录-android当中单独控制文字",
       "date": "2026-06-10",
+      "createdAt": "2026-06-10",
+      "updatedAt": "2026-06-10",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -263,6 +314,8 @@
       "title": "Ra PDF记录：Android当中设置日期",
       "slug": "pdf-安卓开发记录-android当中设置日期",
       "date": "2026-06-09",
+      "createdAt": "2026-06-09",
+      "updatedAt": "2026-06-09",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -277,6 +330,8 @@
       "title": "Ra PDF记录：App功能配置说明",
       "slug": "pdf-开发记录-app功能配置说明",
       "date": "2026-06-09",
+      "createdAt": "2026-06-09",
+      "updatedAt": "2026-06-09",
       "tags": [
         "PDF导入",
         "Ra记录"
@@ -289,6 +344,8 @@
       "title": "Ra PDF记录：Drawable文件",
       "slug": "pdf-安卓开发记录-drawable文件",
       "date": "2026-06-09",
+      "createdAt": "2026-06-09",
+      "updatedAt": "2026-06-09",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -302,6 +359,8 @@
       "title": "Ra PDF记录：Java代码基础",
       "slug": "pdf-开发记录-java代码基础",
       "date": "2026-06-08",
+      "createdAt": "2026-06-08",
+      "updatedAt": "2026-06-08",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -316,6 +375,8 @@
       "title": "Ra PDF记录：代码优化",
       "slug": "pdf-pdf-e382ad93",
       "date": "2026-06-08",
+      "createdAt": "2026-06-08",
+      "updatedAt": "2026-06-08",
       "tags": [
         "PDF导入",
         "Ra记录"
@@ -328,6 +389,8 @@
       "title": "Ra PDF记录：代码基础（自总结）",
       "slug": "pdf-pdf-69f79120",
       "date": "2026-06-08",
+      "createdAt": "2026-06-08",
+      "updatedAt": "2026-06-08",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -341,6 +404,8 @@
       "title": "Ra PDF记录：判断圆屏utils",
       "slug": "pdf-安卓开发记录-判断圆屏utils",
       "date": "2026-06-07",
+      "createdAt": "2026-06-07",
+      "updatedAt": "2026-06-07",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -354,6 +419,8 @@
       "title": "Ra PDF记录：动态表盘（数字加指针）",
       "slug": "pdf-pdf-74456e1a",
       "date": "2026-06-07",
+      "createdAt": "2026-06-07",
+      "updatedAt": "2026-06-07",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -367,6 +434,8 @@
       "title": "Ra PDF记录：命令",
       "slug": "pdf-pdf-7cd6e32e",
       "date": "2026-06-07",
+      "createdAt": "2026-06-07",
+      "updatedAt": "2026-06-07",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -380,6 +449,8 @@
       "title": "Ra PDF记录：基础配置",
       "slug": "pdf-pdf-0193e7fa",
       "date": "2026-06-06",
+      "createdAt": "2026-06-06",
+      "updatedAt": "2026-06-06",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -393,6 +464,8 @@
       "title": "Ra PDF记录：常用（开发记录）",
       "slug": "pdf-pdf-1d16ba4c",
       "date": "2026-06-06",
+      "createdAt": "2026-06-06",
+      "updatedAt": "2026-06-06",
       "tags": [
         "PDF导入",
         "Ra记录"
@@ -405,6 +478,8 @@
       "title": "Ra PDF记录：常用（开发记录 2）",
       "slug": "pdf-pdf-1d16ba4c-2",
       "date": "2026-06-06",
+      "createdAt": "2026-06-06",
+      "updatedAt": "2026-06-06",
       "tags": [
         "PDF导入",
         "Ra记录"
@@ -417,6 +492,8 @@
       "title": "Ra PDF记录：快捷选择",
       "slug": "pdf-pdf-9448c36c",
       "date": "2026-06-05",
+      "createdAt": "2026-06-05",
+      "updatedAt": "2026-06-05",
       "tags": [
         "PDF导入",
         "Ra记录"
@@ -429,6 +506,8 @@
       "title": "Ra PDF记录：想在锁屏页面显示Activity",
       "slug": "pdf-安卓开发记录-想在锁屏页面显示activity",
       "date": "2026-06-05",
+      "createdAt": "2026-06-05",
+      "updatedAt": "2026-06-05",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -442,6 +521,8 @@
       "title": "Ra PDF记录：数据库处理",
       "slug": "pdf-pdf-bb34844c",
       "date": "2026-06-05",
+      "createdAt": "2026-06-05",
+      "updatedAt": "2026-06-05",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -455,6 +536,8 @@
       "title": "Ra PDF记录：编版本",
       "slug": "pdf-pdf-516ee03a",
       "date": "2026-06-04",
+      "createdAt": "2026-06-04",
+      "updatedAt": "2026-06-04",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -468,6 +551,8 @@
       "title": "Ra PDF记录：自定义控件：跑马灯效果",
       "slug": "pdf-pdf-d5e24ae9",
       "date": "2026-06-04",
+      "createdAt": "2026-06-04",
+      "updatedAt": "2026-06-04",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -481,6 +566,8 @@
       "title": "Ra PDF记录：表盘参记",
       "slug": "pdf-pdf-b64179fb",
       "date": "2026-06-04",
+      "createdAt": "2026-06-04",
+      "updatedAt": "2026-06-04",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -494,6 +581,8 @@
       "title": "Ra PDF记录：表盘指针表盘（静态）",
       "slug": "pdf-pdf-ebdf72f8",
       "date": "2026-06-03",
+      "createdAt": "2026-06-03",
+      "updatedAt": "2026-06-03",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -507,6 +596,8 @@
       "title": "Ra PDF记录：表盘数字表盘（静态）",
       "slug": "pdf-pdf-a16fc926",
       "date": "2026-06-03",
+      "createdAt": "2026-06-03",
+      "updatedAt": "2026-06-03",
       "tags": [
         "PDF导入",
         "Ra记录",
@@ -520,6 +611,8 @@
       "title": "Ra PDF记录：解决native层报错，后台的堆栈信息能不能正常获取到",
       "slug": "pdf-开发记录-解决native层报错-后台的堆栈信息能不能正常获取到",
       "date": "2026-06-03",
+      "createdAt": "2026-06-03",
+      "updatedAt": "2026-06-03",
       "tags": [
         "PDF导入",
         "Ra记录",
