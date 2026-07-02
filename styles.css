@@ -848,6 +848,23 @@ textarea {
   background: #dce4ef;
 }
 
+.RaInlineFieldTools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 8px;
+  color: var(--RaMuted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.RaMiniFileButton {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .RaDangerButton {
   background: #fee4e2;
   color: var(--RaDanger);
@@ -1177,6 +1194,7 @@ textarea {
   color: #334155;
   margin: 0;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .RaPostPreview code {

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
     <title>Ra 后台管理</title>
-    <link rel="stylesheet" href="./styles.css?v=ra-20260702-1" />
+    <link rel="stylesheet" href="./styles.css?v=ra-20260702-2" />
   </head>
   <body class="RaPage RaAdminPage RaAuthPending">
     <header class="RaTopbar">
@@ -97,6 +97,13 @@
                 </label>
                 <label class="RaField RaWide">
                   正文 Markdown
+                  <div class="RaInlineFieldTools">
+                    <span>支持 Markdown 或纯文本</span>
+                    <label class="RaFileButton RaMiniFileButton">
+                      导入文本
+                      <input id="RaTextContentFileInput" type="file" accept=".txt,.md,.markdown,.log,.text,text/plain,text/markdown" />
+                    </label>
+                  </div>
                   <textarea id="RaContentInput" rows="16"></textarea>
                 </label>
                 <div class="RaField RaWide">
@@ -410,7 +417,7 @@
       </section>
     </main>
 
-    <script src="./admin-config.js?v=ra-20260702-1"></script>
-    <script src="./admin.js?v=ra-20260702-1"></script>
+    <script src="./admin-config.js?v=ra-20260702-2"></script>
+    <script src="./admin.js?v=ra-20260702-2"></script>
   </body>
 </html>

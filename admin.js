@@ -88,6 +88,7 @@ const RaEls = {
   accessPassword: document.querySelector("#RaAccessPasswordInput"),
   summary: document.querySelector("#RaSummaryInput"),
   content: document.querySelector("#RaContentInput"),
+  textContentFile: document.querySelector("#RaTextContentFileInput"),
   previewPost: document.querySelector("#RaPreviewPostButton"),
   postPreviewPanel: document.querySelector("#RaPostPreviewPanel"),
   postPreview: document.querySelector("#RaPostPreview"),
@@ -603,7 +604,7 @@ function parseMarkdownBlocks(content) {
 
   const flushParagraph = () => {
     if (!paragraph.length) return;
-    blocks.push({ type: "p", text: paragraph.join(" ") });
+    blocks.push({ type: "p", text: paragraph.join("\n") });
     paragraph = [];
   };
   const flushList = () => {
@@ -675,6 +676,56 @@ function renderInlineMarkdown(text) {
   return escapeHtml(text)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+}
+
+async function importTextContent(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  try {
+    if (!isSupportedTextFile(file)) {
+      throw new Error("请选择 txt、md、markdown、log 或 text 文本文件。");
+    }
+    const content = normalizeTextContent(await readTextFile(file));
+    RaEls.content.value = content;
+    if (!RaEls.title.value.trim()) {
+      RaEls.title.value = file.name.replace(/\.[^.]+$/, "");
+      RaEls.slug.value = slugify(RaEls.title.value);
+    }
+    if (!RaEls.summary.value.trim()) {
+      RaEls.summary.value = content.split(/\n\s*\n/).find(Boolean)?.trim().slice(0, 120) || "";
+    }
+    refreshPostPreviewIfOpen();
+    renderPostPreview();
+    setStatus(`已导入 ${file.name}，换行和 Markdown 结构会按发布效果预览。`);
+  } catch (error) {
+    setStatus(`文本导入失败：${error.message}`);
+  }
+}
+
+function isSupportedTextFile(file) {
+  const name = (file.name || "").toLowerCase();
+  const type = (file.type || "").toLowerCase();
+  return (
+    type.startsWith("text/") ||
+    [".txt", ".md", ".markdown", ".log", ".text"].some((ext) => name.endsWith(ext))
+  );
+}
+
+function readTextFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("读取文本文件失败。"));
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsText(file, "utf-8");
+  });
+}
+
+function normalizeTextContent(value) {
+  return String(value || "")
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\u00a0/g, " ");
 }
 
 async function addAttachments(event) {
@@ -1896,6 +1947,7 @@ RaEls.newPost.addEventListener("click", createNewPost);
 RaEls.form.addEventListener("submit", saveCurrentPost);
 RaEls.previewPost.addEventListener("click", renderPostPreview);
 RaEls.deletePost.addEventListener("click", deleteSelectedPost);
+RaEls.textContentFile.addEventListener("change", importTextContent);
 RaEls.attachmentFile.addEventListener("change", addAttachments);
 RaEls.clearAttachments.addEventListener("click", clearAttachments);
 RaEls.attachmentList.addEventListener("click", (event) => {

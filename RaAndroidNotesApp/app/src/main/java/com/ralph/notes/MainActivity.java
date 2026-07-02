@@ -1763,21 +1763,47 @@ public class MainActivity extends Activity {
     }
 
     private void renderMarkdown(LinearLayout parent, String markdown) {
-        String[] lines = markdown == null ? new String[0] : markdown.split("\\n");
-        for (String raw : lines) {
+        String[] lines = markdown == null ? new String[0] : markdown.replace("\r\n", "\n").replace("\r", "\n").split("\\n", -1);
+        boolean inCode = false;
+        StringBuilder code = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            String raw = lines[i];
             String line = raw.trim();
-            if (line.isEmpty()) {
+            if (line.startsWith("```")) {
+                if (inCode) {
+                    parent.addView(monoText(code.toString(), 13, TEXT));
+                    code.setLength(0);
+                    inCode = false;
+                } else {
+                    inCode = true;
+                }
+            } else if (inCode) {
+                if (code.length() > 0) code.append("\n");
+                code.append(raw);
+            } else if (isSetextUnderline(line) && parent.getChildCount() == 0) {
                 parent.addView(spacer(6));
+            } else if (i + 1 < lines.length && isSetextUnderline(lines[i + 1].trim()) && !line.isEmpty()) {
+                parent.addView(title(line, lines[i + 1].trim().startsWith("=") ? 22 : 20));
+                i++;
+            } else if (line.isEmpty()) {
+                parent.addView(spacer(6));
+            } else if (line.startsWith("# ")) {
+                parent.addView(title(line.substring(2), 22));
             } else if (line.startsWith("## ")) {
                 parent.addView(title(line.substring(3), 20));
+            } else if (line.startsWith("### ")) {
+                parent.addView(title(line.substring(4), 18));
             } else if (line.startsWith("- ") || line.startsWith("* ")) {
                 parent.addView(bullet(line.substring(2)));
-            } else if (line.startsWith("```")) {
-                parent.addView(monoText("----", 13, MUTED));
             } else {
-                parent.addView(paragraph(line));
+                parent.addView(paragraph(raw));
             }
         }
+        if (code.length() > 0) parent.addView(monoText(code.toString(), 13, TEXT));
+    }
+
+    private boolean isSetextUnderline(String line) {
+        return line != null && line.length() >= 3 && (line.matches("=+") || line.matches("-+"));
     }
 
     private void clear() {

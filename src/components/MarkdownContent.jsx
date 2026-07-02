@@ -31,7 +31,7 @@ export function parseMarkdownBlocks(content) {
 
   const flushParagraph = () => {
     if (!paragraph.length) return
-    blocks.push({ type: 'p', text: paragraph.join(' ') })
+    blocks.push({ type: 'p', text: paragraph.join('\n') })
     paragraph = []
   }
 
@@ -168,7 +168,7 @@ export default function MarkdownContent({ content }) {
         }
 
         return (
-          <p key={index} className="whitespace-normal break-words text-base leading-8 text-slate-700">
+          <p key={index} className="whitespace-pre-wrap break-words text-base leading-8 text-slate-700">
             {parseInline(block.text)}
           </p>
         )
