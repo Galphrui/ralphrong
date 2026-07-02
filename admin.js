@@ -88,6 +88,9 @@ const RaEls = {
   accessPassword: document.querySelector("#RaAccessPasswordInput"),
   summary: document.querySelector("#RaSummaryInput"),
   content: document.querySelector("#RaContentInput"),
+  previewPost: document.querySelector("#RaPreviewPostButton"),
+  postPreviewPanel: document.querySelector("#RaPostPreviewPanel"),
+  postPreview: document.querySelector("#RaPostPreview"),
   attachmentFile: document.querySelector("#RaAttachmentFileInput"),
   attachmentList: document.querySelector("#RaAttachmentList"),
   clearAttachments: document.querySelector("#RaClearAttachmentsButton"),
@@ -550,6 +553,128 @@ function renderAttachmentList() {
       `,
     )
     .join("");
+}
+
+function renderPostPreview() {
+  if (!RaEls.postPreviewPanel || !RaEls.postPreview) return;
+  const title = RaEls.title.value.trim() || "未命名文章";
+  const tags = RaEls.tags.value.split(",").map((tag) => tag.trim()).filter(Boolean);
+  const summary = RaEls.summary.value.trim();
+  const meta = [RaEls.date.value || new Date().toISOString().slice(0, 10), `${estimateReadingMinutes(RaEls.content.value)} 分钟阅读`];
+  RaEls.postPreview.innerHTML = `
+    <header class="RaPreviewHeader">
+      <div class="RaPreviewTags">${tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
+      <h1>${escapeHtml(title)}</h1>
+      <p>${meta.map(escapeHtml).join(" · ")}</p>
+      ${summary ? `<p>${escapeHtml(summary)}</p>` : ""}
+    </header>
+    ${renderMarkdownPreview(RaEls.content.value)}
+  `;
+  RaEls.postPreviewPanel.hidden = false;
+}
+
+function refreshPostPreviewIfOpen() {
+  if (RaEls.postPreviewPanel && !RaEls.postPreviewPanel.hidden) renderPostPreview();
+}
+
+function renderMarkdownPreview(content) {
+  return parseMarkdownBlocks(content)
+    .map((block) => {
+      if (block.type === "h1") return `<h1>${renderInlineMarkdown(block.text)}</h1>`;
+      if (block.type === "h2") return `<h2>${renderInlineMarkdown(block.text)}</h2>`;
+      if (block.type === "h3") return `<h3>${renderInlineMarkdown(block.text)}</h3>`;
+      if (block.type === "hr") return "<hr />";
+      if (block.type === "code") return `<pre><code>${escapeHtml(block.text)}</code></pre>`;
+      if (block.type === "ul") {
+        return `<ul>${block.items.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("")}</ul>`;
+      }
+      return `<p>${renderInlineMarkdown(block.text)}</p>`;
+    })
+    .join("");
+}
+
+function parseMarkdownBlocks(content) {
+  const lines = String(content || "").replace(/\r\n?/g, "\n").split("\n");
+  const blocks = [];
+  let paragraph = [];
+  let listItems = [];
+  let codeLines = [];
+  let isCode = false;
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    blocks.push({ type: "p", text: paragraph.join(" ") });
+    paragraph = [];
+  };
+  const flushList = () => {
+    if (!listItems.length) return;
+    blocks.push({ type: "ul", items: listItems });
+    listItems = [];
+  };
+  const pushHeading = (level, text) => {
+    const clean = String(text || "").trim();
+    if (clean) blocks.push({ type: `h${Math.min(Math.max(level, 1), 3)}`, text: clean });
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("```")) {
+      if (isCode) {
+        blocks.push({ type: "code", text: codeLines.join("\n") });
+        codeLines = [];
+        isCode = false;
+      } else {
+        flushParagraph();
+        flushList();
+        isCode = true;
+      }
+      return;
+    }
+    if (isCode) {
+      codeLines.push(line);
+      return;
+    }
+    const setextMatch = trimmed.match(/^(=+|-+)$/);
+    if (setextMatch) {
+      flushList();
+      if (paragraph.length) {
+        pushHeading(setextMatch[1][0] === "=" ? 1 : 2, paragraph.join(" "));
+        paragraph = [];
+      } else if (trimmed.length >= 3) {
+        blocks.push({ type: "hr" });
+      }
+      return;
+    }
+    if (!trimmed) {
+      flushParagraph();
+      flushList();
+      return;
+    }
+    const atxMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (atxMatch) {
+      flushParagraph();
+      flushList();
+      pushHeading(atxMatch[1].length, atxMatch[2].replace(/\s+#+$/, ""));
+      return;
+    }
+    if (/^[-*+]\s+/.test(trimmed)) {
+      flushParagraph();
+      listItems.push(trimmed.replace(/^[-*+]\s+/, ""));
+      return;
+    }
+    paragraph.push(trimmed);
+  });
+
+  flushParagraph();
+  flushList();
+  if (codeLines.length) blocks.push({ type: "code", text: codeLines.join("\n") });
+  return blocks;
+}
+
+function renderInlineMarkdown(text) {
+  return escapeHtml(text)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 }
 
 async function addAttachments(event) {
@@ -1769,6 +1894,7 @@ RaEls.adminPostList.addEventListener("click", (event) => {
 });
 RaEls.newPost.addEventListener("click", createNewPost);
 RaEls.form.addEventListener("submit", saveCurrentPost);
+RaEls.previewPost.addEventListener("click", renderPostPreview);
 RaEls.deletePost.addEventListener("click", deleteSelectedPost);
 RaEls.attachmentFile.addEventListener("change", addAttachments);
 RaEls.clearAttachments.addEventListener("click", clearAttachments);
@@ -1811,7 +1937,12 @@ RaEls.profileSectionList.addEventListener("click", (event) => {
 });
 RaEls.title.addEventListener("input", () => {
   if (!RaSelectedSlug) RaEls.slug.value = slugify(RaEls.title.value);
+  refreshPostPreviewIfOpen();
 });
+RaEls.date.addEventListener("input", refreshPostPreviewIfOpen);
+RaEls.tags.addEventListener("input", refreshPostPreviewIfOpen);
+RaEls.summary.addEventListener("input", refreshPostPreviewIfOpen);
+RaEls.content.addEventListener("input", refreshPostPreviewIfOpen);
 RaEls.visibility.addEventListener("change", updateAccessPasswordField);
 RaEls.createAccount.addEventListener("click", createAccount);
 RaEls.resetPassword.addEventListener("click", resetAccountPassword);

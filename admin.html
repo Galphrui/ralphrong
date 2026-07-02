@@ -116,10 +116,18 @@
               </div>
               <div class="RaActions">
                 <button type="submit">保存到数据</button>
+                <button id="RaPreviewPostButton" class="RaSecondaryButton" type="button">预览发布效果</button>
                 <button id="RaDeletePostButton" class="RaDangerButton" type="button">删除文章</button>
                 <button id="RaPublishButton" class="RaPublishButton" type="button">发布到外网</button>
               </div>
             </form>
+            <section class="RaPostPreviewPanel" id="RaPostPreviewPanel" hidden>
+              <div class="RaSectionHeading RaCompactHeading">
+                <p class="RaEyebrow">Preview</p>
+                <h3>发布预览</h3>
+              </div>
+              <article class="RaPostPreview" id="RaPostPreview"></article>
+            </section>
             <p class="RaStatus" id="RaStatusText" role="status"></p>
           </section>
         </section>
