@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Ra 后台管理</title>
+    <link rel="stylesheet" href="./styles.css?v=ra-20260702-6" />
+  </head>
+  <body class="RaPage RaAdminPage RaAuthPending">
+    <header class="RaTopbar">
+      <a class="RaBrand" href="./index.html">
+        <span class="RaBrandMark">Ra</span>
+        <span>
+          <strong>Ralph Admin</strong>
+          <small>Content Studio</small>
+        </span>
+      </a>
+      <nav class="RaNav">
+        <a class="RaTopLink" href="./index.html">前台</a>
+        <div class="RaAdminTabs" role="tablist" aria-label="后台管理导航">
+          <button class="RaTabButton RaActive" type="button" data-ra-admin-tab="posts">文章</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="document">文档编译</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="code">代码库</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="site">站点</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="profile">简历</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="accounts" id="RaAccountsNavLink">账号</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="settings">仓库</button>
+        </div>
+        <button id="RaLogoutButton" class="RaNavButton" type="button">退出</button>
+      </nav>
+    </header>
+
+    <main class="RaAdminShell" id="RaAdminShell" hidden>
+      <section class="RaWorkspacePanel" id="RaPostsPanel" data-ra-admin-panel="posts">
+        <div class="RaWorkspaceHeader">
+          <div class="RaSectionHeading">
+            <p class="RaEyebrow">Posts</p>
+            <h1>文章管理</h1>
+          </div>
+          <div class="RaPostCommands">
+            <label class="RaSearchField">
+              <span>搜索文章</span>
+              <input id="RaPostSearchInput" type="search" placeholder="搜索标题、标签、摘要或正文" />
+            </label>
+            <button id="RaTogglePostListButton" class="RaSecondaryButton" type="button">折叠列表</button>
+            <button id="RaNewPostButton" type="button">新建文章</button>
+          </div>
+        </div>
+
+        <section class="RaAdminGrid" id="RaPostWorkspace">
+          <aside class="RaPanel RaPostListPanel">
+            <div class="RaSectionHeading RaCompactHeading">
+              <p class="RaEyebrow">Library</p>
+              <h2>文章列表</h2>
+              <span id="RaPostCountText" class="RaCountText"></span>
+            </div>
+            <div class="RaList" id="RaAdminPostList"></div>
+          </aside>
+
+          <section class="RaPanel" id="RaEditorPanel">
+            <div class="RaSectionHeading">
+              <p class="RaEyebrow">Editor</p>
+              <h2>内容编辑</h2>
+            </div>
+            <form id="RaPostForm">
+              <div class="RaFormGrid">
+                <label class="RaField">
+                  标题
+                  <input id="RaTitleInput" required />
+                </label>
+                <label class="RaField">
+                  Slug
+                  <input id="RaSlugInput" required />
+                </label>
+                <label class="RaField">
+                  发布日期
+                  <input id="RaDateInput" type="date" required />
+                </label>
+                <label class="RaField">
+                  标签，逗号分隔
+                  <input id="RaTagsInput" placeholder="JavaScript, 架构" />
+                </label>
+                <label class="RaField">
+                  可见权限
+                  <select id="RaVisibilityInput">
+                    <option value="public">所有人可见</option>
+                    <option value="password">输入密码可见</option>
+                  </select>
+                </label>
+                <label class="RaField">
+                  访问密码
+                  <input id="RaAccessPasswordInput" type="password" autocomplete="new-password" placeholder="密码文章必填" />
+                </label>
+                <label class="RaField RaWide">
+                  摘要
+                  <textarea id="RaSummaryInput" rows="3"></textarea>
+                </label>
+                <label class="RaField RaWide">
+                  正文 Markdown
+                  <div class="RaInlineFieldTools">
+                    <span>支持 Markdown 或纯文本</span>
+                    <label class="RaFileButton RaMiniFileButton">
+                      导入文本
+                      <input id="RaTextContentFileInput" type="file" accept=".txt,.md,.markdown,.log,.text,text/plain,text/markdown" />
+                    </label>
+                  </div>
+                  <textarea id="RaContentInput" rows="16"></textarea>
+                </label>
+                <div class="RaField RaWide">
+                  文章附件
+                  <div class="RaAttachmentEditor">
+                    <div class="RaActions RaCompactActions">
+                      <label class="RaFileButton">
+                        上传附件
+                        <input id="RaAttachmentFileInput" type="file" multiple />
+                      </label>
+                      <button id="RaClearAttachmentsButton" class="RaSecondaryButton" type="button">清空附件</button>
+                    </div>
+                    <div class="RaAttachmentList" id="RaAttachmentList"></div>
+                    <p class="RaHint">附件会保存到文章数据中，前台和 App 会在文章详情页提供下载或打开入口。建议单个附件控制在 2MB 内。</p>
+                  </div>
+                </div>
+              </div>
+              <div class="RaActions">
+                <button type="submit">保存到数据</button>
+                <button id="RaPreviewPostButton" class="RaSecondaryButton" type="button">预览发布效果</button>
+                <button id="RaDeletePostButton" class="RaDangerButton" type="button">删除文章</button>
+                <button id="RaPublishButton" class="RaPublishButton" type="button">发布到外网</button>
+              </div>
+            </form>
+            <section class="RaPostPreviewPanel" id="RaPostPreviewPanel" hidden>
+              <div class="RaSectionHeading RaCompactHeading">
+                <p class="RaEyebrow">Preview</p>
+                <h3>发布预览</h3>
+              </div>
+              <article class="RaPostPreview" id="RaPostPreview"></article>
+            </section>
+            <p class="RaStatus" id="RaStatusText" role="status"></p>
+          </section>
+        </section>
+      </section>
+
+      <section class="RaWorkspacePanel" id="RaDocumentPanel" data-ra-admin-panel="document" hidden>
+        <div class="RaPanel">
+          <div class="RaWorkspaceHeader">
+            <div class="RaSectionHeading">
+              <p class="RaEyebrow">Document Studio</p>
+              <h1>文档编译</h1>
+            </div>
+            <div class="RaActions RaCompactActions">
+              <button id="RaDocSyncFromPostButton" class="RaSecondaryButton" type="button">读取当前文章</button>
+              <button id="RaDocApplyToPostButton" type="button">同步到文章</button>
+              <button id="RaDocPublishButton" class="RaPublishButton" type="button">保存并发布</button>
+              <span class="RaDocInlineStatus" id="RaDocInlineStatus" role="status"></span>
+            </div>
+          </div>
+
+          <div class="RaDocMetaGrid">
+            <label class="RaField">
+              标题
+              <input id="RaDocTitleInput" />
+            </label>
+            <label class="RaField">
+              Slug
+              <input id="RaDocSlugInput" />
+            </label>
+            <label class="RaField">
+              发布日期
+              <input id="RaDocDateInput" type="date" />
+            </label>
+            <label class="RaField">
+              标签
+              <input id="RaDocTagsInput" placeholder="逗号分隔" />
+            </label>
+            <label class="RaField">
+              可见权限
+              <select id="RaDocVisibilityInput">
+                <option value="public">所有人可见</option>
+                <option value="password">输入密码可见</option>
+              </select>
+            </label>
+            <label class="RaField">
+              访问密码
+              <input id="RaDocAccessPasswordInput" type="password" autocomplete="new-password" />
+            </label>
+            <label class="RaField RaWide">
+              摘要
+              <textarea id="RaDocSummaryInput" rows="3"></textarea>
+            </label>
+          </div>
+
+          <div class="RaDocStudio">
+            <aside class="RaDocTools">
+              <div class="RaSectionHeading RaCompactHeading">
+                <p class="RaEyebrow">Mode</p>
+                <h3>编辑模式</h3>
+              </div>
+              <div class="RaSegmented" id="RaDocModeGroup">
+                <button class="RaActive" type="button" data-ra-doc-mode="plain">纯文本</button>
+                <button type="button" data-ra-doc-mode="markdown">MD</button>
+                <button type="button" data-ra-doc-mode="rich">高级编辑</button>
+              </div>
+
+              <label class="RaField">
+                标题级别
+                <select id="RaDocHeadingInput">
+                  <option value="1">一级标题</option>
+                  <option value="2">二级标题</option>
+                  <option value="3">三级标题</option>
+                  <option value="4">四级标题</option>
+                  <option value="5">五级标题</option>
+                  <option value="6">六级标题</option>
+                </select>
+              </label>
+              <button id="RaDocApplyHeadingButton" class="RaSecondaryButton" type="button">应用标题</button>
+
+              <label class="RaField">
+                文字大小
+                <select id="RaDocFontSizeInput">
+                  <option value="14">14px</option>
+                  <option value="16" selected>16px</option>
+                  <option value="18">18px</option>
+                  <option value="20">20px</option>
+                  <option value="24">24px</option>
+                  <option value="28">28px</option>
+                  <option value="32">32px</option>
+                </select>
+              </label>
+              <label class="RaField">
+                文字样式
+                <select id="RaDocFontFamilyInput">
+                  <option value="">默认</option>
+                  <option value="system-ui">系统无衬线</option>
+                  <option value="serif">衬线</option>
+                  <option value="monospace">等宽</option>
+                  <option value="cursive">手写</option>
+                </select>
+              </label>
+              <div class="RaDocStyleButtons">
+                <button id="RaDocBoldButton" class="RaSecondaryButton" type="button">B</button>
+                <button id="RaDocItalicButton" class="RaSecondaryButton" type="button">I</button>
+                <button id="RaDocUnderlineButton" class="RaSecondaryButton" type="button">U</button>
+              </div>
+
+              <div class="RaDocColorGroup">
+                <strong>文字颜色</strong>
+                <div class="RaColorSwatches" id="RaDocTextSwatches"></div>
+                <input id="RaDocTextColorInput" type="color" value="#0f172a" />
+              </div>
+              <div class="RaDocColorGroup">
+                <strong>背景颜色</strong>
+                <div class="RaColorSwatches" id="RaDocBgSwatches"></div>
+                <input id="RaDocBgColorInput" type="color" value="#fef3c7" />
+              </div>
+              <button id="RaDocApplyStyleButton" type="button">应用文字格式</button>
+
+              <div class="RaDocToggles">
+                <label><input id="RaDocLineNumbersInput" type="checkbox" checked /> 行号</label>
+                <label><input id="RaDocRulerInput" type="checkbox" checked /> 标尺</label>
+                <label><input id="RaDocGridInput" type="checkbox" /> 网格</label>
+              </div>
+
+              <div class="RaSectionHeading RaCompactHeading">
+                <p class="RaEyebrow">Insert</p>
+                <h3>插入内容</h3>
+              </div>
+              <div class="RaActions RaCompactActions">
+                <button id="RaDocInsertCodeButton" class="RaSecondaryButton" type="button">插入代码</button>
+                <label class="RaFileButton">
+                  插入图片
+                  <input id="RaDocImageInput" type="file" accept="image/*" />
+                </label>
+                <label class="RaFileButton">
+                  插入附件卡片
+                  <input id="RaDocAttachmentInput" type="file" multiple />
+                </label>
+              </div>
+            </aside>
+
+            <section class="RaDocEditorPane">
+              <div class="RaDocRuler" id="RaDocRuler"></div>
+              <div class="RaDocEditorBox" id="RaDocEditorBox">
+                <pre id="RaDocLineNumbers" class="RaDocLineNumbers">1</pre>
+                <textarea id="RaDocContentInput" spellcheck="false"></textarea>
+                <div id="RaDocRichEditor" class="RaDocRichEditor" contenteditable="true" hidden></div>
+              </div>
+            </section>
+
+            <section class="RaDocPreviewPane">
+              <div class="RaSectionHeading RaCompactHeading">
+                <p class="RaEyebrow">Preview</p>
+                <h3>编译预览</h3>
+              </div>
+              <article class="RaPostPreview RaDocPreview" id="RaDocPreview"></article>
+            </section>
+          </div>
+          <p class="RaStatus" id="RaDocStatusText" role="status"></p>
+        </div>
+      </section>
+
+      <section class="RaWorkspacePanel" id="RaCodePanel" data-ra-admin-panel="code" hidden>
+        <div class="RaPanel">
+          <div class="RaSectionHeading">
+            <p class="RaEyebrow">Code Library</p>
+            <h2>代码库与模块配置</h2>
+          </div>
+          <p class="RaHint">这里直接编辑结构化 JSON，适合先存放代码片段、仓库说明和模块显隐/排序配置；前台、Android、iOS 会读取同一份数据。</p>
+          <div class="RaCodeManager">
+            <aside>
+              <div class="RaSectionHeading RaCompactHeading">
+                <p class="RaEyebrow">Code Items</p>
+                <h3>代码条目</h3>
+              </div>
+              <div class="RaList RaCodeList" id="RaCodeList"></div>
+            </aside>
+            <section>
+              <div class="RaFormGrid">
+                <label class="RaField">
+                  名称
+                  <input id="RaCodeNameInput" placeholder="例如：闹钟状态排查脚本" />
+                </label>
+                <label class="RaField">
+                  预设语言
+                  <select id="RaCodeLanguagePresetInput"></select>
+                </label>
+                <label class="RaField">
+                  自定义语言
+                  <input id="RaCodeLanguageInput" placeholder="留空则使用预设，例如 KT / ADB / Mermaid" />
+                </label>
+                <label class="RaField">
+                  标签，逗号分隔
+                  <input id="RaCodeTagsInput" placeholder="Android, Debug" />
+                </label>
+                <label class="RaField">
+                  源路径
+                  <input id="RaCodePathInput" placeholder="snippets/android/debug.md" />
+                </label>
+                <label class="RaField RaWide">
+                  外部链接
+                  <input id="RaCodeUrlInput" placeholder="https://github.com/..." />
+                </label>
+                <label class="RaField RaWide">
+                  描述
+                  <textarea id="RaCodeDescriptionInput" rows="3"></textarea>
+                </label>
+                <label class="RaField RaWide">
+                  代码内容
+                  <textarea id="RaCodeSnippetInput" rows="12" spellcheck="false"></textarea>
+                </label>
+                <div class="RaField RaWide">
+                  代码附件
+                  <div class="RaAttachmentEditor">
+                    <div class="RaActions RaCompactActions">
+                      <label class="RaFileButton">
+                        上传附件
+                        <input id="RaCodeAttachmentFileInput" type="file" multiple />
+                      </label>
+                      <button id="RaClearCodeAttachmentsButton" class="RaSecondaryButton" type="button">清空附件</button>
+                    </div>
+                    <div class="RaAttachmentList" id="RaCodeAttachmentList"></div>
+                  </div>
+                </div>
+                <label class="RaField RaWide">
+                  备注
+                  <textarea id="RaCodeNotesInput" rows="3"></textarea>
+                </label>
+              </div>
+              <div class="RaActions">
+                <button id="RaNewCodeButton" class="RaSecondaryButton" type="button">新建代码条目</button>
+                <button id="RaFormatCodeButton" class="RaSecondaryButton" type="button">按语言格式化</button>
+                <button id="RaDownloadCodeButton" class="RaSecondaryButton" type="button">下载当前代码</button>
+                <button id="RaSaveCodeItemButton" type="button">保存代码条目</button>
+                <button id="RaDeleteCodeItemButton" class="RaDangerButton" type="button">删除代码条目</button>
+              </div>
+            </section>
+          </div>
+          <div class="RaFormGrid">
+            <label class="RaField RaWide">
+              代码库 repositories
+              <textarea id="RaRepositoriesInput" rows="18" spellcheck="false"></textarea>
+            </label>
+            <label class="RaField RaWide">
+              模块配置 modules
+              <textarea id="RaModulesInput" rows="14" spellcheck="false"></textarea>
+            </label>
+          </div>
+          <div class="RaActions">
+            <button id="RaSaveCodeButton" type="button">保存代码库配置</button>
+            <button id="RaPublishCodeButton" class="RaPublishButton" type="button">保存并发布</button>
+          </div>
+          <p class="RaStatus" id="RaCodeStatusText" role="status"></p>
+        </div>
+      </section>
+
+      <section class="RaWorkspacePanel" id="RaSettingsPanel" data-ra-admin-panel="settings" hidden>
+        <div class="RaSectionHeading">
+          <p class="RaEyebrow">Repository</p>
+          <h1>仓库连接</h1>
+        </div>
+        <div class="RaQuickConnect">
+          <label class="RaField">
+            GitHub 仓库地址
+            <input id="RaRepoUrlInput" placeholder="https://github.com/Galphrui/ralphrong" />
+          </label>
+          <div class="RaActions">
+            <button id="RaApplyRepoUrlButton" type="button">应用仓库地址</button>
+            <button id="RaDetectRepoButton" class="RaSecondaryButton" type="button">从当前网址识别</button>
+            <a id="RaOpenDataLink" class="RaLinkButton" href="#" target="_blank" rel="noreferrer">打开数据文件</a>
+          </div>
+          <p class="RaHint" id="RaRepoHint">填写仓库地址后，后台会自动生成 owner、repo、branch 和数据路径。</p>
+        </div>
+        <div class="RaFormGrid">
+          <label class="RaField">
+            GitHub 用户名或组织
+            <input id="RaOwnerInput" autocomplete="username" placeholder="your-github-name" />
+          </label>
+          <label class="RaField">
+            仓库名
+            <input id="RaRepoInput" placeholder="your-blog-repo" />
+          </label>
+          <label class="RaField">
+            分支
+            <input id="RaBranchInput" placeholder="main" />
+          </label>
+          <label class="RaField">
+            数据文件路径
+            <input id="RaPathInput" placeholder="data/posts.json" />
+          </label>
+        </div>
+        <div class="RaActions">
+          <button id="RaSaveSettingsButton" type="button">保存设置</button>
+          <button id="RaLoadRemoteButton" class="RaSecondaryButton" type="button">读取数据</button>
+          <button id="RaSyncDataButton" class="RaPublishButton" type="button">推送数据</button>
+          <button id="RaOpenRepoButton" class="RaSecondaryButton" type="button">打开仓库</button>
+          <button id="RaDownloadButton" class="RaSecondaryButton" type="button">导出 JSON</button>
+          <label class="RaFileButton">
+            导入 JSON
+            <input id="RaImportInput" type="file" accept="application/json" />
+          </label>
+        </div>
+        <p class="RaHint">本地后台会把数据写入文件，并可直接提交推送到 GitHub；外网后台会通过 Worker 直接写入 GitHub。</p>
+        <p class="RaStatus" id="RaDeployStatusText" role="status"></p>
+      </section>
+
+      <section class="RaWorkspacePanel" id="RaSitePanel" data-ra-admin-panel="site" hidden>
+        <div class="RaPanel">
+        <div class="RaSectionHeading">
+          <p class="RaEyebrow">Site</p>
+          <h2>站点信息</h2>
+        </div>
+        <div class="RaFormGrid">
+          <label class="RaField">
+            站点标题
+            <input id="RaSiteTitleInput" />
+          </label>
+          <label class="RaField">
+            副标题
+            <input id="RaSiteSubtitleInput" />
+          </label>
+          <label class="RaField">
+            作者
+            <input id="RaAuthorInput" />
+          </label>
+          <label class="RaField RaWide">
+            作者简介
+            <textarea id="RaBioInput" rows="3"></textarea>
+          </label>
+        </div>
+        <div class="RaActions">
+          <button id="RaSaveSiteButton" type="button">保存站点信息</button>
+          <button id="RaPublishSiteButton" class="RaPublishButton" type="button">保存并发布</button>
+        </div>
+        <p class="RaStatus" id="RaSiteStatusText" role="status"></p>
+        </div>
+      </section>
+
+      <section class="RaWorkspacePanel" id="RaProfilePanel" data-ra-admin-panel="profile" hidden>
+        <div class="RaPanel">
+        <div class="RaSectionHeading">
+          <p class="RaEyebrow">Profile</p>
+          <h2>Ra 个人简历</h2>
+        </div>
+        <div class="RaFormGrid">
+          <label class="RaField">
+            姓名 / 署名
+            <input id="RaProfileNameInput" />
+          </label>
+          <label class="RaField">
+            标题
+            <input id="RaProfileHeadlineInput" />
+          </label>
+          <label class="RaField RaWide">
+            个人照片（可选）
+            <input id="RaProfilePhotoInput" placeholder="可粘贴图片地址，也可选择本地图片上传" />
+          </label>
+          <div class="RaProfilePhotoEditor RaWide">
+            <div class="RaProfilePhotoPreview" id="RaProfilePhotoPreview">
+              <span>照片预览</span>
+            </div>
+            <div>
+              <div class="RaActions RaCompactActions">
+                <label class="RaFileButton">
+                  选择本地图片
+                  <input id="RaProfilePhotoFileInput" type="file" accept="image/*" />
+                </label>
+                <button id="RaClearProfilePhotoButton" class="RaSecondaryButton" type="button">清除照片</button>
+              </div>
+              <p class="RaHint">本地图片会自动压缩后保存到简历数据中，发布后外网可直接显示。</p>
+            </div>
+          </div>
+          <label class="RaField RaWide">
+            联系信息（每行一条）
+            <textarea id="RaProfileContactsInput" rows="3"></textarea>
+          </label>
+          <label class="RaField RaWide">
+            简介
+            <textarea id="RaProfileSummaryInput" rows="3"></textarea>
+          </label>
+        </div>
+        <div class="RaProfileBuilder">
+          <div class="RaSectionHeading">
+            <p class="RaEyebrow">Sections</p>
+            <h3>简历栏目</h3>
+          </div>
+          <div class="RaProfileSectionList" id="RaProfileSectionList"></div>
+          <button id="RaAddProfileSectionButton" class="RaSecondaryButton" type="button">添加栏目</button>
+        </div>
+        <div class="RaActions">
+          <button id="RaSaveProfileButton" type="button">保存简历</button>
+          <button id="RaPublishProfileButton" class="RaPublishButton" type="button">保存并发布简历</button>
+        </div>
+        <p class="RaStatus" id="RaProfileStatusText" role="status"></p>
+        </div>
+      </section>
+
+      <section class="RaWorkspacePanel" id="RaAccountsPanel" data-ra-admin-panel="accounts" hidden>
+        <div class="RaPanel">
+        <div class="RaSectionHeading">
+          <p class="RaEyebrow">Accounts</p>
+          <h2>账号管理</h2>
+        </div>
+        <p class="RaHint">
+          重置指令用于登录页找回密码。账号新增、删除和直接改密只在本地后台服务中可用；本地修改后会自动推送账号数据。若外网提示密码哈希迭代数超限，请在这里重置一次账号密码。
+        </p>
+        <div class="RaFormGrid">
+          <label class="RaField RaWide">
+            新重置指令
+            <input id="RaResetCodeInput" type="password" autocomplete="new-password" placeholder="至少 8 位" />
+          </label>
+        </div>
+        <div class="RaActions">
+          <button id="RaSaveResetCodeButton" type="button">保存重置指令</button>
+        </div>
+        <div id="RaLocalAccountTools">
+          <div class="RaList" id="RaAccountList"></div>
+          <div class="RaFormGrid">
+          <label class="RaField">
+            账号
+            <input id="RaAccountUserInput" placeholder="new-admin" />
+          </label>
+          <label class="RaField">
+            新密码
+            <input id="RaAccountPasswordInput" type="password" autocomplete="new-password" />
+          </label>
+          </div>
+          <div class="RaActions">
+            <button id="RaCreateAccountButton" type="button">新增账号</button>
+            <button id="RaResetPasswordButton" class="RaSecondaryButton" type="button">重置密码</button>
+            <button id="RaDeleteAccountButton" class="RaDangerButton" type="button">删除账号</button>
+            <button id="RaRefreshAccountsButton" class="RaSecondaryButton" type="button">刷新账号</button>
+          </div>
+        </div>
+        <p class="RaStatus" id="RaAccountStatus" role="status"></p>
+        </div>
+      </section>
+    </main>
+
+    <script src="./admin-config.js?v=ra-20260702-6"></script>
+    <script src="./admin.js?v=ra-20260702-6"></script>
+  </body>
+</html>

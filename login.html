@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Ra 管理员登录</title>
+    <link rel="stylesheet" href="./styles.css?v=ra-20260624-3" />
+  </head>
+  <body class="RaPage RaLoginPage">
+    <header class="RaTopbar">
+      <a class="RaBrand" href="./index.html">
+        <span class="RaBrandMark">Ra</span>
+        <span>
+          <strong>Ralph Admin</strong>
+          <small>Secure Gate</small>
+        </span>
+      </a>
+      <nav class="RaNav">
+        <a href="./index.html">前台</a>
+        <a href="./admin.html">后台</a>
+      </nav>
+    </header>
+
+    <main class="RaLoginShell">
+      <section class="RaLoginPanel">
+        <div class="RaSectionHeading">
+          <p class="RaEyebrow">Ra Login</p>
+          <h1>管理员登录</h1>
+        </div>
+        <p class="RaHint">
+          本地可以注册和管理账号；外网只能使用已注册账号登录。忘记密码时可使用后台配置的重置指令设置新密码。
+        </p>
+        <div class="RaFormGrid">
+          <label class="RaField">
+            管理员账号
+            <input id="RaLoginUserInput" autocomplete="username" placeholder="Galphrui" />
+          </label>
+          <label class="RaField">
+            管理员密码
+            <input
+              id="RaLoginPasswordInput"
+              type="password"
+              autocomplete="current-password"
+              placeholder="请输入后台密码"
+            />
+          </label>
+          <label class="RaField RaWide" id="RaRegisterPasswordField">
+            确认密码
+            <input
+              id="RaRegisterPasswordInput"
+              type="password"
+              autocomplete="new-password"
+              placeholder="注册或重置密码时填写"
+            />
+          </label>
+          <label class="RaField RaWide" id="RaResetCodeField" hidden>
+            重置指令
+            <input
+              id="RaResetCodeInput"
+              type="password"
+              autocomplete="off"
+              placeholder="请输入后台配置的重置指令"
+            />
+          </label>
+        </div>
+        <div class="RaActions">
+          <button id="RaLoginButton" type="button">登录后台</button>
+          <button id="RaRegisterButton" class="RaSecondaryButton" type="button">本地注册账号</button>
+          <button id="RaShowResetButton" class="RaSecondaryButton" type="button">重置密码</button>
+          <button id="RaResetPasswordButton" class="RaDangerButton" type="button" hidden>确认重置</button>
+          <a id="RaGuideLink" class="RaLinkButton" href="./README.md" target="_blank" rel="noreferrer">说明</a>
+        </div>
+        <p class="RaStatus" id="RaLoginStatus" role="status"></p>
+      </section>
+    </main>
+
+    <script src="./admin-config.js?v=ra-20260624-3"></script>
+    <script src="./login.js?v=ra-20260624-3"></script>
+  </body>
+</html>

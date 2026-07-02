@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "resetCode": {
+    "passwordHash": "ae792e1219780c0d89e50c165628c94421c3991b273b79575b595350f09d521c",
+    "salt": "6896bbbb05019ed216490f383c89335a",
+    "iterations": 100000,
+    "updatedAt": "2026-06-24T01:43:09.156Z"
+  },
+  "users": [
+    {
+      "username": "Galphrui",
+      "passwordHash": "778d3bfdb187d8f1976970f72d49701d99077ca67b99325993f75b96a74a20e7",
+      "salt": "0d4ecc7f233426cad5e492e4d5b5be51",
+      "iterations": 210000,
+      "createdAt": "2026-06-23T09:51:55.380Z",
+      "updatedAt": "2026-06-23T16:31:06.904Z"
+    },
+    {
+      "username": "Galph",
+      "passwordHash": "99fbcd27a92b1af6fb025ed92a774484995fcf40d77ee48ca26cd7efa2176e73",
+      "salt": "1a9701b7341ee1dd6d3ae7f52a8969b2",
+      "iterations": 210000,
+      "createdAt": "2026-06-23T16:34:02.437Z"
+    },
+    {
+      "username": "ruiao",
+      "passwordHash": "038f36f84629d76bc45a4815fcd7edb5d7d5078ca32fe4f8a71c30f298ac6726",
+      "salt": "2a8522cfbfb8f50ae57f437ecc87b6e0",
+      "iterations": 100000,
+      "createdAt": "2026-06-24T02:32:31.029Z"
+    }
+  ]
+}
