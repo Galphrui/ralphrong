@@ -13,7 +13,7 @@ const androidOfflinePath = join(root, 'RaAndroidNotesApp', 'app', 'src', 'main',
 const iosOfflinePath = join(root, 'RaIosNotesApp', 'RaIosNotesApp', 'Resources', 'offline-posts.json')
 
 const defaultModules = {
-  settings: { maxTopModules: 6 },
+  settings: { maxTopModules: 6, globalDisplayStyle: 'list', moduleDisplayStyles: {} },
   modules: [
     { id: 'posts', label: '文章', href: '#posts', enabled: true, order: 10, surface: 'top' },
     { id: 'code', label: '代码库', href: '#code', enabled: true, order: 20, surface: 'top' },
@@ -80,6 +80,14 @@ if (!posts.modules || !Array.isArray(posts.modules.modules)) {
   if (!Number.isFinite(Number(posts.modules.settings.maxTopModules))) {
     posts.modules.settings.maxTopModules = defaultModules.settings.maxTopModules
     postsChanged = mark('补齐 maxTopModules')
+  }
+  if (!posts.modules.settings.globalDisplayStyle) {
+    posts.modules.settings.globalDisplayStyle = defaultModules.settings.globalDisplayStyle
+    postsChanged = mark('补齐 globalDisplayStyle')
+  }
+  if (!posts.modules.settings.moduleDisplayStyles || typeof posts.modules.settings.moduleDisplayStyles !== 'object') {
+    posts.modules.settings.moduleDisplayStyles = defaultModules.settings.moduleDisplayStyles
+    postsChanged = mark('补齐 moduleDisplayStyles')
   }
 }
 

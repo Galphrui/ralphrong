@@ -827,10 +827,15 @@ public class MainActivity extends Activity {
 
     private void renderAttachments(LinearLayout parent, Post post) {
         if (post == null || post.attachments.isEmpty()) return;
+        renderAttachmentList(parent, post.attachments, "文章附件");
+    }
+
+    private void renderAttachmentList(LinearLayout parent, List<PostAttachment> attachments, String heading) {
+        if (attachments == null || attachments.isEmpty()) return;
         LinearLayout card = card();
         card.addView(label("RA ATTACHMENTS"));
-        card.addView(title("文章附件", 20));
-        for (PostAttachment attachment : post.attachments) {
+        card.addView(title(heading, 20));
+        for (PostAttachment attachment : attachments) {
             LinearLayout item = card();
             item.addView(title(attachment.name == null || attachment.name.isEmpty() ? attachment.fileName : attachment.name, 16));
             item.addView(paragraph((attachment.fileName == null ? "" : attachment.fileName)
@@ -984,10 +989,136 @@ public class MainActivity extends Activity {
                 snippet.setPadding(dp(12), dp(10), dp(12), dp(10));
                 item.addView(snippet);
             }
+            item.setOnClickListener(v -> renderCodeDetail(repo));
             page.addView(item);
         }
         content.addView(page);
         updateFloatingSort();
+    }
+
+    private void renderCodeDetail(CodeRepository repo) {
+        currentPage = "code";
+        currentDetailSlug = "";
+        selectTab(navCode);
+        clear();
+
+        LinearLayout page = card();
+        Button back = secondaryButton("返回代码库");
+        back.setOnClickListener(v -> renderCodeRepository());
+        page.addView(back);
+        page.addView(label(repo.language == null || repo.language.isEmpty() ? "CODE" : repo.language));
+        page.addView(title(repo.name, 24));
+        if (repo.updatedAt != null && !repo.updatedAt.isEmpty()) page.addView(paragraph("更新：" + repo.updatedAt));
+        if (repo.sourcePath != null && !repo.sourcePath.isEmpty()) page.addView(paragraph("文件：" + codeFileName(repo)));
+        if (repo.description != null && !repo.description.isEmpty()) page.addView(paragraph(repo.description));
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setGravity(Gravity.START);
+        Button save = primaryButton("保存代码");
+        save.setOnClickListener(v -> saveCodeSnippet(repo));
+        actions.addView(save);
+        if (repo.url != null && !repo.url.isEmpty()) {
+            Button open = secondaryButton("打开仓库");
+            open.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(repo.url))));
+            actions.addView(open);
+        }
+        page.addView(actions);
+
+        if (repo.snippet != null && !repo.snippet.isEmpty()) {
+            TextView snippet = paragraph(formatCodeSnippet(repo.snippet, repo.language));
+            snippet.setTypeface(Typeface.MONOSPACE);
+            snippet.setTextColor(Color.WHITE);
+            snippet.setBackgroundColor(Color.rgb(2, 6, 23));
+            snippet.setPadding(dp(12), dp(10), dp(12), dp(10));
+            page.addView(snippet);
+        }
+        if (repo.notes != null && !repo.notes.isEmpty()) page.addView(paragraph(repo.notes));
+        renderAttachmentList(page, repo.attachments, "代码附件");
+        content.addView(page);
+        updateFloatingSort();
+    }
+
+    private void saveCodeSnippet(CodeRepository repo) {
+        try {
+            File dir = new File(getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS), "code");
+            if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("无法创建代码目录");
+            File file = new File(dir, codeFileName(repo));
+            try (FileOutputStream output = new FileOutputStream(file)) {
+                output.write(formatCodeSnippet(repo.snippet, repo.language).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            toast("代码已保存：" + file.getAbsolutePath());
+        } catch (Exception error) {
+            toast("代码保存失败：" + error.getMessage());
+        }
+    }
+
+    private String codeFileName(CodeRepository repo) {
+        String base = sanitizeFileName(repo.name == null || repo.name.isEmpty() ? repo.id : repo.name);
+        return base + "." + codeExtension(repo.language);
+    }
+
+    private String codeExtension(String language) {
+        String clean = String.valueOf(language == null ? "" : language).trim().toLowerCase(Locale.US);
+        if (clean.equals("c")) return "c";
+        if (clean.equals("c++") || clean.equals("cpp")) return "cpp";
+        if (clean.equals("python")) return "py";
+        if (clean.equals("java")) return "java";
+        if (clean.equals("kotlin") || clean.equals("kt")) return "kt";
+        if (clean.equals("javascript") || clean.equals("js")) return "js";
+        if (clean.equals("typescript") || clean.equals("ts")) return "ts";
+        if (clean.equals("shell") || clean.equals("adb")) return "sh";
+        if (clean.equals("xml")) return "xml";
+        if (clean.equals("json")) return "json";
+        if (clean.equals("markdown") || clean.equals("md")) return "md";
+        if (clean.equals("swift")) return "swift";
+        if (clean.equals("go")) return "go";
+        if (clean.equals("rust")) return "rs";
+        if (clean.equals("gradle")) return "gradle";
+        if (clean.equals("sql")) return "sql";
+        if (clean.equals("yaml")) return "yml";
+        return clean.replaceAll("[^a-z0-9]", "").isEmpty() ? "txt" : clean.replaceAll("[^a-z0-9]", "");
+    }
+
+    private String formatCodeSnippet(String source, String language) {
+        String code = String.valueOf(source == null ? "" : source).replace("\r\n", "\n").replace("\r", "\n").trim();
+        String clean = String.valueOf(language == null ? "" : language).trim().toLowerCase(Locale.US);
+        if (clean.equals("json")) {
+            try {
+                return new JSONObject(code).toString(2);
+            } catch (Exception ignored) {
+                try {
+                    return new JSONArray(code).toString(2);
+                } catch (Exception ignoredAgain) {
+                    return code;
+                }
+            }
+        }
+        if (clean.equals("c") || clean.equals("c++") || clean.equals("java") || clean.equals("kotlin")
+                || clean.equals("javascript") || clean.equals("typescript") || clean.equals("swift")
+                || clean.equals("go") || clean.equals("rust") || clean.equals("gradle")) {
+            return formatBracedCode(code);
+        }
+        return code;
+    }
+
+    private String formatBracedCode(String code) {
+        String[] lines = code.replaceAll("\\{\\s*", "{\n")
+                .replaceAll("\\s*\\}", "\n}")
+                .replaceAll(";\\s*", ";\n")
+                .replaceAll("\\n{2,}", "\n")
+                .split("\n");
+        StringBuilder out = new StringBuilder();
+        int level = 0;
+        for (String line : lines) {
+            String clean = line.trim();
+            if (clean.isEmpty()) continue;
+            if (clean.startsWith("}")) level = Math.max(0, level - 1);
+            for (int i = 0; i < level; i++) out.append("  ");
+            out.append(clean).append('\n');
+            if (clean.endsWith("{")) level++;
+        }
+        return out.toString().trim();
     }
 
     private void renderProfile() {

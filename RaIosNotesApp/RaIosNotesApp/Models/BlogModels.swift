@@ -50,6 +50,7 @@ struct CodeRepository: Codable, Identifiable, Hashable {
     var updatedAt: String?
     var snippet: String?
     var notes: String?
+    var attachments: [PostAttachment]?
 }
 
 struct ModuleRegistry: Codable, Hashable {

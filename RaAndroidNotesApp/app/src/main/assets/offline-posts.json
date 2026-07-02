@@ -810,7 +810,9 @@
   },
   "modules": {
     "settings": {
-      "maxTopModules": 6
+      "maxTopModules": 6,
+      "globalDisplayStyle": "list",
+      "moduleDisplayStyles": {}
     },
     "modules": [
       {

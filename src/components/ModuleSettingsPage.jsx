@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useBlogStore } from '../store/useStore'
-import { clampMaxModules, writeModulePreferences } from '../utils/moduleConfig'
+import { CODE_DISPLAY_STYLES } from '../utils/codeLibrary'
+import { clampMaxModules, normalizeDisplayStyle, writeModulePreferences } from '../utils/moduleConfig'
 
 export default function ModuleSettingsPage() {
   const { moduleSettings, setModuleSettings } = useBlogStore()
@@ -9,9 +10,16 @@ export default function ModuleSettingsPage() {
     [moduleSettings.modules],
   )
 
-  const persist = (nextModules, nextMax = moduleSettings.maxTopModules) => {
+  const persist = (
+    nextModules,
+    nextMax = moduleSettings.maxTopModules,
+    globalDisplayStyle = moduleSettings.globalDisplayStyle,
+    moduleDisplayStyles = moduleSettings.moduleDisplayStyles,
+  ) => {
     const normalized = writeModulePreferences({
       maxTopModules: nextMax,
+      globalDisplayStyle,
+      moduleDisplayStyles,
       modules: nextModules.map((module, index) => ({ ...module, order: (index + 1) * 10 })),
     })
     setModuleSettings(normalized)
@@ -31,14 +39,25 @@ export default function ModuleSettingsPage() {
     persist(next)
   }
 
+  const changeGlobalStyle = (style) => {
+    persist(modules, moduleSettings.maxTopModules, normalizeDisplayStyle(style), moduleSettings.moduleDisplayStyles)
+  }
+
+  const changeModuleStyle = (id, style) => {
+    persist(modules, moduleSettings.maxTopModules, moduleSettings.globalDisplayStyle, {
+      ...moduleSettings.moduleDisplayStyles,
+      [id]: normalizeDisplayStyle(style),
+    })
+  }
+
   return (
     <section className="mx-auto max-w-4xl py-4">
       <div className="mb-5 border border-slate-200 bg-white p-5 shadow-sm">
         <p className="mb-2 text-xs font-black uppercase text-primary-700">Ra Modules</p>
         <h1 className="text-2xl font-black text-slate-950">模块显示设置</h1>
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px] sm:items-end">
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_180px_180px] lg:items-end">
           <p className="text-sm font-medium leading-6 text-slate-600">
-            控制顶部功能入口默认显示哪些模块、显示顺序，以及同时露出的模块数量。超过数量的模块会收进“更多”，避免以后功能变多时挤压导航。
+            控制顶部功能入口默认显示哪些模块、显示顺序、同时露出的模块数量，以及所有模块默认采用的内容排版。超过数量的模块会收进“更多”，避免以后功能变多时挤压导航。
           </p>
           <label className="text-xs font-black uppercase text-slate-500">
             顶部最多显示
@@ -50,6 +69,20 @@ export default function ModuleSettingsPage() {
               onChange={(event) => persist(modules, clampMaxModules(event.target.value))}
               className="mt-2 h-11 w-full border border-slate-200 bg-white px-3 text-sm font-black text-slate-800 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
             />
+          </label>
+          <label className="text-xs font-black uppercase text-slate-500">
+            全局排版风格
+            <select
+              value={moduleSettings.globalDisplayStyle || 'list'}
+              onChange={(event) => changeGlobalStyle(event.target.value)}
+              className="mt-2 h-11 w-full border border-slate-200 bg-white px-3 text-sm font-black text-slate-800 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+            >
+              {CODE_DISPLAY_STYLES.map((style) => (
+                <option key={style.id} value={style.id}>
+                  {style.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
       </div>
@@ -71,7 +104,19 @@ export default function ModuleSettingsPage() {
               </div>
               <p className="mt-1 truncate text-xs font-bold text-slate-500">{module.href}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={moduleSettings.moduleDisplayStyles?.[module.id] || moduleSettings.globalDisplayStyle || 'list'}
+                onChange={(event) => changeModuleStyle(module.id, event.target.value)}
+                className="h-10 border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                title="单模块排版风格"
+              >
+                {CODE_DISPLAY_STYLES.map((style) => (
+                  <option key={style.id} value={style.id}>
+                    {style.label}
+                  </option>
+                ))}
+              </select>
               <button
                 type="button"
                 onClick={() => toggleModule(module.id)}

@@ -167,40 +167,12 @@ struct CodeRepositoryView: View {
                     Panel { Text("暂无匹配的代码库").foregroundStyle(.secondary) }
                 } else {
                     ForEach(repositories) { repo in
-                        Panel {
-                            VStack(alignment: .leading, spacing: 10) {
-                                HStack(alignment: .top) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(repo.language.uppercased())
-                                            .font(.caption.weight(.bold))
-                                            .foregroundStyle(Color.raPrimary)
-                                        Text(repo.name)
-                                            .font(.headline)
-                                    }
-                                    Spacer()
-                                    if let updatedAt = repo.updatedAt, !updatedAt.isEmpty {
-                                        Text(updatedAt).font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
-                                Text(repo.description)
-                                    .foregroundStyle(.secondary)
-                                TagCloud(tags: repo.tags)
-                                if let snippet = repo.snippet, !snippet.isEmpty {
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        Text(snippet)
-                                            .font(.system(.caption, design: .monospaced))
-                                            .padding(10)
-                                            .background(Color.black.opacity(0.88), in: RoundedRectangle(cornerRadius: 6))
-                                            .foregroundStyle(.white)
-                                    }
-                                }
-                                if let sourcePath = repo.sourcePath, !sourcePath.isEmpty {
-                                    Text(sourcePath)
-                                        .font(.footnote.monospaced())
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
+                        NavigationLink {
+                            CodeRepositoryDetailView(repo: repo)
+                        } label: {
+                            CodeRepositoryCard(repo: repo)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -211,6 +183,179 @@ struct CodeRepositoryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await model.refresh() }
     }
+}
+
+struct CodeRepositoryCard: View {
+    let repo: CodeRepository
+
+    var body: some View {
+        Panel {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(repo.language.uppercased())
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Color.raPrimary)
+                        Text(repo.name)
+                            .font(.headline)
+                    }
+                    Spacer()
+                    if let updatedAt = repo.updatedAt, !updatedAt.isEmpty {
+                        Text(updatedAt).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Text(repo.description)
+                    .foregroundStyle(.secondary)
+                TagCloud(tags: repo.tags)
+                if let snippet = repo.snippet, !snippet.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        Text(formatCodeSnippet(snippet, language: repo.language))
+                            .font(.system(.caption, design: .monospaced))
+                            .padding(10)
+                            .background(Color.black.opacity(0.88), in: RoundedRectangle(cornerRadius: 6))
+                            .foregroundStyle(.white)
+                    }
+                }
+                if let sourcePath = repo.sourcePath, !sourcePath.isEmpty {
+                    Text(sourcePath)
+                        .font(.footnote.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
+struct CodeRepositoryDetailView: View {
+    let repo: CodeRepository
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(repo.name)
+                    .font(.largeTitle.weight(.bold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text([repo.language, repo.updatedAt ?? "", repo.sourcePath ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                TagCloud(tags: repo.tags)
+                Text(repo.description)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    if let fileURL = codeTempFileURL(for: repo) {
+                        ShareLink(item: fileURL) {
+                            Label("保存代码", systemImage: "square.and.arrow.down")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.raPrimary)
+                    }
+                    if let urlText = repo.url, let url = URL(string: urlText), !urlText.isEmpty {
+                        Link(destination: url) {
+                            Label("打开仓库", systemImage: "arrow.up.right")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+
+                if let snippet = repo.snippet, !snippet.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        Text(formatCodeSnippet(snippet, language: repo.language))
+                            .font(.system(.footnote, design: .monospaced))
+                            .padding(14)
+                            .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 8))
+                            .foregroundStyle(.white)
+                    }
+                }
+
+                if let notes = repo.notes, !notes.isEmpty {
+                    Panel {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("备注").font(.headline)
+                            Text(notes).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                AttachmentSection(attachments: repo.attachments ?? [], title: "代码附件")
+            }
+            .padding(16)
+        }
+        .background(Color.raBackground)
+        .navigationTitle("代码详情")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private func codeTempFileURL(for repo: CodeRepository) -> URL? {
+    let snippet = formatCodeSnippet(repo.snippet ?? "", language: repo.language)
+    guard !snippet.isEmpty, let data = snippet.data(using: .utf8) else { return nil }
+    let fileName = safeFileName(repo.name.isEmpty ? repo.id : repo.name) + "." + codeExtension(repo.language)
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+    try? data.write(to: url, options: .atomic)
+    return url
+}
+
+private func codeExtension(_ language: String) -> String {
+    switch language.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+    case "c": return "c"
+    case "c++", "cpp": return "cpp"
+    case "python": return "py"
+    case "java": return "java"
+    case "kotlin", "kt": return "kt"
+    case "javascript", "js": return "js"
+    case "typescript", "ts": return "ts"
+    case "shell", "adb": return "sh"
+    case "xml": return "xml"
+    case "json": return "json"
+    case "markdown", "md": return "md"
+    case "gradle": return "gradle"
+    case "swift": return "swift"
+    case "go": return "go"
+    case "rust": return "rs"
+    case "sql": return "sql"
+    case "yaml": return "yml"
+    default: return "txt"
+    }
+}
+
+private func safeFileName(_ value: String) -> String {
+    let invalid = CharacterSet(charactersIn: "\\/:*?\"<>|")
+    let clean = value.components(separatedBy: invalid).joined(separator: "_").trimmingCharacters(in: .whitespacesAndNewlines)
+    return clean.isEmpty ? "code-snippet" : clean
+}
+
+private func formatCodeSnippet(_ source: String, language: String) -> String {
+    let code = source.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    let clean = language.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if clean == "json",
+       let data = code.data(using: .utf8),
+       let object = try? JSONSerialization.jsonObject(with: data),
+       let pretty = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]),
+       let text = String(data: pretty, encoding: .utf8) {
+        return text
+    }
+    if ["c", "c++", "java", "kotlin", "javascript", "typescript", "swift", "go", "rust", "gradle"].contains(clean) {
+        return formatBracedCode(code)
+    }
+    return code
+}
+
+private func formatBracedCode(_ code: String) -> String {
+    let expanded = code
+        .replacingOccurrences(of: "\\{\\s*", with: "{\n", options: .regularExpression)
+        .replacingOccurrences(of: "\\s*\\}", with: "\n}", options: .regularExpression)
+        .replacingOccurrences(of: ";\\s*", with: ";\n", options: .regularExpression)
+        .replacingOccurrences(of: "\\n{2,}", with: "\n", options: .regularExpression)
+    var level = 0
+    return expanded.split(separator: "\n").compactMap { rawLine in
+        let clean = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return nil }
+        if clean.hasPrefix("}") { level = max(level - 1, 0) }
+        let output = String(repeating: "  ", count: level) + clean
+        if clean.hasSuffix("{") { level += 1 }
+        return output
+    }.joined(separator: "\n")
 }
 
 struct PostDetailView: View {
@@ -303,12 +448,13 @@ struct PostDetailView: View {
 
 struct AttachmentSection: View {
     let attachments: [PostAttachment]
+    var title: String = "文章附件"
 
     var body: some View {
         if !attachments.isEmpty {
             Panel {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("文章附件").font(.headline)
+                    Text(title).font(.headline)
                     ForEach(attachments) { attachment in
                         HStack(alignment: .top, spacing: 12) {
                             VStack(alignment: .leading, spacing: 4) {

@@ -138,6 +138,7 @@ const normalizeRepository = (repo) => ({
   updatedAt: repo.updatedAt || repo.date || '',
   snippet: repo.snippet || '',
   notes: repo.notes || '',
+  attachments: normalizeAttachments(repo.attachments),
   visibility: repo.visibility === 'private' ? 'private' : 'public',
 })
 

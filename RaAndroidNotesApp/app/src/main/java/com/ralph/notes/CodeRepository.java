@@ -14,4 +14,5 @@ public class CodeRepository {
     public String snippet = "";
     public String notes = "";
     public final List<String> tags = new ArrayList<>();
+    public final List<PostAttachment> attachments = new ArrayList<>();
 }

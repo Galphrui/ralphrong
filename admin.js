@@ -8,11 +8,34 @@ const RA_SESSION_TOKEN_KEY = "RaBlogAdminSessionToken";
 const RA_PUBLISH_POLL_ATTEMPTS = 36;
 const RA_PUBLISH_POLL_DELAY_MS = 5000;
 const RA_DEFAULT_PANEL = "posts";
+const RA_CODE_LANGUAGE_PRESETS = [
+  { label: "Plain Text", value: "Plain Text", extension: "txt" },
+  { label: "C", value: "C", extension: "c" },
+  { label: "C++", value: "C++", extension: "cpp" },
+  { label: "Python", value: "Python", extension: "py" },
+  { label: "Java", value: "Java", extension: "java" },
+  { label: "Kotlin / KT", value: "Kotlin", extension: "kt" },
+  { label: "JavaScript", value: "JavaScript", extension: "js" },
+  { label: "TypeScript", value: "TypeScript", extension: "ts" },
+  { label: "Shell", value: "Shell", extension: "sh" },
+  { label: "ADB", value: "ADB", extension: "sh" },
+  { label: "XML", value: "XML", extension: "xml" },
+  { label: "JSON", value: "JSON", extension: "json" },
+  { label: "Markdown", value: "Markdown", extension: "md" },
+  { label: "Gradle", value: "Gradle", extension: "gradle" },
+  { label: "SQL", value: "SQL", extension: "sql" },
+  { label: "YAML", value: "YAML", extension: "yml" },
+  { label: "Swift", value: "Swift", extension: "swift" },
+  { label: "Dart", value: "Dart", extension: "dart" },
+  { label: "Go", value: "Go", extension: "go" },
+  { label: "Rust", value: "Rust", extension: "rs" },
+];
 
 let RaData = getDefaultData();
 let RaSelectedSlug = "";
 let RaSelectedAttachments = [];
 let RaSelectedCodeId = "";
+let RaSelectedCodeAttachments = [];
 let RaRemoteSha = "";
 let RaPostSearchQuery = "";
 let RaPostListCollapsed = false;
@@ -73,14 +96,20 @@ const RaEls = {
   status: document.querySelector("#RaStatusText"),
   codeList: document.querySelector("#RaCodeList"),
   codeName: document.querySelector("#RaCodeNameInput"),
+  codeLanguagePreset: document.querySelector("#RaCodeLanguagePresetInput"),
   codeLanguage: document.querySelector("#RaCodeLanguageInput"),
   codeTags: document.querySelector("#RaCodeTagsInput"),
   codePath: document.querySelector("#RaCodePathInput"),
   codeUrl: document.querySelector("#RaCodeUrlInput"),
   codeDescription: document.querySelector("#RaCodeDescriptionInput"),
   codeSnippet: document.querySelector("#RaCodeSnippetInput"),
+  codeAttachmentFile: document.querySelector("#RaCodeAttachmentFileInput"),
+  codeAttachmentList: document.querySelector("#RaCodeAttachmentList"),
+  clearCodeAttachments: document.querySelector("#RaClearCodeAttachmentsButton"),
   codeNotes: document.querySelector("#RaCodeNotesInput"),
   newCode: document.querySelector("#RaNewCodeButton"),
+  formatCode: document.querySelector("#RaFormatCodeButton"),
+  downloadCode: document.querySelector("#RaDownloadCodeButton"),
   saveCodeItem: document.querySelector("#RaSaveCodeItemButton"),
   deleteCodeItem: document.querySelector("#RaDeleteCodeItemButton"),
   repositories: document.querySelector("#RaRepositoriesInput"),
@@ -131,6 +160,7 @@ async function initRaAdmin() {
   RaEls.syncData.hidden = !RA_IS_LOCAL_ADMIN;
   showAdminPanel(getPanelFromHash());
   updatePostListCollapsed();
+  setupCodeLanguagePresetOptions();
 
   await loadInitialData();
   renderSiteForm();
@@ -484,7 +514,7 @@ function saveCodeConfig() {
     const modules = JSON.parse(RaEls.modules.value || "{}");
     if (!Array.isArray(repositories)) throw new Error("repositories 必须是数组。");
     if (!modules || !Array.isArray(modules.modules)) throw new Error("modules.modules 必须是数组。");
-    RaData.repositories = repositories;
+    RaData.repositories = normalizeCodeRepositories(repositories);
     RaData.modules = modules;
     saveLocalData();
     renderCodeForm();
@@ -585,6 +615,127 @@ function normalizeAttachments(value) {
     .filter((item) => item.url || item.dataUrl);
 }
 
+function setupCodeLanguagePresetOptions() {
+  if (!RaEls.codeLanguagePreset) return;
+  RaEls.codeLanguagePreset.innerHTML = RA_CODE_LANGUAGE_PRESETS.map(
+    (item) => `<option value="${escapeAttr(item.value)}">${escapeHtml(item.label)}</option>`,
+  ).join("");
+}
+
+function currentCodeLanguage() {
+  return RaEls.codeLanguage.value.trim() || RaEls.codeLanguagePreset.value || "Plain Text";
+}
+
+function selectCodeLanguage(language) {
+  const clean = normalizeCodeLanguage(language);
+  const preset = RA_CODE_LANGUAGE_PRESETS.find((item) => item.value.toLowerCase() === clean.toLowerCase());
+  if (preset) {
+    RaEls.codeLanguagePreset.value = preset.value;
+    RaEls.codeLanguage.value = "";
+  } else {
+    RaEls.codeLanguagePreset.value = "Plain Text";
+    RaEls.codeLanguage.value = clean === "Plain Text" ? "" : clean;
+  }
+}
+
+function normalizeCodeLanguage(language) {
+  const clean = String(language || "").trim();
+  if (!clean) return "Plain Text";
+  const lower = clean.toLowerCase();
+  if (lower === "kt") return "Kotlin";
+  if (lower === "cpp" || lower === "cxx") return "C++";
+  if (lower === "js") return "JavaScript";
+  if (lower === "ts") return "TypeScript";
+  if (lower === "md") return "Markdown";
+  return clean;
+}
+
+function codeLanguageExtension(language) {
+  const clean = normalizeCodeLanguage(language).toLowerCase();
+  const preset = RA_CODE_LANGUAGE_PRESETS.find(
+    (item) => item.value.toLowerCase() === clean || item.label.toLowerCase() === clean,
+  );
+  return preset?.extension || clean.replace(/[^a-z0-9]+/g, "").slice(0, 8) || "txt";
+}
+
+function codeFileName(item = {}) {
+  return `${slugify(item.name || item.id || "code-snippet")}.${codeLanguageExtension(item.language)}`;
+}
+
+function normalizeCodeRepositories(value) {
+  return (Array.isArray(value) ? value : []).map((repo) => ({
+    id: repo.id || slugify(repo.name || `code-${Date.now()}`),
+    name: repo.name || "未命名代码",
+    description: repo.description || "",
+    language: normalizeCodeLanguage(repo.language || "Plain Text"),
+    tags: Array.isArray(repo.tags) ? repo.tags : [],
+    url: repo.url || "",
+    sourcePath: repo.sourcePath || "",
+    updatedAt: repo.updatedAt || repo.date || "",
+    snippet: repo.snippet || "",
+    notes: repo.notes || "",
+    attachments: normalizeAttachments(repo.attachments),
+  }));
+}
+
+function formatCodeByLanguage(source, language) {
+  const code = String(source || "").replace(/\r\n?/g, "\n").trim();
+  if (!code) return "";
+  const normalized = normalizeCodeLanguage(language).toLowerCase();
+  if (normalized === "json") {
+    try {
+      return JSON.stringify(JSON.parse(code), null, 2);
+    } catch {
+      return normalizeCodeLines(code);
+    }
+  }
+  if (normalized === "xml" || normalized === "html") return formatXmlCode(code);
+  if (["c", "c++", "java", "kotlin", "javascript", "typescript", "swift", "go", "rust", "gradle"].includes(normalized)) {
+    return formatBracedCode(code);
+  }
+  return normalizeCodeLines(code);
+}
+
+function normalizeCodeLines(code) {
+  return code.split("\n").map((line) => line.replace(/\s+$/g, "")).join("\n");
+}
+
+function formatXmlCode(code) {
+  const tokens = code.replace(/>\s*</g, ">\n<").split("\n");
+  let level = 0;
+  return tokens
+    .map((token) => {
+      const clean = token.trim();
+      if (!clean) return "";
+      if (/^<\//.test(clean)) level = Math.max(level - 1, 0);
+      const line = `${"  ".repeat(level)}${clean}`;
+      if (/^<[^!?/][^>]*[^/]?>$/.test(clean) && !/^<[^>]+>.*<\/[^>]+>$/.test(clean)) level += 1;
+      return line;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+function formatBracedCode(code) {
+  let level = 0;
+  return code
+    .replace(/\{\s*/g, "{\n")
+    .replace(/\s*\}/g, "\n}")
+    .replace(/;\s*/g, ";\n")
+    .replace(/\n{2,}/g, "\n")
+    .split("\n")
+    .map((line) => {
+      const clean = line.trim();
+      if (!clean) return "";
+      if (clean.startsWith("}")) level = Math.max(level - 1, 0);
+      const output = `${"  ".repeat(level)}${clean}`;
+      if (clean.endsWith("{")) level += 1;
+      return output;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
 function renderCodeList() {
   if (!RaEls.codeList) return;
   const repositories = Array.isArray(RaData.repositories) ? RaData.repositories : [];
@@ -609,13 +760,15 @@ function selectCodeItem(id) {
   const item = repositories.find((repo) => repo.id === id) || createEmptyCodeItem();
   RaSelectedCodeId = item.id || "";
   RaEls.codeName.value = item.name || "";
-  RaEls.codeLanguage.value = item.language || "";
+  selectCodeLanguage(item.language || "");
   RaEls.codeTags.value = (item.tags || []).join(", ");
   RaEls.codePath.value = item.sourcePath || "";
   RaEls.codeUrl.value = item.url || "";
   RaEls.codeDescription.value = item.description || "";
   RaEls.codeSnippet.value = item.snippet || "";
   RaEls.codeNotes.value = item.notes || "";
+  RaSelectedCodeAttachments = normalizeAttachments(item.attachments);
+  renderCodeAttachmentList();
   renderCodeList();
 }
 
@@ -631,6 +784,7 @@ function createEmptyCodeItem() {
     updatedAt: new Date().toISOString().slice(0, 10),
     snippet: "",
     notes: "",
+    attachments: [],
   };
 }
 
@@ -645,13 +799,14 @@ function saveCodeItem() {
     id: RaSelectedCodeId || slugify(RaEls.codeName.value || `code-${Date.now()}`),
     name: RaEls.codeName.value.trim(),
     description: RaEls.codeDescription.value.trim(),
-    language: RaEls.codeLanguage.value.trim() || "Code",
+    language: currentCodeLanguage(),
     tags: RaEls.codeTags.value.split(",").map((tag) => tag.trim()).filter(Boolean),
     url: RaEls.codeUrl.value.trim(),
     sourcePath: RaEls.codePath.value.trim(),
     updatedAt: now,
     snippet: RaEls.codeSnippet.value,
     notes: RaEls.codeNotes.value.trim(),
+    attachments: normalizeAttachments(RaSelectedCodeAttachments),
   };
   if (!item.name) {
     setCodeStatus("代码条目名称必填。");
@@ -674,6 +829,79 @@ function deleteCodeItem() {
   saveLocalData();
   renderCodeForm();
   setCodeStatus("代码条目已删除。");
+}
+
+function renderCodeAttachmentList() {
+  if (!RaEls.codeAttachmentList) return;
+  const attachments = normalizeAttachments(RaSelectedCodeAttachments);
+  if (!attachments.length) {
+    RaEls.codeAttachmentList.innerHTML = '<div class="RaEmptyState">暂无附件</div>';
+    return;
+  }
+  RaEls.codeAttachmentList.innerHTML = attachments
+    .map(
+      (item, index) => `
+        <article class="RaAttachmentItem">
+          <div>
+            <strong>${escapeHtml(item.name || item.fileName || "附件")}</strong>
+            <small>${escapeHtml(item.fileName || "")}${item.size ? ` · ${formatBytes(item.size)}` : ""}</small>
+          </div>
+          <button class="RaDangerButton" type="button" data-ra-delete-code-attachment="${index}">删除</button>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+async function addCodeAttachments(event) {
+  const files = [...(event.target.files || [])];
+  event.target.value = "";
+  if (!files.length) return;
+  try {
+    const next = [];
+    for (const file of files) {
+      if (file.size > 2 * 1024 * 1024) throw new Error(`${file.name} 超过 2MB，请压缩后再上传。`);
+      next.push(await fileToAttachment(file));
+    }
+    RaSelectedCodeAttachments = [...normalizeAttachments(RaSelectedCodeAttachments), ...next];
+    renderCodeAttachmentList();
+    setCodeStatus(`已添加 ${next.length} 个代码附件，保存代码条目后生效。`);
+  } catch (error) {
+    setCodeStatus(`代码附件添加失败：${error.message}`);
+  }
+}
+
+function deleteCodeAttachment(index) {
+  RaSelectedCodeAttachments = normalizeAttachments(RaSelectedCodeAttachments).filter((_, itemIndex) => itemIndex !== index);
+  renderCodeAttachmentList();
+}
+
+function clearCodeAttachments() {
+  RaSelectedCodeAttachments = [];
+  renderCodeAttachmentList();
+  setCodeStatus("代码附件已清空，保存代码条目后生效。");
+}
+
+function formatCurrentCodeSnippet() {
+  RaEls.codeSnippet.value = formatCodeByLanguage(RaEls.codeSnippet.value, currentCodeLanguage());
+  setCodeStatus("代码已按当前语言格式化。");
+}
+
+function downloadCurrentCodeSnippet() {
+  const language = currentCodeLanguage();
+  const item = {
+    id: RaSelectedCodeId || "",
+    name: RaEls.codeName.value.trim() || "code-snippet",
+    language,
+    snippet: RaEls.codeSnippet.value,
+  };
+  const link = document.createElement("a");
+  link.href = `data:text/plain;charset=utf-8,${encodeURIComponent(formatCodeByLanguage(item.snippet, language))}`;
+  link.download = codeFileName(item);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setCodeStatus(`已准备下载 ${link.download}。`);
 }
 
 function formatBytes(size) {
@@ -1356,7 +1584,7 @@ function normalizeData(input) {
         attachments: normalizeAttachments(post.attachments),
       })),
     ),
-    repositories: Array.isArray(input.repositories) ? input.repositories : [],
+    repositories: normalizeCodeRepositories(input.repositories),
     modules: input.modules || getDefaultModules(),
     profile: normalizeProfile(input.profile),
   };
@@ -1382,7 +1610,7 @@ function getDefaultData() {
 
 function getDefaultModules() {
   return {
-    settings: { maxTopModules: 6 },
+    settings: { maxTopModules: 6, globalDisplayStyle: "list", moduleDisplayStyles: {} },
     modules: [
       { id: "posts", label: "文章", href: "#posts", enabled: true, order: 10, surface: "top" },
       { id: "code", label: "代码库", href: "#code", enabled: true, order: 20, surface: "top" },
@@ -1555,8 +1783,19 @@ RaEls.publishProfile.addEventListener("click", publishProfileInfo);
 RaEls.saveCode.addEventListener("click", saveCodeConfig);
 RaEls.publishCode.addEventListener("click", publishCodeConfig);
 RaEls.newCode.addEventListener("click", newCodeItem);
+RaEls.codeLanguagePreset.addEventListener("change", () => {
+  RaEls.codeLanguage.value = "";
+});
+RaEls.formatCode.addEventListener("click", formatCurrentCodeSnippet);
+RaEls.downloadCode.addEventListener("click", downloadCurrentCodeSnippet);
 RaEls.saveCodeItem.addEventListener("click", saveCodeItem);
 RaEls.deleteCodeItem.addEventListener("click", deleteCodeItem);
+RaEls.codeAttachmentFile.addEventListener("change", addCodeAttachments);
+RaEls.clearCodeAttachments.addEventListener("click", clearCodeAttachments);
+RaEls.codeAttachmentList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-ra-delete-code-attachment]");
+  if (button) deleteCodeAttachment(Number(button.dataset.raDeleteCodeAttachment));
+});
 RaEls.codeList.addEventListener("click", (event) => {
   const item = event.target.closest("[data-ra-code-id]");
   if (item) selectCodeItem(item.dataset.raCodeId);

@@ -11,7 +11,11 @@ export const DEFAULT_MODULES = [
 
 export const DEFAULT_MODULE_SETTINGS = {
   maxTopModules: 6,
+  globalDisplayStyle: 'list',
+  moduleDisplayStyles: {},
 }
+
+export const DISPLAY_STYLE_IDS = ['list', 'code-block', 'compact', 'gallery', 'timeline', 'magazine']
 
 export function normalizeModuleSettings(rawSettings = {}, rawModules = DEFAULT_MODULES) {
   const savedModules = Array.isArray(rawSettings.modules) ? rawSettings.modules : []
@@ -28,6 +32,8 @@ export function normalizeModuleSettings(rawSettings = {}, rawModules = DEFAULT_M
 
   return {
     maxTopModules: clampMaxModules(rawSettings.maxTopModules),
+    globalDisplayStyle: normalizeDisplayStyle(rawSettings.globalDisplayStyle),
+    moduleDisplayStyles: normalizeModuleDisplayStyles(rawSettings.moduleDisplayStyles),
     modules: modules.sort((a, b) => a.order - b.order || a.label.localeCompare(b.label)),
   }
 }
@@ -86,4 +92,23 @@ export function clampMaxModules(value) {
   const next = Number(value)
   if (!Number.isFinite(next)) return DEFAULT_MODULE_SETTINGS.maxTopModules
   return Math.min(Math.max(Math.round(next), 3), 8)
+}
+
+export function normalizeDisplayStyle(value) {
+  return DISPLAY_STYLE_IDS.includes(value) ? value : DEFAULT_MODULE_SETTINGS.globalDisplayStyle
+}
+
+export function normalizeModuleDisplayStyles(value = {}) {
+  if (!value || typeof value !== 'object') return {}
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([key, style]) => [key, normalizeDisplayStyle(style)])
+      .filter(([key]) => key),
+  )
+}
+
+export function displayStyleForModule(settings, moduleId) {
+  const globalStyle = normalizeDisplayStyle(settings?.globalDisplayStyle)
+  const moduleStyle = settings?.moduleDisplayStyles?.[moduleId]
+  return normalizeDisplayStyle(moduleStyle || globalStyle)
 }

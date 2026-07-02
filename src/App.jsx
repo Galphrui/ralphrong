@@ -21,7 +21,10 @@ function getRoute() {
     return { name: 'guestbook' }
   }
   if (hash === 'code') {
-    return { name: 'code' }
+    return { name: 'code', id: '' }
+  }
+  if (hash.startsWith('code/')) {
+    return { name: 'code', id: decodeURIComponent(hash.slice(5)) }
   }
   if (hash === 'modules') {
     return { name: 'modules' }
@@ -97,7 +100,7 @@ export default function App() {
             <Guestbook />
           </div>
         ) : route.name === 'code' ? (
-          <CodeRepositoryPage />
+          <CodeRepositoryPage selectedId={route.id} />
         ) : route.name === 'modules' ? (
           <ModuleSettingsPage />
         ) : route.name === 'post' ? (

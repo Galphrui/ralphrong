@@ -147,8 +147,12 @@
                   <input id="RaCodeNameInput" placeholder="例如：闹钟状态排查脚本" />
                 </label>
                 <label class="RaField">
-                  语言 / 类型
-                  <input id="RaCodeLanguageInput" placeholder="Java / ADB / Shell" />
+                  预设语言
+                  <select id="RaCodeLanguagePresetInput"></select>
+                </label>
+                <label class="RaField">
+                  自定义语言
+                  <input id="RaCodeLanguageInput" placeholder="留空则使用预设，例如 KT / ADB / Mermaid" />
                 </label>
                 <label class="RaField">
                   标签，逗号分隔
@@ -170,6 +174,19 @@
                   代码内容
                   <textarea id="RaCodeSnippetInput" rows="12" spellcheck="false"></textarea>
                 </label>
+                <div class="RaField RaWide">
+                  代码附件
+                  <div class="RaAttachmentEditor">
+                    <div class="RaActions RaCompactActions">
+                      <label class="RaFileButton">
+                        上传附件
+                        <input id="RaCodeAttachmentFileInput" type="file" multiple />
+                      </label>
+                      <button id="RaClearCodeAttachmentsButton" class="RaSecondaryButton" type="button">清空附件</button>
+                    </div>
+                    <div class="RaAttachmentList" id="RaCodeAttachmentList"></div>
+                  </div>
+                </div>
                 <label class="RaField RaWide">
                   备注
                   <textarea id="RaCodeNotesInput" rows="3"></textarea>
@@ -177,6 +194,8 @@
               </div>
               <div class="RaActions">
                 <button id="RaNewCodeButton" class="RaSecondaryButton" type="button">新建代码条目</button>
+                <button id="RaFormatCodeButton" class="RaSecondaryButton" type="button">按语言格式化</button>
+                <button id="RaDownloadCodeButton" class="RaSecondaryButton" type="button">下载当前代码</button>
                 <button id="RaSaveCodeItemButton" type="button">保存代码条目</button>
                 <button id="RaDeleteCodeItemButton" class="RaDangerButton" type="button">删除代码条目</button>
               </div>

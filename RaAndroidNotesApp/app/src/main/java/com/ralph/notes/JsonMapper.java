@@ -58,6 +58,7 @@ public final class JsonMapper {
         repo.snippet = json.optString("snippet", "");
         repo.notes = json.optString("notes", "");
         readStringArray(json.optJSONArray("tags"), repo.tags);
+        readAttachmentArray(json.optJSONArray("attachments"), repo.attachments);
         return repo;
     }
 
