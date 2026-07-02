@@ -175,6 +175,28 @@ function getExtraSections(profile) {
     .filter((section) => !standardWords.some((word) => section.title?.includes(word)))
 }
 
+function PrintFlow({ profile, extraSections }) {
+  return (
+    <div className="resume-print-flow" aria-hidden="true">
+      <ExperienceSection title="工作经历" eyebrow="Experience" items={profile.workExperience} />
+      <ExperienceSection title="项目经历" eyebrow="Projects" items={profile.projects} />
+      <SkillGroups groups={profile.skills} />
+      <Section title="核心优势" eyebrow="Strengths" compact>
+        <BulletList items={profile.advantages} compact />
+      </Section>
+      <ExperienceSection title="教育经历" eyebrow="Education" items={profile.education} />
+      <Section title="个人评价" eyebrow="Review" compact>
+        <BulletList items={profile.selfReview} compact />
+      </Section>
+      {extraSections.map((section, index) => (
+        <Section key={`${section.title}-${index}`} title={section.title || '补充信息'} eyebrow={`Extra ${index + 1}`}>
+          <GenericSectionContent content={section.content} />
+        </Section>
+      ))}
+    </div>
+  )
+}
+
 export default function ProfilePage() {
   const { profile } = useBlogStore()
 
@@ -249,6 +271,8 @@ export default function ProfilePage() {
             ))}
           </main>
         </div>
+
+        <PrintFlow profile={profile} extraSections={extraSections} />
       </article>
     </div>
   )

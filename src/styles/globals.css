@@ -185,6 +185,10 @@
   min-width: 0;
 }
 
+.resume-print-flow {
+  display: none;
+}
+
 .resume-section {
   background: #fff;
   border: 0;
@@ -382,35 +386,35 @@
 
   .resume-hero {
     break-inside: avoid;
-    gap: 6mm !important;
-    grid-template-columns: minmax(0, 1fr) 27mm !important;
-    padding-bottom: 5mm !important;
+    gap: 4mm !important;
+    grid-template-columns: minmax(0, 1fr) 22mm !important;
+    padding-bottom: 3.5mm !important;
   }
 
   .resume-hero h1 {
-    font-size: 24pt !important;
-    margin-top: 2mm !important;
+    font-size: 21pt !important;
+    margin-top: 1.2mm !important;
   }
 
   .resume-headline {
-    font-size: 10.5pt !important;
-    margin-top: 2mm !important;
+    font-size: 9.4pt !important;
+    margin-top: 1.2mm !important;
   }
 
   .resume-summary {
-    font-size: 9pt !important;
-    line-height: 1.45 !important;
-    margin-top: 3mm !important;
+    font-size: 8.3pt !important;
+    line-height: 1.38 !important;
+    margin-top: 1.6mm !important;
   }
 
   .resume-photo {
     padding: 1mm !important;
-    width: 27mm !important;
+    width: 22mm !important;
   }
 
   .resume-contact-grid {
     gap: 1.5mm !important;
-    margin-top: 3mm !important;
+    margin-top: 2mm !important;
   }
 
   .resume-contact-item {
@@ -419,14 +423,30 @@
 
   .resume-contact-item span,
   .resume-contact-item strong {
-    font-size: 7.8pt !important;
+    font-size: 7.2pt !important;
   }
 
   .resume-layout {
-    display: grid !important;
-    gap: 6mm !important;
-    grid-template-columns: 53mm minmax(0, 1fr) !important;
-    margin-top: 5mm !important;
+    display: none !important;
+  }
+
+  .resume-print-flow {
+    column-count: 2;
+    column-fill: balance;
+    column-gap: 6mm;
+    column-rule: 0;
+    display: block !important;
+    margin-top: 3.5mm !important;
+  }
+
+  .resume-print-flow .resume-section {
+    display: block;
+    margin-bottom: 3.4mm !important;
+  }
+
+  .resume-print-flow .resume-section-title {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
   }
 
   .resume-sidebar,
@@ -439,54 +459,50 @@
     page-break-inside: auto !important;
   }
 
-  .resume-sidebar .resume-section {
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
-  }
-
   .resume-section-title {
-    margin-bottom: 2.5mm !important;
-    padding-bottom: 1.5mm !important;
+    margin-bottom: 1.8mm !important;
+    padding-bottom: 1mm !important;
   }
 
   .resume-section-title span {
-    font-size: 7.5pt !important;
+    font-size: 7pt !important;
   }
 
   .resume-section-title h2,
   .resume-section-compact .resume-section-title h2 {
-    font-size: 11pt !important;
+    font-size: 10pt !important;
   }
 
   .resume-item-list {
-    gap: 4mm !important;
+    display: block !important;
   }
 
   .resume-item {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
+    margin-bottom: 2.6mm !important;
     padding-left: 3mm !important;
   }
 
   .resume-item h3 {
-    font-size: 10pt !important;
+    font-size: 9.2pt !important;
   }
 
   .resume-item p,
   .resume-bullets,
   .resume-intent,
   .resume-plain-line {
-    font-size: 8.4pt !important;
-    line-height: 1.45 !important;
+    font-size: 7.7pt !important;
+    line-height: 1.34 !important;
   }
 
   .resume-item time {
-    font-size: 7.8pt !important;
+    font-size: 7.2pt !important;
   }
 
   .resume-bullets {
-    gap: 1.3mm !important;
-    margin-top: 2mm !important;
+    gap: 1mm !important;
+    margin-top: 1.4mm !important;
   }
 
   .resume-bullets li {
@@ -500,12 +516,12 @@
   }
 
   .resume-skill-groups {
-    gap: 2.6mm !important;
+    gap: 2mm !important;
   }
 
   .resume-skill-group h3 {
-    font-size: 8.7pt !important;
-    margin-bottom: 1.4mm !important;
+    font-size: 8pt !important;
+    margin-bottom: 1mm !important;
   }
 
   .resume-skill-group div {
@@ -513,8 +529,8 @@
   }
 
   .resume-skill-group span {
-    font-size: 7.8pt !important;
-    padding: 1mm 1.5mm !important;
+    font-size: 7.1pt !important;
+    padding: 0.8mm 1.2mm !important;
   }
 }
 
