@@ -18,11 +18,13 @@ function sanitizeRichHtml(html) {
   const template = document.createElement('template')
   template.innerHTML = String(html || '')
   template.content.querySelectorAll('script, iframe, object, embed, style').forEach((node) => node.remove())
+  template.content.querySelectorAll('[data-ra-editor-only]').forEach((node) => node.remove())
   template.content.querySelectorAll('*').forEach((node) => {
     ;[...node.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase()
       const value = attr.value || ''
       if (name.startsWith('on')) node.removeAttribute(attr.name)
+      if (name === 'contenteditable' || name === 'draggable') node.removeAttribute(attr.name)
       if ((name === 'href' || name === 'src') && !/^(https?:|data:image\/|data:application\/|#|\.\/|\/)/i.test(value)) {
         node.removeAttribute(attr.name)
       }

@@ -1247,6 +1247,19 @@ textarea {
   margin-top: 18px;
 }
 
+.RaDocInlineStatus {
+  color: var(--RaPrimaryDark);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 900;
+  min-height: 34px;
+  align-items: center;
+}
+
+.RaButtonPulse {
+  box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.16);
+}
+
 .RaDocTools,
 .RaDocEditorPane,
 .RaDocPreviewPane {
@@ -1402,6 +1415,53 @@ textarea {
   color: #e2e8f0;
   overflow-x: auto;
   padding: 14px;
+}
+
+.RaDocRichEditor .RaCodeCard {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  margin: 14px 0;
+  padding: 0;
+}
+
+.RaDocRichEditor .RaCodeCard[data-ra-selected="true"] {
+  border-color: var(--RaPrimary);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.14);
+}
+
+.RaDocRichEditor .RaCodeCardToolbar {
+  align-items: center;
+  background: #eef6f6;
+  border-bottom: 1px solid #dbe4ee;
+  color: #0f766e;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+
+.RaDocRichEditor .RaCodeCardToolbar span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  margin-right: auto;
+}
+
+.RaDocRichEditor .RaCodeCardToolbar button {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  min-height: 28px;
+  padding: 0 8px;
+}
+
+.RaDocRichEditor .RaCodeCard pre {
+  margin: 0;
+  max-height: 360px;
 }
 
 .RaDocEditorBox.RaRichMode {

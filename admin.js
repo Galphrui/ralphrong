@@ -39,6 +39,7 @@ let RaSelectedAttachments = [];
 let RaSelectedCodeId = "";
 let RaSelectedCodeAttachments = [];
 let RaDocMode = "plain";
+let RaSavedRichRange = null;
 let RaRemoteSha = "";
 let RaPostSearchQuery = "";
 let RaPostListCollapsed = false;
@@ -105,6 +106,7 @@ const RaEls = {
   docContent: document.querySelector("#RaDocContentInput"),
   docPreview: document.querySelector("#RaDocPreview"),
   docStatus: document.querySelector("#RaDocStatusText"),
+  docInlineStatus: document.querySelector("#RaDocInlineStatus"),
   docTitle: document.querySelector("#RaDocTitleInput"),
   docSlug: document.querySelector("#RaDocSlugInput"),
   docDate: document.querySelector("#RaDocDateInput"),
@@ -674,32 +676,36 @@ function renderDocumentPreview() {
 }
 
 function getDocumentEditorContent() {
-  if (RaDocMode === "rich") return sanitizeRichHtml(RaEls.docRichEditor?.innerHTML || "");
+  if (RaDocMode === "rich") return sanitizeRichHtml(RaEls.docRichEditor?.innerHTML || "", { forEditor: false });
   return RaEls.docContent?.value || "";
 }
 
 function setRichEditorHtml(html) {
   if (!RaEls.docRichEditor) return;
-  RaEls.docRichEditor.innerHTML = sanitizeRichHtml(html || "");
+  RaEls.docRichEditor.innerHTML = sanitizeRichHtml(html || "", { forEditor: true });
   syncPostFromDocument({ showMessage: false });
   refreshDocumentStudio();
 }
 
 function renderRichDocumentContent(content, attachments = []) {
   const raw = String(content || "");
-  if (/<[a-z][\s\S]*>/i.test(raw)) return sanitizeRichHtml(raw);
+  if (/<[a-z][\s\S]*>/i.test(raw)) return sanitizeRichHtml(raw, { forEditor: true });
   return renderMarkdownPreview(raw, attachments, "markdown");
 }
 
-function sanitizeRichHtml(html) {
+function sanitizeRichHtml(html, options = {}) {
+  const { forEditor = false } = options;
   const template = document.createElement("template");
   template.innerHTML = String(html || "");
   template.content.querySelectorAll("script, iframe, object, embed, style").forEach((node) => node.remove());
+  if (!forEditor) template.content.querySelectorAll("[data-ra-editor-only]").forEach((node) => node.remove());
   template.content.querySelectorAll("*").forEach((node) => {
     [...node.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase();
       const value = attr.value || "";
       if (name.startsWith("on")) node.removeAttribute(attr.name);
+      if (!forEditor && name === "contenteditable") node.removeAttribute(attr.name);
+      if (!forEditor && name === "draggable") node.removeAttribute(attr.name);
       if ((name === "href" || name === "src") && !/^(https?:|data:image\/|data:application\/|#|\.\/|\/)/i.test(value)) {
         node.removeAttribute(attr.name);
       }
@@ -754,16 +760,18 @@ function applyDocumentStyle(kind) {
 function execRichCommand(command, value = null, message = "格式已应用。") {
   if (!RaEls.docRichEditor) return;
   RaEls.docRichEditor.focus();
+  restoreRichSelection();
   document.execCommand(command, false, value);
   setRichEditorHtml(RaEls.docRichEditor.innerHTML);
+  saveRichSelection();
   setDocStatus(message);
 }
 
 function execRichStyle() {
   if (!RaEls.docRichEditor) return;
   RaEls.docRichEditor.focus();
+  restoreRichSelection();
   document.execCommand("fontSize", false, "4");
-  const selection = window.getSelection();
   const fontNodes = [...RaEls.docRichEditor.querySelectorAll("font[size='4']")];
   fontNodes.forEach((font) => {
     const span = document.createElement("span");
@@ -774,8 +782,8 @@ function execRichStyle() {
     if (RaEls.docFontFamily?.value) span.style.fontFamily = RaEls.docFontFamily.value;
     font.replaceWith(span);
   });
-  if (selection) selection.removeAllRanges();
   setRichEditorHtml(RaEls.docRichEditor.innerHTML);
+  saveRichSelection();
   setDocStatus("文字格式已应用。");
 }
 
@@ -832,10 +840,166 @@ function findEnclosingRichStyle() {
   };
 }
 
+function isSelectionInsideRichEditor() {
+  const selection = window.getSelection();
+  if (!selection || !selection.rangeCount || !RaEls.docRichEditor) return false;
+  const range = selection.getRangeAt(0);
+  return RaEls.docRichEditor.contains(range.commonAncestorContainer);
+}
+
+function saveRichSelection() {
+  if (!isSelectionInsideRichEditor()) return;
+  RaSavedRichRange = window.getSelection().getRangeAt(0).cloneRange();
+}
+
+function restoreRichSelection() {
+  if (!RaEls.docRichEditor || !RaSavedRichRange || !RaEls.docRichEditor.contains(RaSavedRichRange.commonAncestorContainer)) {
+    return false;
+  }
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(RaSavedRichRange);
+  return true;
+}
+
+function getRichInsertRange() {
+  if (!RaEls.docRichEditor) return null;
+  restoreRichSelection();
+  const selection = window.getSelection();
+  if (selection?.rangeCount && RaEls.docRichEditor.contains(selection.getRangeAt(0).commonAncestorContainer)) {
+    return selection.getRangeAt(0);
+  }
+  const range = document.createRange();
+  range.selectNodeContents(RaEls.docRichEditor);
+  range.collapse(false);
+  return range;
+}
+
+function placeCaretInside(node) {
+  if (!node) return;
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  range.collapse(false);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  saveRichSelection();
+}
+
+function makeRichSpacerParagraph() {
+  const paragraph = document.createElement("p");
+  paragraph.innerHTML = "<br>";
+  return paragraph;
+}
+
+function syncRichEditorMutation(message) {
+  syncPostFromDocument({ showMessage: false });
+  renderDocumentPreview();
+  if (message) setDocStatus(message);
+}
+
+function createRichCodeCard(code = "在这里粘贴代码") {
+  const card = document.createElement("figure");
+  card.className = "RaCodeCard";
+  card.setAttribute("contenteditable", "false");
+  card.setAttribute("draggable", "true");
+  card.dataset.raCodeCard = "true";
+  card.innerHTML = `
+    <figcaption class="RaCodeCardToolbar" data-ra-editor-only="true">
+      <strong>代码块</strong>
+      <span>独立卡片</span>
+      <button type="button" data-ra-code-move="up">上移</button>
+      <button type="button" data-ra-code-move="down">下移</button>
+      <button type="button" data-ra-code-edit>编辑</button>
+      <button type="button" data-ra-code-delete>删除</button>
+    </figcaption>
+    <pre><code>${escapeHtml(code)}</code></pre>
+  `;
+  return card;
+}
+
+function insertRichNodeAtCursor(node, message = "") {
+  if (!RaEls.docRichEditor || !node) return;
+  RaEls.docRichEditor.focus();
+  const range = getRichInsertRange();
+  if (!range) return;
+  range.deleteContents();
+  range.insertNode(node);
+  const spacer = makeRichSpacerParagraph();
+  node.after(spacer);
+  placeCaretInside(spacer);
+  syncRichEditorMutation(message);
+}
+
+function insertRichHtmlAtCursor(html, message = "") {
+  if (!RaEls.docRichEditor) return;
+  const template = document.createElement("template");
+  template.innerHTML = sanitizeRichHtml(html || "", { forEditor: true });
+  const nodes = [...template.content.childNodes].filter((node) => node.nodeType !== Node.TEXT_NODE || node.textContent.trim());
+  if (!nodes.length) return;
+  RaEls.docRichEditor.focus();
+  const range = getRichInsertRange();
+  if (!range) return;
+  range.deleteContents();
+  const fragment = document.createDocumentFragment();
+  nodes.forEach((node) => fragment.appendChild(node));
+  const last = nodes[nodes.length - 1];
+  range.insertNode(fragment);
+  const spacer = makeRichSpacerParagraph();
+  last.after(spacer);
+  placeCaretInside(spacer);
+  syncRichEditorMutation(message);
+}
+
+function isEmptyEditorParagraph(node) {
+  return node?.tagName === "P" && !node.textContent.trim();
+}
+
+function moveRichCodeCard(card, direction) {
+  if (!card) return;
+  let sibling = direction === "up" ? card.previousElementSibling : card.nextElementSibling;
+  while (isEmptyEditorParagraph(sibling)) {
+    sibling = direction === "up" ? sibling.previousElementSibling : sibling.nextElementSibling;
+  }
+  if (!sibling) {
+    setDocStatus("这个代码块已经在边界位置。");
+    return;
+  }
+  if (direction === "up") sibling.before(card);
+  else sibling.after(card);
+  syncRichEditorMutation("代码块位置已调整。");
+}
+
+function handleRichEditorClick(event) {
+  const card = event.target.closest("[data-ra-code-card]");
+  const moveButton = event.target.closest("[data-ra-code-move]");
+  if (moveButton && card) {
+    moveRichCodeCard(card, moveButton.dataset.raCodeMove);
+    return;
+  }
+  if (event.target.closest("[data-ra-code-delete]") && card) {
+    card.remove();
+    syncRichEditorMutation("代码块已删除。");
+    return;
+  }
+  if (event.target.closest("[data-ra-code-edit]") && card) {
+    const code = card.querySelector("code");
+    const next = window.prompt("编辑代码块内容", code?.textContent || "");
+    if (next === null) return;
+    if (code) code.textContent = next;
+    syncRichEditorMutation("代码块已更新。");
+    return;
+  }
+  if (card) {
+    RaEls.docRichEditor.querySelectorAll("[data-ra-code-card]").forEach((item) => item.removeAttribute("data-ra-selected"));
+    card.dataset.raSelected = "true";
+    setDocStatus("已选中代码卡片，可上移、下移、编辑或删除。");
+  }
+}
+
 function insertDocumentCode() {
   if (RaDocMode === "rich") {
-    insertRichHtml(`<pre><code>在这里粘贴代码</code></pre>`);
-    setDocStatus("已插入代码块。");
+    insertRichNodeAtCursor(createRichCodeCard(), "已在光标处插入代码卡片。");
     return;
   }
   replaceDocumentSelection("\n```text\n在这里粘贴代码\n```\n");
@@ -849,8 +1013,10 @@ async function insertDocumentImage(event) {
     if (!file.type.startsWith("image/")) throw new Error("请选择图片文件。");
     const dataUrl = await fileToDataUrl(file);
     if (RaDocMode === "rich") {
-      insertRichHtml(`<img src="${escapeAttr(dataUrl)}" alt="${escapeAttr(file.name)}" />`);
-      setDocStatus(`已插入图片：${file.name}`);
+      const image = document.createElement("img");
+      image.src = dataUrl;
+      image.alt = file.name;
+      insertRichNodeAtCursor(image, `已在光标处插入图片：${file.name}`);
       return;
     }
     replaceDocumentSelection(`\n[[ra-image src="${dataUrl}" alt="${file.name.replace(/"/g, "")}"]]\n`);
@@ -870,8 +1036,7 @@ async function insertDocumentAttachments(event) {
     RaSelectedAttachments = [...normalizeAttachments(RaSelectedAttachments), ...next];
     renderAttachmentList();
     if (RaDocMode === "rich") {
-      insertRichHtml(next.map((item) => renderInlineAttachmentCard(item)).join(""));
-      setDocStatus(`已插入 ${next.length} 个附件卡片。`);
+      insertRichHtmlAtCursor(next.map((item) => renderInlineAttachmentCard(item)).join(""), `已在光标处插入 ${next.length} 个附件卡片。`);
       return;
     }
     replaceDocumentSelection(`\n${next.map((item) => `[[ra-attachment:${item.id}]]`).join("\n")}\n`);
@@ -882,10 +1047,7 @@ async function insertDocumentAttachments(event) {
 }
 
 function insertRichHtml(html) {
-  if (!RaEls.docRichEditor) return;
-  RaEls.docRichEditor.focus();
-  document.execCommand("insertHTML", false, html);
-  setRichEditorHtml(RaEls.docRichEditor.innerHTML);
+  insertRichHtmlAtCursor(html);
 }
 
 async function pasteIntoRichEditor(event) {
@@ -896,7 +1058,10 @@ async function pasteIntoRichEditor(event) {
   try {
     for (const file of files) {
       const dataUrl = await fileToDataUrl(file);
-      insertRichHtml(`<img src="${escapeAttr(dataUrl)}" alt="${escapeAttr(file.name || "粘贴图片")}" />`);
+      const image = document.createElement("img");
+      image.src = dataUrl;
+      image.alt = file.name || "粘贴图片";
+      insertRichNodeAtCursor(image);
     }
     setDocStatus(`已粘贴 ${files.length} 张图片。`);
   } catch (error) {
@@ -906,6 +1071,7 @@ async function pasteIntoRichEditor(event) {
 
 function selectedDocumentText() {
   if (RaDocMode === "rich") {
+    restoreRichSelection();
     const selection = window.getSelection();
     if (!selection || !RaEls.docRichEditor?.contains(selection.anchorNode)) return "";
     return selection.toString();
@@ -959,6 +1125,19 @@ function replaceDocumentRange(start, end, value, options = {}) {
 
 function setDocStatus(message) {
   if (RaEls.docStatus) RaEls.docStatus.textContent = message || "";
+  if (RaEls.docInlineStatus) RaEls.docInlineStatus.textContent = message || "";
+}
+
+function flashDocButton(button, label) {
+  if (!button || !label) return;
+  const original = button.dataset.raOriginalText || button.textContent;
+  button.dataset.raOriginalText = original;
+  button.textContent = label;
+  button.classList.add("RaButtonPulse");
+  window.setTimeout(() => {
+    button.textContent = button.dataset.raOriginalText || original;
+    button.classList.remove("RaButtonPulse");
+  }, 1300);
 }
 
 function renderAttachmentList() {
@@ -2475,26 +2654,38 @@ RaEls.docContent.addEventListener("input", () => {
   refreshDocumentStudio();
 });
 RaEls.docRichEditor.addEventListener("input", () => {
+  saveRichSelection();
   syncPostFromDocument({ showMessage: false });
   renderDocumentPreview();
   setDocStatus("富文本内容已更新。");
 });
 RaEls.docRichEditor.addEventListener("paste", pasteIntoRichEditor);
+RaEls.docRichEditor.addEventListener("click", handleRichEditorClick);
+RaEls.docRichEditor.addEventListener("keyup", saveRichSelection);
+RaEls.docRichEditor.addEventListener("mouseup", saveRichSelection);
+RaEls.docRichEditor.addEventListener("focus", saveRichSelection);
+document.addEventListener("selectionchange", () => {
+  if (document.activeElement === RaEls.docRichEditor) saveRichSelection();
+});
 RaEls.docContent.addEventListener("scroll", () => {
   if (RaEls.docLineNumbers) RaEls.docLineNumbers.scrollTop = RaEls.docContent.scrollTop;
 });
 RaEls.docSyncFromPost.addEventListener("click", () => {
   syncDocumentFromPost();
+  flashDocButton(RaEls.docSyncFromPost, "已读取");
   setDocStatus("已读取当前文章的全部信息。");
 });
 RaEls.docApplyToPost.addEventListener("click", () => {
   syncPostFromDocument();
+  flashDocButton(RaEls.docApplyToPost, "已同步");
   if (saveCurrentPost()) setDocStatus("已同步并保存到文章数据。");
 });
 RaEls.docPublish.addEventListener("click", async () => {
+  flashDocButton(RaEls.docPublish, "发布中...");
   setDocStatus("正在保存并发布...");
   syncPostFromDocument({ showMessage: false });
   if (saveCurrentPost()) await publishData("posts");
+  flashDocButton(RaEls.docPublish, "已提交");
   setDocStatus("发布请求已提交，请等待部署完成。");
 });
 [
@@ -2530,8 +2721,11 @@ RaEls.docBgColor.addEventListener("input", applyDocumentStyleIfSelection);
 RaEls.docLineNumbersToggle.addEventListener("change", updateDocumentChrome);
 RaEls.docRulerToggle.addEventListener("change", updateDocumentChrome);
 RaEls.docGridToggle.addEventListener("change", updateDocumentChrome);
+RaEls.docInsertCode.addEventListener("mousedown", saveRichSelection);
 RaEls.docInsertCode.addEventListener("click", insertDocumentCode);
+RaEls.docImage.addEventListener("click", saveRichSelection);
 RaEls.docImage.addEventListener("change", insertDocumentImage);
+RaEls.docAttachment.addEventListener("click", saveRichSelection);
 RaEls.docAttachment.addEventListener("change", insertDocumentAttachments);
 RaEls.saveSite.addEventListener("click", saveSiteInfo);
 RaEls.publishSite.addEventListener("click", publishSiteInfo);
