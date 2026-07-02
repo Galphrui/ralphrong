@@ -15,6 +15,9 @@ export default function PostCard({ post, onClick, displayStyle = 'list' }) {
   const isMagazine = displayStyle === 'magazine'
   const isCodeBlock = displayStyle === 'code-block'
   const isGallery = displayStyle === 'gallery'
+  const cardTone = isCodeBlock
+    ? 'border-slate-800 bg-slate-950 text-slate-100 shadow-soft hover:border-primary-400'
+    : 'border-slate-200 bg-white text-slate-900 hover:border-primary-300 hover:shadow-soft'
 
   const onLike = async (event) => {
     event.stopPropagation()
@@ -28,11 +31,11 @@ export default function PostCard({ post, onClick, displayStyle = 'list' }) {
 
   return (
     <motion.article
-      className={`cursor-pointer border border-slate-200 bg-white shadow-sm hover:border-primary-300 hover:shadow-soft ${
+      className={`cursor-pointer border shadow-sm ${cardTone} ${
         isCompact ? 'p-4' : 'p-5'
       } ${isTimeline ? 'border-l-4 border-l-primary-600' : ''} ${
         isMagazine ? 'grid gap-4 lg:grid-cols-[0.85fr_1.15fr]' : ''
-      } ${isCodeBlock ? 'bg-slate-950 text-slate-100 hover:border-primary-500' : ''}`}
+      }`}
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
@@ -69,15 +72,15 @@ export default function PostCard({ post, onClick, displayStyle = 'list' }) {
           {post.tags?.slice(0, 3).map((tag) => (
             <span
               key={tag}
-            className={`inline-block px-3 py-1 text-xs font-bold ${
-              isCodeBlock ? 'border border-slate-700 bg-slate-900 text-primary-200' : 'bg-primary-50 text-primary-700'
-            }`}
+              className={`inline-block px-3 py-1 text-xs font-bold ${
+                isCodeBlock ? 'border border-slate-700 bg-slate-900 text-primary-200' : 'bg-primary-50 text-primary-700'
+              }`}
             >
               {tag}
             </span>
           ))}
           {post.tags?.length > 3 && (
-            <span className="py-1 text-xs text-slate-500">+{post.tags.length - 3}</span>
+            <span className={`py-1 text-xs ${isCodeBlock ? 'text-slate-300' : 'text-slate-500'}`}>+{post.tags.length - 3}</span>
           )}
           {isPasswordProtected && (
             <span className="inline-block bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
