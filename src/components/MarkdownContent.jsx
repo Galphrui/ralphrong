@@ -1,6 +1,19 @@
 import { Fragment } from 'react'
 
-function parseInline(text) {
+function parseTokenAttributes(value = '') {
+  const attrs = {}
+  String(value).replace(/([a-zA-Z]+)="([^"]*)"/g, (_, key, attrValue) => {
+    attrs[key] = attrValue.replace(/&quot;/g, '"')
+    return ''
+  })
+  return attrs
+}
+
+function isSafeColor(value) {
+  return /^#[0-9a-fA-F]{3,8}$/.test(String(value || ''))
+}
+
+function parseBasicInline(text) {
   const parts = String(text).split(/(`[^`]+`|\*\*[^*]+\*\*)/g)
   return parts.map((part, index) => {
     if (part.startsWith('`') && part.endsWith('`')) {
@@ -19,6 +32,38 @@ function parseInline(text) {
     }
     return <Fragment key={index}>{part}</Fragment>
   })
+}
+
+function parseInline(text) {
+  const source = String(text || '')
+  const richPattern = /\[\[ra-style\s+([^\]]+)\]\]([\s\S]*?)\[\[\/ra-style\]\]/g
+  const nodes = []
+  let lastIndex = 0
+  let key = 0
+
+  for (const match of source.matchAll(richPattern)) {
+    if (match.index > lastIndex) {
+      nodes.push(<Fragment key={`t-${key++}`}>{parseBasicInline(source.slice(lastIndex, match.index))}</Fragment>)
+    }
+    const attrs = parseTokenAttributes(match[1])
+    const style = {}
+    if (attrs.size) style.fontSize = `${Number(attrs.size) || 16}px`
+    if (isSafeColor(attrs.color)) style.color = attrs.color
+    if (isSafeColor(attrs.bg)) style.backgroundColor = attrs.bg
+    if (attrs.font) style.fontFamily = attrs.font
+    if (attrs.underline === '1') style.textDecoration = 'underline'
+    nodes.push(
+      <span key={`r-${key++}`} className="rounded px-0.5" style={style}>
+        {parseBasicInline(match[2])}
+      </span>,
+    )
+    lastIndex = match.index + match[0].length
+  }
+
+  if (lastIndex < source.length) {
+    nodes.push(<Fragment key={`t-${key++}`}>{parseBasicInline(source.slice(lastIndex))}</Fragment>)
+  }
+  return nodes
 }
 
 export function parseMarkdownBlocks(content) {
@@ -44,7 +89,7 @@ export function parseMarkdownBlocks(content) {
   const pushHeading = (level, text) => {
     const clean = String(text || '').trim()
     if (!clean) return
-    blocks.push({ type: `h${Math.min(Math.max(level, 1), 3)}`, text: clean })
+    blocks.push({ type: `h${Math.min(Math.max(level, 1), 6)}`, text: clean })
   }
 
   lines.forEach((line) => {
@@ -86,6 +131,22 @@ export function parseMarkdownBlocks(content) {
       return
     }
 
+    const imageMatch = trimmed.match(/^\[\[ra-image\s+(.+)\]\]$/)
+    if (imageMatch) {
+      flushParagraph()
+      flushList()
+      blocks.push({ type: 'image', ...parseTokenAttributes(imageMatch[1]) })
+      return
+    }
+
+    const attachmentMatch = trimmed.match(/^\[\[ra-attachment:([^\]]+)\]\]$/)
+    if (attachmentMatch) {
+      flushParagraph()
+      flushList()
+      blocks.push({ type: 'attachment', id: attachmentMatch[1].trim() })
+      return
+    }
+
     const atxMatch = trimmed.match(/^(#{1,6})\s+(.+)$/)
     if (atxMatch) {
       flushParagraph()
@@ -110,8 +171,13 @@ export function parseMarkdownBlocks(content) {
   return blocks
 }
 
-export default function MarkdownContent({ content }) {
+export default function MarkdownContent({ content, attachments = [], mode = 'markdown' }) {
+  if (mode === 'plain') {
+    return <p className="whitespace-pre-wrap break-words text-base leading-8 text-slate-700">{content}</p>
+  }
+
   const blocks = parseMarkdownBlocks(content)
+  const attachmentMap = new Map((attachments || []).map((item) => [item.id, item]))
 
   return (
     <div className="space-y-6">
@@ -135,6 +201,14 @@ export default function MarkdownContent({ content }) {
         if (block.type === 'h3') {
           return (
             <h3 key={index} className="pt-3 text-xl font-black leading-tight text-slate-950">
+              {parseInline(block.text)}
+            </h3>
+          )
+        }
+
+        if (['h4', 'h5', 'h6'].includes(block.type)) {
+          return (
+            <h3 key={index} className="pt-2 text-lg font-black leading-tight text-slate-950">
               {parseInline(block.text)}
             </h3>
           )
@@ -164,6 +238,35 @@ export default function MarkdownContent({ content }) {
             >
               <code>{block.text}</code>
             </pre>
+          )
+        }
+
+        if (block.type === 'image') {
+          return (
+            <img
+              key={index}
+              src={block.src}
+              alt={block.alt || '插入图片'}
+              className="max-w-full border border-slate-200"
+            />
+          )
+        }
+
+        if (block.type === 'attachment') {
+          const item = attachmentMap.get(block.id)
+          return (
+            <a
+              key={index}
+              href={item?.dataUrl || '#'}
+              download={item?.fileName || item?.name || 'attachment'}
+              className="flex items-center justify-between gap-4 border border-blue-200 bg-blue-50 p-4 text-slate-900 no-underline"
+            >
+              <span>
+                <strong className="block font-black">{item?.name || item?.fileName || `附件不存在：${block.id}`}</strong>
+                {item && <small className="mt-1 block text-sm text-slate-500">{[item.fileName, item.size ? `${Math.ceil(item.size / 1024)} KB` : ''].filter(Boolean).join(' · ')}</small>}
+              </span>
+              {item && <strong className="text-sm text-primary-700">下载</strong>}
+            </a>
           )
         }
 

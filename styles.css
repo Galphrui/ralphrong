@@ -1233,6 +1233,187 @@ textarea {
   margin: 0;
 }
 
+.RaDocStudio {
+  display: grid;
+  grid-template-columns: minmax(220px, 260px) minmax(360px, 1fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.RaDocTools,
+.RaDocEditorPane,
+.RaDocPreviewPane {
+  min-width: 0;
+}
+
+.RaSegmented,
+.RaDocStyleButtons,
+.RaColorSwatches,
+.RaDocToggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.RaSegmented {
+  margin-bottom: 16px;
+}
+
+.RaSegmented button,
+.RaDocStyleButtons button {
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.RaSegmented button.RaActive {
+  background: var(--RaPrimary);
+  color: #fff;
+}
+
+.RaDocColorGroup {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.RaDocColorGroup strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.RaColorSwatch {
+  border: 2px solid #dbe4ee;
+  border-radius: 999px;
+  cursor: pointer;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  width: 26px;
+}
+
+.RaColorSwatch.RaActive {
+  border-color: var(--RaPrimary);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.18);
+}
+
+.RaDocToggles {
+  border-top: 1px solid var(--RaBorder);
+  margin-top: 16px;
+  padding-top: 14px;
+}
+
+.RaDocToggles label {
+  align-items: center;
+  color: var(--RaMuted);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.RaDocRuler {
+  background: repeating-linear-gradient(to right, #cbd5e1 0 1px, transparent 1px 40px);
+  border: 1px solid var(--RaBorder);
+  border-bottom: 0;
+  color: var(--RaMuted);
+  height: 22px;
+}
+
+.RaDocEditorBox {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  min-height: 620px;
+  border: 1px solid var(--RaBorder);
+  background: #fff;
+}
+
+.RaDocEditorBox.RaGridEnabled {
+  background-image:
+    linear-gradient(rgba(20, 184, 166, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 184, 166, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.RaDocLineNumbers {
+  border-right: 1px solid var(--RaBorder);
+  color: #94a3b8;
+  font: 12px/24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  margin: 0;
+  min-height: 100%;
+  overflow: hidden;
+  padding: 14px 8px;
+  text-align: right;
+  user-select: none;
+  white-space: pre;
+}
+
+.RaDocEditorBox.RaNoLines {
+  grid-template-columns: 1fr;
+}
+
+.RaDocEditorBox.RaNoLines .RaDocLineNumbers {
+  display: none;
+}
+
+#RaDocContentInput {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font: 14px/24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  min-height: 620px;
+  outline: none;
+  padding: 14px;
+  resize: vertical;
+  white-space: pre-wrap;
+}
+
+.RaDocPreview {
+  min-height: 642px;
+  overflow: auto;
+}
+
+.RaInlineImage {
+  border: 1px solid var(--RaBorder);
+  display: block;
+  margin: 8px 0;
+  max-width: 100%;
+}
+
+.RaInlineAttachmentCard {
+  align-items: center;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #0f172a;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 10px 0;
+  padding: 12px;
+  text-decoration: none;
+}
+
+.RaInlineAttachmentCard strong,
+.RaInlineAttachmentCard small {
+  display: block;
+}
+
+.RaInlineAttachmentCard small {
+  color: var(--RaMuted);
+  margin-top: 3px;
+}
+
+.RaRichText {
+  border-radius: 4px;
+  padding: 0 2px;
+}
+
+@media (max-width: 1180px) {
+  .RaDocStudio {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 860px) {
   .RaTopbar,
   .RaNav {

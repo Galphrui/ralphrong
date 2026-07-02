@@ -87,6 +87,8 @@ export default function PostDetail({ post }) {
   const metrics = postMetrics?.[post.slug] || { views: 0, likes: 0 }
   const isPasswordProtected = post.visibility === 'password'
   const isUnlocked = !isPasswordProtected || unlockedPosts[post.slug] === true
+  const inlineAttachmentIds = new Set([...String(post.content || '').matchAll(/\[\[ra-attachment:([^\]]+)\]\]/g)].map((match) => match[1].trim()))
+  const bottomAttachments = (post.attachments || []).filter((item) => !inlineAttachmentIds.has(item.id))
 
   const unlockPost = (event) => {
     event.preventDefault()
@@ -153,10 +155,10 @@ export default function PostDetail({ post }) {
       {isUnlocked ? (
         <>
           <div className="mt-8">
-            <MarkdownContent content={post.content} />
+            <MarkdownContent content={post.content} attachments={post.attachments || []} mode={post.contentFormat || 'markdown'} />
           </div>
 
-          <AttachmentList attachments={post.attachments || []} />
+          <AttachmentList attachments={bottomAttachments} />
 
           <div className="mt-10">
             <Guestbook postSlug={post.slug} title="文章留言" />

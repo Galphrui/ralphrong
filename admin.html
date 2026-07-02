@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
     <title>Ra 后台管理</title>
-    <link rel="stylesheet" href="./styles.css?v=ra-20260702-2" />
+    <link rel="stylesheet" href="./styles.css?v=ra-20260702-3" />
   </head>
   <body class="RaPage RaAdminPage RaAuthPending">
     <header class="RaTopbar">
@@ -20,6 +20,7 @@
         <a class="RaTopLink" href="./index.html">前台</a>
         <div class="RaAdminTabs" role="tablist" aria-label="后台管理导航">
           <button class="RaTabButton RaActive" type="button" data-ra-admin-tab="posts">文章</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="document">文档编译</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="code">代码库</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="site">站点</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="profile">简历</button>
@@ -138,6 +139,128 @@
             <p class="RaStatus" id="RaStatusText" role="status"></p>
           </section>
         </section>
+      </section>
+
+      <section class="RaWorkspacePanel" id="RaDocumentPanel" data-ra-admin-panel="document" hidden>
+        <div class="RaPanel">
+          <div class="RaWorkspaceHeader">
+            <div class="RaSectionHeading">
+              <p class="RaEyebrow">Document Studio</p>
+              <h1>文档编译</h1>
+            </div>
+            <div class="RaActions RaCompactActions">
+              <button id="RaDocSyncFromPostButton" class="RaSecondaryButton" type="button">读取当前文章</button>
+              <button id="RaDocApplyToPostButton" type="button">同步到文章</button>
+              <button id="RaDocPublishButton" class="RaPublishButton" type="button">保存并发布</button>
+            </div>
+          </div>
+
+          <div class="RaDocStudio">
+            <aside class="RaDocTools">
+              <div class="RaSectionHeading RaCompactHeading">
+                <p class="RaEyebrow">Mode</p>
+                <h3>编辑模式</h3>
+              </div>
+              <div class="RaSegmented" id="RaDocModeGroup">
+                <button class="RaActive" type="button" data-ra-doc-mode="plain">纯文本</button>
+                <button type="button" data-ra-doc-mode="markdown">MD</button>
+                <button type="button" data-ra-doc-mode="rich">高级编辑</button>
+              </div>
+
+              <label class="RaField">
+                标题级别
+                <select id="RaDocHeadingInput">
+                  <option value="1">一级标题</option>
+                  <option value="2">二级标题</option>
+                  <option value="3">三级标题</option>
+                  <option value="4">四级标题</option>
+                  <option value="5">五级标题</option>
+                  <option value="6">六级标题</option>
+                </select>
+              </label>
+              <button id="RaDocApplyHeadingButton" class="RaSecondaryButton" type="button">应用标题</button>
+
+              <label class="RaField">
+                文字大小
+                <select id="RaDocFontSizeInput">
+                  <option value="14">14px</option>
+                  <option value="16" selected>16px</option>
+                  <option value="18">18px</option>
+                  <option value="20">20px</option>
+                  <option value="24">24px</option>
+                  <option value="28">28px</option>
+                  <option value="32">32px</option>
+                </select>
+              </label>
+              <label class="RaField">
+                文字样式
+                <select id="RaDocFontFamilyInput">
+                  <option value="">默认</option>
+                  <option value="system-ui">系统无衬线</option>
+                  <option value="serif">衬线</option>
+                  <option value="monospace">等宽</option>
+                  <option value="cursive">手写</option>
+                </select>
+              </label>
+              <div class="RaDocStyleButtons">
+                <button id="RaDocBoldButton" class="RaSecondaryButton" type="button">B</button>
+                <button id="RaDocItalicButton" class="RaSecondaryButton" type="button">I</button>
+                <button id="RaDocUnderlineButton" class="RaSecondaryButton" type="button">U</button>
+              </div>
+
+              <div class="RaDocColorGroup">
+                <strong>文字颜色</strong>
+                <div class="RaColorSwatches" id="RaDocTextSwatches"></div>
+                <input id="RaDocTextColorInput" type="color" value="#0f172a" />
+              </div>
+              <div class="RaDocColorGroup">
+                <strong>背景颜色</strong>
+                <div class="RaColorSwatches" id="RaDocBgSwatches"></div>
+                <input id="RaDocBgColorInput" type="color" value="#fef3c7" />
+              </div>
+              <button id="RaDocApplyStyleButton" type="button">应用文字格式</button>
+
+              <div class="RaDocToggles">
+                <label><input id="RaDocLineNumbersInput" type="checkbox" checked /> 行号</label>
+                <label><input id="RaDocRulerInput" type="checkbox" checked /> 标尺</label>
+                <label><input id="RaDocGridInput" type="checkbox" /> 网格</label>
+              </div>
+
+              <div class="RaSectionHeading RaCompactHeading">
+                <p class="RaEyebrow">Insert</p>
+                <h3>插入内容</h3>
+              </div>
+              <div class="RaActions RaCompactActions">
+                <button id="RaDocInsertCodeButton" class="RaSecondaryButton" type="button">插入代码</button>
+                <label class="RaFileButton">
+                  插入图片
+                  <input id="RaDocImageInput" type="file" accept="image/*" />
+                </label>
+                <label class="RaFileButton">
+                  插入附件卡片
+                  <input id="RaDocAttachmentInput" type="file" multiple />
+                </label>
+              </div>
+            </aside>
+
+            <section class="RaDocEditorPane">
+              <div class="RaDocRuler" id="RaDocRuler"></div>
+              <div class="RaDocEditorBox" id="RaDocEditorBox">
+                <pre id="RaDocLineNumbers" class="RaDocLineNumbers">1</pre>
+                <textarea id="RaDocContentInput" spellcheck="false"></textarea>
+              </div>
+            </section>
+
+            <section class="RaDocPreviewPane">
+              <div class="RaSectionHeading RaCompactHeading">
+                <p class="RaEyebrow">Preview</p>
+                <h3>编译预览</h3>
+              </div>
+              <article class="RaPostPreview RaDocPreview" id="RaDocPreview"></article>
+            </section>
+          </div>
+          <p class="RaStatus" id="RaDocStatusText" role="status"></p>
+        </div>
       </section>
 
       <section class="RaWorkspacePanel" id="RaCodePanel" data-ra-admin-panel="code" hidden>
@@ -417,7 +540,7 @@
       </section>
     </main>
 
-    <script src="./admin-config.js?v=ra-20260702-2"></script>
-    <script src="./admin.js?v=ra-20260702-2"></script>
+    <script src="./admin-config.js?v=ra-20260702-3"></script>
+    <script src="./admin.js?v=ra-20260702-3"></script>
   </body>
 </html>

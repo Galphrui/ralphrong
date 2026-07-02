@@ -30,12 +30,15 @@ const RA_CODE_LANGUAGE_PRESETS = [
   { label: "Go", value: "Go", extension: "go" },
   { label: "Rust", value: "Rust", extension: "rs" },
 ];
+const RA_DOC_COLORS = ["#0f172a", "#dc2626", "#ea580c", "#ca8a04", "#16a34a", "#0891b2", "#2563eb", "#7c3aed", "#db2777"];
+const RA_DOC_BACKGROUNDS = ["#ffffff", "#fee2e2", "#ffedd5", "#fef3c7", "#dcfce7", "#cffafe", "#dbeafe", "#ede9fe", "#fce7f3"];
 
 let RaData = getDefaultData();
 let RaSelectedSlug = "";
 let RaSelectedAttachments = [];
 let RaSelectedCodeId = "";
 let RaSelectedCodeAttachments = [];
+let RaDocMode = "plain";
 let RaRemoteSha = "";
 let RaPostSearchQuery = "";
 let RaPostListCollapsed = false;
@@ -98,6 +101,34 @@ const RaEls = {
   deletePost: document.querySelector("#RaDeletePostButton"),
   publish: document.querySelector("#RaPublishButton"),
   status: document.querySelector("#RaStatusText"),
+  docModeGroup: document.querySelector("#RaDocModeGroup"),
+  docContent: document.querySelector("#RaDocContentInput"),
+  docPreview: document.querySelector("#RaDocPreview"),
+  docStatus: document.querySelector("#RaDocStatusText"),
+  docLineNumbers: document.querySelector("#RaDocLineNumbers"),
+  docEditorBox: document.querySelector("#RaDocEditorBox"),
+  docRuler: document.querySelector("#RaDocRuler"),
+  docHeading: document.querySelector("#RaDocHeadingInput"),
+  docFontSize: document.querySelector("#RaDocFontSizeInput"),
+  docFontFamily: document.querySelector("#RaDocFontFamilyInput"),
+  docTextColor: document.querySelector("#RaDocTextColorInput"),
+  docBgColor: document.querySelector("#RaDocBgColorInput"),
+  docTextSwatches: document.querySelector("#RaDocTextSwatches"),
+  docBgSwatches: document.querySelector("#RaDocBgSwatches"),
+  docBold: document.querySelector("#RaDocBoldButton"),
+  docItalic: document.querySelector("#RaDocItalicButton"),
+  docUnderline: document.querySelector("#RaDocUnderlineButton"),
+  docApplyHeading: document.querySelector("#RaDocApplyHeadingButton"),
+  docApplyStyle: document.querySelector("#RaDocApplyStyleButton"),
+  docLineNumbersToggle: document.querySelector("#RaDocLineNumbersInput"),
+  docRulerToggle: document.querySelector("#RaDocRulerInput"),
+  docGridToggle: document.querySelector("#RaDocGridInput"),
+  docInsertCode: document.querySelector("#RaDocInsertCodeButton"),
+  docImage: document.querySelector("#RaDocImageInput"),
+  docAttachment: document.querySelector("#RaDocAttachmentInput"),
+  docSyncFromPost: document.querySelector("#RaDocSyncFromPostButton"),
+  docApplyToPost: document.querySelector("#RaDocApplyToPostButton"),
+  docPublish: document.querySelector("#RaDocPublishButton"),
   codeList: document.querySelector("#RaCodeList"),
   codeName: document.querySelector("#RaCodeNameInput"),
   codeLanguagePreset: document.querySelector("#RaCodeLanguagePresetInput"),
@@ -165,6 +196,7 @@ async function initRaAdmin() {
   showAdminPanel(getPanelFromHash());
   updatePostListCollapsed();
   setupCodeLanguagePresetOptions();
+  setupDocumentStudio();
 
   await loadInitialData();
   renderSiteForm();
@@ -534,6 +566,159 @@ async function publishCodeConfig() {
   if (saveCodeConfig()) await publishData("code");
 }
 
+function setupDocumentStudio() {
+  renderColorSwatches(RaEls.docTextSwatches, RA_DOC_COLORS, RaEls.docTextColor);
+  renderColorSwatches(RaEls.docBgSwatches, RA_DOC_BACKGROUNDS, RaEls.docBgColor);
+  syncDocumentFromPost();
+  updateDocumentChrome();
+}
+
+function renderColorSwatches(container, colors, input) {
+  if (!container) return;
+  container.innerHTML = colors
+    .map((color) => `<button class="RaColorSwatch" type="button" data-ra-color="${color}" style="background:${color}" aria-label="${color}"></button>`)
+    .join("");
+  container.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-ra-color]");
+    if (!button || !input) return;
+    input.value = button.dataset.raColor;
+    [...container.querySelectorAll(".RaColorSwatch")].forEach((item) => item.classList.toggle("RaActive", item === button));
+  });
+}
+
+function syncDocumentFromPost() {
+  if (!RaEls.docContent || !RaEls.content) return;
+  RaEls.docContent.value = RaEls.content.value || "";
+  refreshDocumentStudio();
+}
+
+function syncPostFromDocument({ showMessage = true } = {}) {
+  if (!RaEls.docContent || !RaEls.content) return;
+  RaEls.content.value = RaEls.docContent.value;
+  refreshPostPreviewIfOpen();
+  if (showMessage) setDocStatus("已同步到当前文章，保存或发布后生效。");
+}
+
+function setDocumentMode(mode) {
+  RaDocMode = mode || "plain";
+  if (RaEls.docModeGroup) {
+    RaEls.docModeGroup.querySelectorAll("[data-ra-doc-mode]").forEach((button) => {
+      button.classList.toggle("RaActive", button.dataset.raDocMode === RaDocMode);
+    });
+  }
+  refreshDocumentStudio();
+}
+
+function refreshDocumentStudio() {
+  updateDocumentLines();
+  updateDocumentChrome();
+  renderDocumentPreview();
+}
+
+function updateDocumentLines() {
+  if (!RaEls.docLineNumbers || !RaEls.docContent) return;
+  const count = Math.max(1, RaEls.docContent.value.split("\n").length);
+  RaEls.docLineNumbers.textContent = Array.from({ length: count }, (_, index) => index + 1).join("\n");
+}
+
+function updateDocumentChrome() {
+  if (RaEls.docEditorBox) {
+    RaEls.docEditorBox.classList.toggle("RaNoLines", !RaEls.docLineNumbersToggle?.checked);
+    RaEls.docEditorBox.classList.toggle("RaGridEnabled", Boolean(RaEls.docGridToggle?.checked));
+  }
+  if (RaEls.docRuler) RaEls.docRuler.hidden = !RaEls.docRulerToggle?.checked;
+}
+
+function renderDocumentPreview() {
+  if (!RaEls.docPreview || !RaEls.docContent) return;
+  RaEls.docPreview.innerHTML = renderMarkdownPreview(RaEls.docContent.value, normalizeAttachments(RaSelectedAttachments), RaDocMode);
+}
+
+function applyDocumentHeading() {
+  const level = Math.min(Math.max(Number(RaEls.docHeading?.value || 1), 1), 6);
+  const value = selectedDocumentText() || "标题";
+  replaceDocumentSelection(`${"#".repeat(level)} ${value.replace(/^#{1,6}\s+/, "")}`);
+}
+
+function applyDocumentStyle(kind) {
+  const selected = selectedDocumentText() || "文字";
+  if (kind === "bold") return replaceDocumentSelection(`**${selected}**`);
+  if (kind === "italic") return replaceDocumentSelection(`*${selected}*`);
+  if (kind === "underline") return wrapDocumentRichStyle({ underline: "1" }, selected);
+  const attrs = {
+    size: RaEls.docFontSize?.value || "16",
+    color: RaEls.docTextColor?.value || "",
+    bg: RaEls.docBgColor?.value || "",
+    font: RaEls.docFontFamily?.value || "",
+  };
+  wrapDocumentRichStyle(attrs, selected);
+}
+
+function wrapDocumentRichStyle(attrs, text) {
+  const attrText = Object.entries(attrs)
+    .filter(([, value]) => value)
+    .map(([key, value]) => `${key}="${String(value).replace(/"/g, "&quot;")}"`)
+    .join(" ");
+  replaceDocumentSelection(`[[ra-style ${attrText}]]${text}[[/ra-style]]`);
+}
+
+function insertDocumentCode() {
+  replaceDocumentSelection("\n```text\n在这里粘贴代码\n```\n");
+}
+
+async function insertDocumentImage(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  try {
+    if (!file.type.startsWith("image/")) throw new Error("请选择图片文件。");
+    const dataUrl = await fileToDataUrl(file);
+    replaceDocumentSelection(`\n[[ra-image src="${dataUrl}" alt="${file.name.replace(/"/g, "")}"]]\n`);
+    setDocStatus(`已插入图片：${file.name}`);
+  } catch (error) {
+    setDocStatus(`图片插入失败：${error.message}`);
+  }
+}
+
+async function insertDocumentAttachments(event) {
+  const files = [...(event.target.files || [])];
+  event.target.value = "";
+  if (!files.length) return;
+  try {
+    const next = [];
+    for (const file of files) next.push(await fileToAttachment(file));
+    RaSelectedAttachments = [...normalizeAttachments(RaSelectedAttachments), ...next];
+    renderAttachmentList();
+    replaceDocumentSelection(`\n${next.map((item) => `[[ra-attachment:${item.id}]]`).join("\n")}\n`);
+    setDocStatus(`已插入 ${next.length} 个附件卡片。`);
+  } catch (error) {
+    setDocStatus(`附件插入失败：${error.message}`);
+  }
+}
+
+function selectedDocumentText() {
+  const input = RaEls.docContent;
+  if (!input) return "";
+  return input.value.slice(input.selectionStart, input.selectionEnd);
+}
+
+function replaceDocumentSelection(value) {
+  const input = RaEls.docContent;
+  if (!input) return;
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  input.value = `${input.value.slice(0, start)}${value}${input.value.slice(end)}`;
+  input.focus();
+  input.selectionStart = start;
+  input.selectionEnd = start + value.length;
+  syncPostFromDocument({ showMessage: false });
+  refreshDocumentStudio();
+}
+
+function setDocStatus(message) {
+  if (RaEls.docStatus) RaEls.docStatus.textContent = message || "";
+}
+
 function renderAttachmentList() {
   if (!RaEls.attachmentList) return;
   const attachments = normalizeAttachments(RaSelectedAttachments);
@@ -569,7 +754,7 @@ function renderPostPreview() {
       <p>${meta.map(escapeHtml).join(" · ")}</p>
       ${summary ? `<p>${escapeHtml(summary)}</p>` : ""}
     </header>
-    ${renderMarkdownPreview(RaEls.content.value)}
+    ${renderMarkdownPreview(RaEls.content.value, normalizeAttachments(RaSelectedAttachments), RaDocMode)}
   `;
   RaEls.postPreviewPanel.hidden = false;
 }
@@ -578,14 +763,19 @@ function refreshPostPreviewIfOpen() {
   if (RaEls.postPreviewPanel && !RaEls.postPreviewPanel.hidden) renderPostPreview();
 }
 
-function renderMarkdownPreview(content) {
+function renderMarkdownPreview(content, attachments = [], mode = "markdown") {
+  if (mode === "plain") return `<p>${escapeHtml(content)}</p>`;
+  const attachmentMap = new Map(normalizeAttachments(attachments).map((item) => [item.id, item]));
   return parseMarkdownBlocks(content)
     .map((block) => {
       if (block.type === "h1") return `<h1>${renderInlineMarkdown(block.text)}</h1>`;
       if (block.type === "h2") return `<h2>${renderInlineMarkdown(block.text)}</h2>`;
       if (block.type === "h3") return `<h3>${renderInlineMarkdown(block.text)}</h3>`;
+      if (["h4", "h5", "h6"].includes(block.type)) return `<h3>${renderInlineMarkdown(block.text)}</h3>`;
       if (block.type === "hr") return "<hr />";
       if (block.type === "code") return `<pre><code>${escapeHtml(block.text)}</code></pre>`;
+      if (block.type === "image") return `<img class="RaInlineImage" src="${escapeAttr(block.src)}" alt="${escapeAttr(block.alt || "插入图片")}" />`;
+      if (block.type === "attachment") return renderInlineAttachmentCard(attachmentMap.get(block.id), block.id);
       if (block.type === "ul") {
         return `<ul>${block.items.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("")}</ul>`;
       }
@@ -614,7 +804,7 @@ function parseMarkdownBlocks(content) {
   };
   const pushHeading = (level, text) => {
     const clean = String(text || "").trim();
-    if (clean) blocks.push({ type: `h${Math.min(Math.max(level, 1), 3)}`, text: clean });
+    if (clean) blocks.push({ type: `h${Math.min(Math.max(level, 1), 6)}`, text: clean });
   };
 
   lines.forEach((line) => {
@@ -646,6 +836,20 @@ function parseMarkdownBlocks(content) {
       }
       return;
     }
+    const imageMatch = trimmed.match(/^\[\[ra-image\s+(.+)\]\]$/);
+    if (imageMatch) {
+      flushParagraph();
+      flushList();
+      blocks.push({ type: "image", ...parseTokenAttributes(imageMatch[1]) });
+      return;
+    }
+    const attachmentMatch = trimmed.match(/^\[\[ra-attachment:([^\]]+)\]\]$/);
+    if (attachmentMatch) {
+      flushParagraph();
+      flushList();
+      blocks.push({ type: "attachment", id: attachmentMatch[1].trim() });
+      return;
+    }
     if (!trimmed) {
       flushParagraph();
       flushList();
@@ -673,9 +877,60 @@ function parseMarkdownBlocks(content) {
 }
 
 function renderInlineMarkdown(text) {
+  const source = String(text || "");
+  const richPattern = /\[\[ra-style\s+([^\]]+)\]\]([\s\S]*?)\[\[\/ra-style\]\]/g;
+  let html = "";
+  let lastIndex = 0;
+  for (const match of source.matchAll(richPattern)) {
+    html += renderBasicInlineMarkdown(source.slice(lastIndex, match.index));
+    html += renderRichTextSpan(match[2], parseTokenAttributes(match[1]));
+    lastIndex = match.index + match[0].length;
+  }
+  html += renderBasicInlineMarkdown(source.slice(lastIndex));
+  return html;
+}
+
+function renderBasicInlineMarkdown(text) {
   return escapeHtml(text)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+}
+
+function renderRichTextSpan(text, attrs = {}) {
+  const styles = [];
+  if (attrs.size) styles.push(`font-size:${Number(attrs.size) || 16}px`);
+  if (isSafeColor(attrs.color)) styles.push(`color:${attrs.color}`);
+  if (isSafeColor(attrs.bg)) styles.push(`background:${attrs.bg}`);
+  if (attrs.font) styles.push(`font-family:${escapeAttr(attrs.font)}`);
+  if (attrs.underline === "1") styles.push("text-decoration:underline");
+  return `<span class="RaRichText" style="${styles.join(";")}">${renderBasicInlineMarkdown(text)}</span>`;
+}
+
+function renderInlineAttachmentCard(item, fallbackId = "") {
+  if (!item) return `<div class="RaInlineAttachmentCard"><span>附件不存在：${escapeHtml(fallbackId)}</span></div>`;
+  const href = item.dataUrl || "#";
+  return `
+    <a class="RaInlineAttachmentCard" href="${escapeAttr(href)}" download="${escapeAttr(item.fileName || item.name || "attachment")}">
+      <span>
+        <strong>${escapeHtml(item.name || item.fileName || "附件")}</strong>
+        <small>${escapeHtml(item.fileName || "")}${item.size ? ` · ${formatBytes(item.size)}` : ""}</small>
+      </span>
+      <strong>下载</strong>
+    </a>
+  `;
+}
+
+function parseTokenAttributes(value = "") {
+  const attrs = {};
+  String(value).replace(/([a-zA-Z]+)="([^"]*)"/g, (_, key, attrValue) => {
+    attrs[key] = attrValue.replace(/&quot;/g, '"');
+    return "";
+  });
+  return attrs;
+}
+
+function isSafeColor(value) {
+  return /^#[0-9a-fA-F]{3,8}$/.test(String(value || ""));
 }
 
 async function importTextContent(event) {
@@ -761,6 +1016,15 @@ function fileToAttachment(file) {
         createdAt: new Date().toISOString(),
       });
     };
+    reader.readAsDataURL(file);
+  });
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("读取文件失败。"));
+    reader.onload = () => resolve(String(reader.result || ""));
     reader.readAsDataURL(file);
   });
 }
@@ -1247,9 +1511,11 @@ function selectPost(slug) {
   RaEls.summary.value = post.summary;
   RaEls.content.value = post.content;
   RaSelectedAttachments = normalizeAttachments(post.attachments);
+  setDocumentMode(post.contentFormat || "markdown");
   renderAttachmentList();
   updateAccessPasswordField();
   renderPostList();
+  syncDocumentFromPost();
 }
 
 function saveCurrentPost(event) {
@@ -1271,6 +1537,7 @@ function saveCurrentPost(event) {
     accessPassword: RaEls.accessPassword.value.trim(),
     summary: RaEls.summary.value.trim(),
     content: RaEls.content.value.trim(),
+    contentFormat: RaDocMode,
     readingMinutes: estimateReadingMinutes(RaEls.content.value),
     attachments: normalizeAttachments(RaSelectedAttachments),
   };
@@ -1704,7 +1971,7 @@ function delay(ms) {
 }
 
 function setPublishing(isPublishing) {
-  [RaEls.publish, RaEls.publishSite, RaEls.publishProfile, RaEls.publishCode, RaEls.syncData].forEach((button) => {
+  [RaEls.publish, RaEls.publishSite, RaEls.publishProfile, RaEls.publishCode, RaEls.syncData, RaEls.docPublish].forEach((button) => {
     if (button) button.disabled = isPublishing;
   });
 }
@@ -1726,6 +1993,7 @@ function createEmptyPost() {
     tags: [],
     summary: "",
     content: "## 背景\n\n在这里写下问题背景。\n\n## 方案\n\n记录你的技术方案与取舍。\n",
+    contentFormat: "markdown",
     readingMinutes: 3,
     visibility: "public",
     accessPassword: "",
@@ -1756,6 +2024,7 @@ function normalizeData(input) {
         accessPassword: post.accessPassword || post.password || "",
         summary: post.summary || "",
         content: post.content || "",
+        contentFormat: ["plain", "markdown", "rich"].includes(post.contentFormat) ? post.contentFormat : "markdown",
         readingMinutes: post.readingMinutes || estimateReadingMinutes(post.content || ""),
         attachments: normalizeAttachments(post.attachments),
       })),
@@ -1954,6 +2223,37 @@ RaEls.attachmentList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-ra-delete-attachment]");
   if (button) deleteAttachment(Number(button.dataset.raDeleteAttachment));
 });
+RaEls.docModeGroup.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-ra-doc-mode]");
+  if (button) setDocumentMode(button.dataset.raDocMode);
+});
+RaEls.docContent.addEventListener("input", () => {
+  syncPostFromDocument({ showMessage: false });
+  refreshDocumentStudio();
+});
+RaEls.docContent.addEventListener("scroll", () => {
+  if (RaEls.docLineNumbers) RaEls.docLineNumbers.scrollTop = RaEls.docContent.scrollTop;
+});
+RaEls.docSyncFromPost.addEventListener("click", () => {
+  syncDocumentFromPost();
+  setDocStatus("已读取当前文章正文。");
+});
+RaEls.docApplyToPost.addEventListener("click", () => syncPostFromDocument());
+RaEls.docPublish.addEventListener("click", async () => {
+  syncPostFromDocument({ showMessage: false });
+  if (saveCurrentPost()) await publishData("posts");
+});
+RaEls.docApplyHeading.addEventListener("click", applyDocumentHeading);
+RaEls.docApplyStyle.addEventListener("click", () => applyDocumentStyle("rich"));
+RaEls.docBold.addEventListener("click", () => applyDocumentStyle("bold"));
+RaEls.docItalic.addEventListener("click", () => applyDocumentStyle("italic"));
+RaEls.docUnderline.addEventListener("click", () => applyDocumentStyle("underline"));
+RaEls.docLineNumbersToggle.addEventListener("change", updateDocumentChrome);
+RaEls.docRulerToggle.addEventListener("change", updateDocumentChrome);
+RaEls.docGridToggle.addEventListener("change", updateDocumentChrome);
+RaEls.docInsertCode.addEventListener("click", insertDocumentCode);
+RaEls.docImage.addEventListener("change", insertDocumentImage);
+RaEls.docAttachment.addEventListener("change", insertDocumentAttachments);
 RaEls.saveSite.addEventListener("click", saveSiteInfo);
 RaEls.publishSite.addEventListener("click", publishSiteInfo);
 RaEls.saveProfile.addEventListener("click", saveProfileInfo);
@@ -1994,7 +2294,10 @@ RaEls.title.addEventListener("input", () => {
 RaEls.date.addEventListener("input", refreshPostPreviewIfOpen);
 RaEls.tags.addEventListener("input", refreshPostPreviewIfOpen);
 RaEls.summary.addEventListener("input", refreshPostPreviewIfOpen);
-RaEls.content.addEventListener("input", refreshPostPreviewIfOpen);
+RaEls.content.addEventListener("input", () => {
+  syncDocumentFromPost();
+  refreshPostPreviewIfOpen();
+});
 RaEls.visibility.addEventListener("change", updateAccessPasswordField);
 RaEls.createAccount.addEventListener("click", createAccount);
 RaEls.resetPassword.addEventListener("click", resetAccountPassword);
