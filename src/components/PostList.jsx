@@ -4,6 +4,7 @@ import PostCard from './PostCard'
 import TagFilter from './TagFilter'
 import { useBlogStore } from '../store/useStore'
 import { sortLabel, sortPosts } from '../utils/postSort'
+import { displayStyleForModule } from '../utils/moduleConfig'
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
@@ -32,6 +33,7 @@ export default function PostList() {
     searchQuery,
     selectedTag,
     sortMode,
+    moduleSettings,
     setSearchQuery,
   } = useBlogStore()
 
@@ -74,6 +76,7 @@ export default function PostList() {
   const pageEndIndex = Math.min(pageStartIndex + postsPerPage, filteredPosts.length)
   const currentPosts = filteredPosts.slice(pageStartIndex, pageEndIndex)
   const pageRange = useMemo(() => getPageRange(currentPage, totalPages), [currentPage, totalPages])
+  const displayStyle = displayStyleForModule(moduleSettings, 'posts')
 
   const goToPage = (page) => {
     const nextPage = Math.min(Math.max(page, 1), totalPages)
@@ -141,7 +144,7 @@ export default function PostList() {
             <AnimatePresence mode="wait">
               <motion.div
                 key={`${currentPage}-${postsPerPage}-${selectedTag}-${searchQuery}-${sortMode}`}
-                className="grid gap-4"
+                className={postLayoutClass(displayStyle)}
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -151,6 +154,7 @@ export default function PostList() {
                   <PostCard
                     key={post.slug}
                     post={post}
+                    displayStyle={displayStyle}
                     onClick={() => {
                       window.location.hash = `post/${encodeURIComponent(post.slug)}`
                     }}
@@ -230,4 +234,13 @@ export default function PostList() {
       </div>
     </section>
   )
+}
+
+function postLayoutClass(style) {
+  if (style === 'gallery') return 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3'
+  if (style === 'compact') return 'grid gap-3'
+  if (style === 'timeline') return 'grid gap-4 border-l border-primary-100 pl-4'
+  if (style === 'magazine') return 'grid gap-5'
+  if (style === 'code-block') return 'grid gap-4 lg:grid-cols-2'
+  return 'grid gap-4'
 }

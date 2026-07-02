@@ -3,13 +3,18 @@ import { postUpdatedAt } from '../utils/postSort'
 import { likePost } from '../utils/api'
 import { useBlogStore } from '../store/useStore'
 
-export default function PostCard({ post, onClick }) {
+export default function PostCard({ post, onClick, displayStyle = 'list' }) {
   const { postMetrics, setPostMetrics } = useBlogStore()
   const updatedAt = postUpdatedAt(post)
   const showUpdatedAt = updatedAt && updatedAt !== post.date
   const metrics = postMetrics?.[post.slug] || { views: 0, likes: 0 }
   const isPasswordProtected = post.visibility === 'password'
   const attachmentCount = post.attachments?.length || 0
+  const isCompact = displayStyle === 'compact'
+  const isTimeline = displayStyle === 'timeline'
+  const isMagazine = displayStyle === 'magazine'
+  const isCodeBlock = displayStyle === 'code-block'
+  const isGallery = displayStyle === 'gallery'
 
   const onLike = async (event) => {
     event.stopPropagation()
@@ -23,7 +28,11 @@ export default function PostCard({ post, onClick }) {
 
   return (
     <motion.article
-      className="cursor-pointer border border-slate-200 bg-white p-5 shadow-sm hover:border-primary-300 hover:shadow-soft"
+      className={`cursor-pointer border border-slate-200 bg-white shadow-sm hover:border-primary-300 hover:shadow-soft ${
+        isCompact ? 'p-4' : 'p-5'
+      } ${isTimeline ? 'border-l-4 border-l-primary-600' : ''} ${
+        isMagazine ? 'grid gap-4 lg:grid-cols-[0.85fr_1.15fr]' : ''
+      } ${isCodeBlock ? 'bg-slate-950 text-slate-100 hover:border-primary-500' : ''}`}
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
@@ -32,23 +41,27 @@ export default function PostCard({ post, onClick }) {
       transition={{ duration: 0.5 }}
     >
       {/* Meta */}
-      <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-sm font-medium text-slate-500">
+      <div className={`mb-2 flex flex-wrap gap-x-3 gap-y-1 text-sm font-medium ${isCodeBlock ? 'text-slate-300' : 'text-slate-500'}`}>
         <span>{post.date}</span>
-        <span>{post.readingMinutes || 3} 分钟阅读</span>
-        <span>{metrics.views || 0} 点击</span>
-        <span>{metrics.likes || 0} 赞</span>
+        {!isCompact && <span>{post.readingMinutes || 3} 分钟阅读</span>}
+        {!isCompact && <span>{metrics.views || 0} 点击</span>}
+        {!isCompact && <span>{metrics.likes || 0} 赞</span>}
         {isPasswordProtected && <span>密码可见</span>}
         {attachmentCount > 0 && <span>{attachmentCount} 个附件</span>}
         {showUpdatedAt && <span>修改 {updatedAt.slice(0, 10)}</span>}
       </div>
 
       {/* Title */}
-      <h3 className="mb-3 line-clamp-2 text-xl font-black leading-tight text-slate-950">
+      <h3 className={`mb-3 line-clamp-2 font-black leading-tight ${isGallery ? 'text-lg' : 'text-xl'} ${isCodeBlock ? 'text-white' : 'text-slate-950'}`}>
         {post.title}
       </h3>
 
       {/* Summary */}
-      <p className="mb-4 line-clamp-3 text-sm leading-6 text-slate-600">{post.summary}</p>
+      {!isCompact && (
+        <p className={`mb-4 line-clamp-3 text-sm leading-6 ${isCodeBlock ? 'text-slate-300' : 'text-slate-600'}`}>
+          {post.summary}
+        </p>
+      )}
 
       {/* Tags */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -56,7 +69,9 @@ export default function PostCard({ post, onClick }) {
           {post.tags?.slice(0, 3).map((tag) => (
             <span
               key={tag}
-              className="inline-block bg-primary-50 px-3 py-1 text-xs font-bold text-primary-700"
+            className={`inline-block px-3 py-1 text-xs font-bold ${
+              isCodeBlock ? 'border border-slate-700 bg-slate-900 text-primary-200' : 'bg-primary-50 text-primary-700'
+            }`}
             >
               {tag}
             </span>
@@ -70,13 +85,17 @@ export default function PostCard({ post, onClick }) {
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onLike}
-          className="shrink-0 border border-primary-100 bg-primary-50 px-3 py-1.5 text-xs font-black text-primary-700 hover:border-primary-300"
-        >
-          点赞 {metrics.likes || 0}
-        </button>
+        {!isMagazine && (
+          <button
+            type="button"
+            onClick={onLike}
+            className={`shrink-0 border px-3 py-1.5 text-xs font-black hover:border-primary-300 ${
+              isCodeBlock ? 'border-slate-700 bg-slate-900 text-primary-200' : 'border-primary-100 bg-primary-50 text-primary-700'
+            }`}
+          >
+            点赞 {metrics.likes || 0}
+          </button>
+        )}
       </div>
     </motion.article>
   )

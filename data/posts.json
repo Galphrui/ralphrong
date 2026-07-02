@@ -864,7 +864,9 @@
   ],
   "modules": {
     "settings": {
-      "maxTopModules": 6
+      "maxTopModules": 6,
+      "globalDisplayStyle": "list",
+      "moduleDisplayStyles": {}
     },
     "modules": [
       {
@@ -1086,97 +1088,5 @@
         "content": "做事偏工程落地，重视问题复现、日志证据、影响范围和回归验证，能够在版本压力下推进问题闭环。\n熟悉智能手表项目从需求开发到量产维护的节奏，具备跨模块沟通能力和持续维护复杂系统问题的耐心。\n希望继续深耕 Android 系统、Framework、智能穿戴或嵌入式 Android 方向，承担更完整的系统模块和项目交付职责。"
       }
     ]
-  },
-  "modules": {
-    "settings": {
-      "maxTopModules": 6,
-      "globalDisplayStyle": "list",
-      "moduleDisplayStyles": {}
-    },
-    "modules": [
-      {
-        "id": "posts",
-        "label": "文章",
-        "href": "#posts",
-        "enabled": true,
-        "order": 10,
-        "surface": "top"
-      },
-      {
-        "id": "code",
-        "label": "代码库",
-        "href": "#code",
-        "enabled": true,
-        "order": 20,
-        "surface": "top"
-      },
-      {
-        "id": "profile",
-        "label": "个人",
-        "href": "#profile",
-        "enabled": true,
-        "order": 30,
-        "surface": "top"
-      },
-      {
-        "id": "guestbook",
-        "label": "留言",
-        "href": "#guestbook",
-        "enabled": true,
-        "order": 40,
-        "surface": "top"
-      },
-      {
-        "id": "modules",
-        "label": "设置",
-        "href": "#modules",
-        "enabled": true,
-        "order": 90,
-        "surface": "top"
-      },
-      {
-        "id": "admin",
-        "label": "管理",
-        "href": "./admin.html",
-        "enabled": true,
-        "order": 100,
-        "surface": "top",
-        "external": true
-      }
-    ]
-  },
-  "repositories": [
-    {
-      "id": "android-alarm-debug-kit",
-      "name": "Android 闹钟状态排查工具集",
-      "description": "沉淀关机闹钟、FIRED_STATE、Activity 前台拉起和通知链路排查时常用的日志命令与状态判断片段。",
-      "language": "Java / ADB",
-      "tags": [
-        "Android",
-        "Alarm",
-        "Debug"
-      ],
-      "url": "https://github.com/Galphrui/ralphrong",
-      "sourcePath": "snippets/android/alarm-debug.md",
-      "updatedAt": "2026-06-30",
-      "snippet": "adb shell dumpsys window | grep -E \"mCurrentFocus|mFocusedApp\"\nadb logcat -s AlarmStateManager SgtcAlarmActivity AlarmService\n\nif (instance.mAlarmState != AlarmInstance.FIRED_STATE) {\n    Log.w(TAG, \"Alarm UI launched before provider state reached FIRED_STATE\");\n}",
-      "notes": "适合保存系统问题定位过程中的可复用代码和命令。"
-    },
-    {
-      "id": "blog-module-registry",
-      "name": "Ra 站点模块注册表",
-      "description": "用于管理文章、代码库、留言、简历、管理后台等入口的显隐、排序和最大显示数量。",
-      "language": "JavaScript",
-      "tags": [
-        "Web",
-        "Module",
-        "Config"
-      ],
-      "url": "https://github.com/Galphrui/ralphrong",
-      "sourcePath": "src/utils/moduleConfig.js",
-      "updatedAt": "2026-06-30",
-      "snippet": "export const DEFAULT_MODULES = [\n  { id: 'posts', label: '文章', enabled: true, order: 10 },\n  { id: 'code', label: '代码库', enabled: true, order: 20 },\n]\n\nexport function splitTopModules(settings) {\n  return topModules(settings).slice(0, settings.maxTopModules)\n}",
-      "notes": "后续新增模块只需要注册配置，页面入口不再硬编码。"
-    }
-  ]
+  }
 }
