@@ -13,6 +13,24 @@ function isSafeColor(value) {
   return /^#[0-9a-fA-F]{3,8}$/.test(String(value || ''))
 }
 
+function sanitizeRichHtml(html) {
+  if (typeof document === 'undefined') return String(html || '')
+  const template = document.createElement('template')
+  template.innerHTML = String(html || '')
+  template.content.querySelectorAll('script, iframe, object, embed, style').forEach((node) => node.remove())
+  template.content.querySelectorAll('*').forEach((node) => {
+    ;[...node.attributes].forEach((attr) => {
+      const name = attr.name.toLowerCase()
+      const value = attr.value || ''
+      if (name.startsWith('on')) node.removeAttribute(attr.name)
+      if ((name === 'href' || name === 'src') && !/^(https?:|data:image\/|data:application\/|#|\.\/|\/)/i.test(value)) {
+        node.removeAttribute(attr.name)
+      }
+    })
+  })
+  return template.innerHTML
+}
+
 function parseBasicInline(text) {
   const parts = String(text).split(/(`[^`]+`|\*\*[^*]+\*\*)/g)
   return parts.map((part, index) => {
@@ -174,6 +192,15 @@ export function parseMarkdownBlocks(content) {
 export default function MarkdownContent({ content, attachments = [], mode = 'markdown' }) {
   if (mode === 'plain') {
     return <p className="whitespace-pre-wrap break-words text-base leading-8 text-slate-700">{content}</p>
+  }
+
+  if (mode === 'rich') {
+    return (
+      <div
+        className="space-y-6 break-words text-base leading-8 text-slate-700 [&_a]:text-primary-700 [&_img]:max-w-full [&_img]:border [&_img]:border-slate-200 [&_pre]:overflow-x-auto [&_pre]:border [&_pre]:border-slate-800 [&_pre]:bg-slate-950 [&_pre]:p-5 [&_pre]:text-sm [&_pre]:leading-7 [&_pre]:text-slate-100"
+        dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(content) }}
+      />
+    )
   }
 
   const blocks = parseMarkdownBlocks(content)

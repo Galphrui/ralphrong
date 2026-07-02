@@ -1240,6 +1240,13 @@ textarea {
   margin-top: 18px;
 }
 
+.RaDocMetaGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
 .RaDocTools,
 .RaDocEditorPane,
 .RaDocPreviewPane {
@@ -1368,6 +1375,44 @@ textarea {
   white-space: pre-wrap;
 }
 
+.RaDocRichEditor {
+  background: #fff;
+  color: #0f172a;
+  font: 16px/1.75 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  min-height: 620px;
+  outline: none;
+  overflow-wrap: anywhere;
+  padding: 22px;
+}
+
+.RaDocRichEditor:empty::before {
+  color: #94a3b8;
+  content: "在这里编辑文档内容，也可以直接粘贴图片";
+}
+
+.RaDocRichEditor img {
+  border: 1px solid var(--RaBorder);
+  display: block;
+  margin: 12px 0;
+  max-width: 100%;
+}
+
+.RaDocRichEditor pre {
+  background: #020617;
+  color: #e2e8f0;
+  overflow-x: auto;
+  padding: 14px;
+}
+
+.RaDocEditorBox.RaRichMode {
+  display: block;
+}
+
+.RaDocEditorBox.RaRichMode .RaDocLineNumbers,
+.RaDocEditorBox.RaRichMode #RaDocContentInput {
+  display: none;
+}
+
 .RaDocPreview {
   min-height: 642px;
   overflow: auto;
@@ -1410,6 +1455,10 @@ textarea {
 
 @media (max-width: 1180px) {
   .RaDocStudio {
+    grid-template-columns: 1fr;
+  }
+
+  .RaDocMetaGrid {
     grid-template-columns: 1fr;
   }
 }

@@ -105,8 +105,16 @@ const RaEls = {
   docContent: document.querySelector("#RaDocContentInput"),
   docPreview: document.querySelector("#RaDocPreview"),
   docStatus: document.querySelector("#RaDocStatusText"),
+  docTitle: document.querySelector("#RaDocTitleInput"),
+  docSlug: document.querySelector("#RaDocSlugInput"),
+  docDate: document.querySelector("#RaDocDateInput"),
+  docTags: document.querySelector("#RaDocTagsInput"),
+  docVisibility: document.querySelector("#RaDocVisibilityInput"),
+  docAccessPassword: document.querySelector("#RaDocAccessPasswordInput"),
+  docSummary: document.querySelector("#RaDocSummaryInput"),
   docLineNumbers: document.querySelector("#RaDocLineNumbers"),
   docEditorBox: document.querySelector("#RaDocEditorBox"),
+  docRichEditor: document.querySelector("#RaDocRichEditor"),
   docRuler: document.querySelector("#RaDocRuler"),
   docHeading: document.querySelector("#RaDocHeadingInput"),
   docFontSize: document.querySelector("#RaDocFontSizeInput"),
@@ -589,18 +597,44 @@ function renderColorSwatches(container, colors, input) {
 
 function syncDocumentFromPost() {
   if (!RaEls.docContent || !RaEls.content) return;
+  RaEls.docTitle.value = RaEls.title.value || "";
+  RaEls.docSlug.value = RaEls.slug.value || "";
+  RaEls.docDate.value = RaEls.date.value || "";
+  RaEls.docTags.value = RaEls.tags.value || "";
+  RaEls.docVisibility.value = RaEls.visibility.value || "public";
+  RaEls.docAccessPassword.value = RaEls.accessPassword.value || "";
+  RaEls.docSummary.value = RaEls.summary.value || "";
   RaEls.docContent.value = RaEls.content.value || "";
+  if (RaEls.docRichEditor) {
+    RaEls.docRichEditor.innerHTML = RaDocMode === "rich"
+      ? renderRichDocumentContent(RaEls.content.value, normalizeAttachments(RaSelectedAttachments))
+      : renderMarkdownPreview(RaEls.content.value, normalizeAttachments(RaSelectedAttachments), RaDocMode);
+  }
   refreshDocumentStudio();
 }
 
 function syncPostFromDocument({ showMessage = true } = {}) {
   if (!RaEls.docContent || !RaEls.content) return;
-  RaEls.content.value = RaEls.docContent.value;
+  RaEls.title.value = RaEls.docTitle.value.trim();
+  RaEls.slug.value = RaEls.docSlug.value.trim() || slugify(RaEls.docTitle.value);
+  RaEls.date.value = RaEls.docDate.value || new Date().toISOString().slice(0, 10);
+  RaEls.tags.value = RaEls.docTags.value;
+  RaEls.visibility.value = RaEls.docVisibility.value;
+  RaEls.accessPassword.value = RaEls.docAccessPassword.value;
+  RaEls.summary.value = RaEls.docSummary.value;
+  RaEls.content.value = getDocumentEditorContent();
+  updateAccessPasswordField();
   refreshPostPreviewIfOpen();
   if (showMessage) setDocStatus("已同步到当前文章，保存或发布后生效。");
 }
 
 function setDocumentMode(mode) {
+  if (mode === "rich" && RaDocMode !== "rich" && RaEls.docRichEditor) {
+    RaEls.docRichEditor.innerHTML = renderMarkdownPreview(RaEls.docContent.value, normalizeAttachments(RaSelectedAttachments), RaDocMode);
+  }
+  if (RaDocMode === "rich" && mode !== "rich" && RaEls.docRichEditor) {
+    RaEls.docContent.value = htmlToPlainText(RaEls.docRichEditor.innerHTML);
+  }
   RaDocMode = mode || "plain";
   if (RaEls.docModeGroup) {
     RaEls.docModeGroup.querySelectorAll("[data-ra-doc-mode]").forEach((button) => {
@@ -608,6 +642,7 @@ function setDocumentMode(mode) {
     });
   }
   refreshDocumentStudio();
+  setDocStatus(`已切换到${RaDocMode === "rich" ? "高级编辑" : RaDocMode === "markdown" ? "MD" : "纯文本"}模式。`);
 }
 
 function refreshDocumentStudio() {
@@ -626,16 +661,66 @@ function updateDocumentChrome() {
   if (RaEls.docEditorBox) {
     RaEls.docEditorBox.classList.toggle("RaNoLines", !RaEls.docLineNumbersToggle?.checked);
     RaEls.docEditorBox.classList.toggle("RaGridEnabled", Boolean(RaEls.docGridToggle?.checked));
+    RaEls.docEditorBox.classList.toggle("RaRichMode", RaDocMode === "rich");
   }
+  if (RaEls.docRichEditor) RaEls.docRichEditor.hidden = RaDocMode !== "rich";
+  if (RaEls.docContent) RaEls.docContent.hidden = RaDocMode === "rich";
   if (RaEls.docRuler) RaEls.docRuler.hidden = !RaEls.docRulerToggle?.checked;
 }
 
 function renderDocumentPreview() {
   if (!RaEls.docPreview || !RaEls.docContent) return;
-  RaEls.docPreview.innerHTML = renderMarkdownPreview(RaEls.docContent.value, normalizeAttachments(RaSelectedAttachments), RaDocMode);
+  RaEls.docPreview.innerHTML = renderMarkdownPreview(getDocumentEditorContent(), normalizeAttachments(RaSelectedAttachments), RaDocMode);
+}
+
+function getDocumentEditorContent() {
+  if (RaDocMode === "rich") return sanitizeRichHtml(RaEls.docRichEditor?.innerHTML || "");
+  return RaEls.docContent?.value || "";
+}
+
+function setRichEditorHtml(html) {
+  if (!RaEls.docRichEditor) return;
+  RaEls.docRichEditor.innerHTML = sanitizeRichHtml(html || "");
+  syncPostFromDocument({ showMessage: false });
+  refreshDocumentStudio();
+}
+
+function renderRichDocumentContent(content, attachments = []) {
+  const raw = String(content || "");
+  if (/<[a-z][\s\S]*>/i.test(raw)) return sanitizeRichHtml(raw);
+  return renderMarkdownPreview(raw, attachments, "markdown");
+}
+
+function sanitizeRichHtml(html) {
+  const template = document.createElement("template");
+  template.innerHTML = String(html || "");
+  template.content.querySelectorAll("script, iframe, object, embed, style").forEach((node) => node.remove());
+  template.content.querySelectorAll("*").forEach((node) => {
+    [...node.attributes].forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      const value = attr.value || "";
+      if (name.startsWith("on")) node.removeAttribute(attr.name);
+      if ((name === "href" || name === "src") && !/^(https?:|data:image\/|data:application\/|#|\.\/|\/)/i.test(value)) {
+        node.removeAttribute(attr.name);
+      }
+    });
+  });
+  return template.innerHTML;
+}
+
+function htmlToPlainText(html) {
+  const box = document.createElement("div");
+  box.innerHTML = sanitizeRichHtml(html || "");
+  return box.innerText || "";
 }
 
 function applyDocumentHeading() {
+  if (RaDocMode === "rich") {
+    const level = Math.min(Math.max(Number(RaEls.docHeading?.value || 1), 1), 6);
+    execRichCommand("formatBlock", `H${level}`);
+    setDocStatus(`已应用 ${level} 级标题。`);
+    return;
+  }
   const level = Math.min(Math.max(Number(RaEls.docHeading?.value || 1), 1), 6);
   const value = selectedDocumentText() || "标题";
   const clean = value.replace(/^#{1,6}\s+/, "");
@@ -646,6 +731,13 @@ function applyDocumentHeading() {
 }
 
 function applyDocumentStyle(kind) {
+  if (RaDocMode === "rich") {
+    if (kind === "bold") return execRichCommand("bold", null, "已切换加粗。");
+    if (kind === "italic") return execRichCommand("italic", null, "已切换斜体。");
+    if (kind === "underline") return execRichCommand("underline", null, "已切换下划线。");
+    execRichStyle();
+    return;
+  }
   const selected = selectedDocumentText() || "文字";
   if (kind === "bold") return replaceDocumentSelection(`**${selected}**`, { selectionStartOffset: 2, selectionEndOffset: 2 + selected.length });
   if (kind === "italic") return replaceDocumentSelection(`*${selected}*`, { selectionStartOffset: 1, selectionEndOffset: 1 + selected.length });
@@ -657,6 +749,34 @@ function applyDocumentStyle(kind) {
     font: RaEls.docFontFamily?.value || "",
   };
   wrapDocumentRichStyle(attrs, selected);
+}
+
+function execRichCommand(command, value = null, message = "格式已应用。") {
+  if (!RaEls.docRichEditor) return;
+  RaEls.docRichEditor.focus();
+  document.execCommand(command, false, value);
+  setRichEditorHtml(RaEls.docRichEditor.innerHTML);
+  setDocStatus(message);
+}
+
+function execRichStyle() {
+  if (!RaEls.docRichEditor) return;
+  RaEls.docRichEditor.focus();
+  document.execCommand("fontSize", false, "4");
+  const selection = window.getSelection();
+  const fontNodes = [...RaEls.docRichEditor.querySelectorAll("font[size='4']")];
+  fontNodes.forEach((font) => {
+    const span = document.createElement("span");
+    span.innerHTML = font.innerHTML;
+    span.style.fontSize = `${Number(RaEls.docFontSize?.value || 16)}px`;
+    if (isSafeColor(RaEls.docTextColor?.value)) span.style.color = RaEls.docTextColor.value;
+    if (isSafeColor(RaEls.docBgColor?.value)) span.style.backgroundColor = RaEls.docBgColor.value;
+    if (RaEls.docFontFamily?.value) span.style.fontFamily = RaEls.docFontFamily.value;
+    font.replaceWith(span);
+  });
+  if (selection) selection.removeAllRanges();
+  setRichEditorHtml(RaEls.docRichEditor.innerHTML);
+  setDocStatus("文字格式已应用。");
 }
 
 function applyDocumentStyleIfSelection() {
@@ -713,6 +833,11 @@ function findEnclosingRichStyle() {
 }
 
 function insertDocumentCode() {
+  if (RaDocMode === "rich") {
+    insertRichHtml(`<pre><code>在这里粘贴代码</code></pre>`);
+    setDocStatus("已插入代码块。");
+    return;
+  }
   replaceDocumentSelection("\n```text\n在这里粘贴代码\n```\n");
 }
 
@@ -723,6 +848,11 @@ async function insertDocumentImage(event) {
   try {
     if (!file.type.startsWith("image/")) throw new Error("请选择图片文件。");
     const dataUrl = await fileToDataUrl(file);
+    if (RaDocMode === "rich") {
+      insertRichHtml(`<img src="${escapeAttr(dataUrl)}" alt="${escapeAttr(file.name)}" />`);
+      setDocStatus(`已插入图片：${file.name}`);
+      return;
+    }
     replaceDocumentSelection(`\n[[ra-image src="${dataUrl}" alt="${file.name.replace(/"/g, "")}"]]\n`);
     setDocStatus(`已插入图片：${file.name}`);
   } catch (error) {
@@ -739,6 +869,11 @@ async function insertDocumentAttachments(event) {
     for (const file of files) next.push(await fileToAttachment(file));
     RaSelectedAttachments = [...normalizeAttachments(RaSelectedAttachments), ...next];
     renderAttachmentList();
+    if (RaDocMode === "rich") {
+      insertRichHtml(next.map((item) => renderInlineAttachmentCard(item)).join(""));
+      setDocStatus(`已插入 ${next.length} 个附件卡片。`);
+      return;
+    }
     replaceDocumentSelection(`\n${next.map((item) => `[[ra-attachment:${item.id}]]`).join("\n")}\n`);
     setDocStatus(`已插入 ${next.length} 个附件卡片。`);
   } catch (error) {
@@ -746,7 +881,35 @@ async function insertDocumentAttachments(event) {
   }
 }
 
+function insertRichHtml(html) {
+  if (!RaEls.docRichEditor) return;
+  RaEls.docRichEditor.focus();
+  document.execCommand("insertHTML", false, html);
+  setRichEditorHtml(RaEls.docRichEditor.innerHTML);
+}
+
+async function pasteIntoRichEditor(event) {
+  if (RaDocMode !== "rich") return;
+  const files = [...(event.clipboardData?.files || [])].filter((file) => file.type.startsWith("image/"));
+  if (!files.length) return;
+  event.preventDefault();
+  try {
+    for (const file of files) {
+      const dataUrl = await fileToDataUrl(file);
+      insertRichHtml(`<img src="${escapeAttr(dataUrl)}" alt="${escapeAttr(file.name || "粘贴图片")}" />`);
+    }
+    setDocStatus(`已粘贴 ${files.length} 张图片。`);
+  } catch (error) {
+    setDocStatus(`粘贴图片失败：${error.message}`);
+  }
+}
+
 function selectedDocumentText() {
+  if (RaDocMode === "rich") {
+    const selection = window.getSelection();
+    if (!selection || !RaEls.docRichEditor?.contains(selection.anchorNode)) return "";
+    return selection.toString();
+  }
   const input = RaEls.docContent;
   if (!input) return "";
   return input.value.slice(input.selectionStart, input.selectionEnd);
@@ -844,6 +1007,7 @@ function refreshPostPreviewIfOpen() {
 
 function renderMarkdownPreview(content, attachments = [], mode = "markdown") {
   if (mode === "plain") return `<p>${escapeHtml(content)}</p>`;
+  if (mode === "rich") return renderRichDocumentContent(content, attachments);
   const attachmentMap = new Map(normalizeAttachments(attachments).map((item) => [item.id, item]));
   return parseMarkdownBlocks(content)
     .map((block) => {
@@ -2310,17 +2474,46 @@ RaEls.docContent.addEventListener("input", () => {
   syncPostFromDocument({ showMessage: false });
   refreshDocumentStudio();
 });
+RaEls.docRichEditor.addEventListener("input", () => {
+  syncPostFromDocument({ showMessage: false });
+  renderDocumentPreview();
+  setDocStatus("富文本内容已更新。");
+});
+RaEls.docRichEditor.addEventListener("paste", pasteIntoRichEditor);
 RaEls.docContent.addEventListener("scroll", () => {
   if (RaEls.docLineNumbers) RaEls.docLineNumbers.scrollTop = RaEls.docContent.scrollTop;
 });
 RaEls.docSyncFromPost.addEventListener("click", () => {
   syncDocumentFromPost();
-  setDocStatus("已读取当前文章正文。");
+  setDocStatus("已读取当前文章的全部信息。");
 });
-RaEls.docApplyToPost.addEventListener("click", () => syncPostFromDocument());
+RaEls.docApplyToPost.addEventListener("click", () => {
+  syncPostFromDocument();
+  if (saveCurrentPost()) setDocStatus("已同步并保存到文章数据。");
+});
 RaEls.docPublish.addEventListener("click", async () => {
+  setDocStatus("正在保存并发布...");
   syncPostFromDocument({ showMessage: false });
   if (saveCurrentPost()) await publishData("posts");
+  setDocStatus("发布请求已提交，请等待部署完成。");
+});
+[
+  RaEls.docTitle,
+  RaEls.docSlug,
+  RaEls.docDate,
+  RaEls.docTags,
+  RaEls.docVisibility,
+  RaEls.docAccessPassword,
+  RaEls.docSummary,
+].forEach((input) => {
+  input.addEventListener("input", () => {
+    syncPostFromDocument({ showMessage: false });
+    setDocStatus("文章信息已同步。");
+  });
+  input.addEventListener("change", () => {
+    syncPostFromDocument({ showMessage: false });
+    setDocStatus("文章信息已同步。");
+  });
 });
 RaEls.docApplyHeading.addEventListener("click", applyDocumentHeading);
 RaEls.docApplyStyle.addEventListener("click", () => applyDocumentStyle("rich"));
