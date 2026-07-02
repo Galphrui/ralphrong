@@ -583,6 +583,7 @@ function renderColorSwatches(container, colors, input) {
     if (!button || !input) return;
     input.value = button.dataset.raColor;
     [...container.querySelectorAll(".RaColorSwatch")].forEach((item) => item.classList.toggle("RaActive", item === button));
+    applyDocumentStyleIfSelection();
   });
 }
 
@@ -637,13 +638,17 @@ function renderDocumentPreview() {
 function applyDocumentHeading() {
   const level = Math.min(Math.max(Number(RaEls.docHeading?.value || 1), 1), 6);
   const value = selectedDocumentText() || "标题";
-  replaceDocumentSelection(`${"#".repeat(level)} ${value.replace(/^#{1,6}\s+/, "")}`);
+  const clean = value.replace(/^#{1,6}\s+/, "");
+  replaceDocumentSelection(`${"#".repeat(level)} ${clean}`, {
+    selectionStartOffset: level + 1,
+    selectionEndOffset: level + 1 + clean.length,
+  });
 }
 
 function applyDocumentStyle(kind) {
   const selected = selectedDocumentText() || "文字";
-  if (kind === "bold") return replaceDocumentSelection(`**${selected}**`);
-  if (kind === "italic") return replaceDocumentSelection(`*${selected}*`);
+  if (kind === "bold") return replaceDocumentSelection(`**${selected}**`, { selectionStartOffset: 2, selectionEndOffset: 2 + selected.length });
+  if (kind === "italic") return replaceDocumentSelection(`*${selected}*`, { selectionStartOffset: 1, selectionEndOffset: 1 + selected.length });
   if (kind === "underline") return wrapDocumentRichStyle({ underline: "1" }, selected);
   const attrs = {
     size: RaEls.docFontSize?.value || "16",
@@ -654,12 +659,57 @@ function applyDocumentStyle(kind) {
   wrapDocumentRichStyle(attrs, selected);
 }
 
+function applyDocumentStyleIfSelection() {
+  if (!selectedDocumentText()) return;
+  applyDocumentStyle("rich");
+}
+
 function wrapDocumentRichStyle(attrs, text) {
-  const attrText = Object.entries(attrs)
+  const input = RaEls.docContent;
+  const existing = findEnclosingRichStyle();
+  if (existing && input) {
+    const nextAttrs = { ...existing.attrs, ...attrs };
+    const nextPrefix = `[[ra-style ${formatTokenAttributes(nextAttrs)}]]`;
+    const nextValue = `${nextPrefix}${existing.text}[[/ra-style]]`;
+    replaceDocumentRange(existing.start, existing.end, nextValue, {
+      selectionStartOffset: nextPrefix.length + (input.selectionStart - existing.textStart),
+      selectionEndOffset: nextPrefix.length + (input.selectionEnd - existing.textStart),
+    });
+    return;
+  }
+  const attrText = formatTokenAttributes(attrs);
+  const prefix = `[[ra-style ${attrText}]]`;
+  replaceDocumentSelection(`${prefix}${text}[[/ra-style]]`, {
+    selectionStartOffset: prefix.length,
+    selectionEndOffset: prefix.length + text.length,
+  });
+}
+
+function formatTokenAttributes(attrs) {
+  return Object.entries(attrs)
     .filter(([, value]) => value)
     .map(([key, value]) => `${key}="${String(value).replace(/"/g, "&quot;")}"`)
     .join(" ");
-  replaceDocumentSelection(`[[ra-style ${attrText}]]${text}[[/ra-style]]`);
+}
+
+function findEnclosingRichStyle() {
+  const input = RaEls.docContent;
+  if (!input) return null;
+  const value = input.value;
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  const openStart = value.lastIndexOf("[[ra-style", start);
+  const openEnd = openStart >= 0 ? value.indexOf("]]", openStart) : -1;
+  const closeStart = value.indexOf("[[/ra-style]]", end);
+  const previousClose = value.lastIndexOf("[[/ra-style]]", start);
+  if (openStart < 0 || openEnd < 0 || closeStart < 0 || previousClose > openStart || openEnd + 2 > start) return null;
+  return {
+    start: openStart,
+    end: closeStart + "[[/ra-style]]".length,
+    textStart: openEnd + 2,
+    text: value.slice(openEnd + 2, closeStart),
+    attrs: parseTokenAttributes(value.slice(openStart + "[[ra-style".length, openEnd)),
+  };
 }
 
 function insertDocumentCode() {
@@ -702,17 +752,46 @@ function selectedDocumentText() {
   return input.value.slice(input.selectionStart, input.selectionEnd);
 }
 
-function replaceDocumentSelection(value) {
+function captureDocumentViewport() {
+  return {
+    docScrollTop: RaEls.docContent?.scrollTop || 0,
+    docScrollLeft: RaEls.docContent?.scrollLeft || 0,
+    lineScrollTop: RaEls.docLineNumbers?.scrollTop || 0,
+    pageX: window.scrollX,
+    pageY: window.scrollY,
+  };
+}
+
+function restoreDocumentViewport(state) {
+  if (!state) return;
+  if (RaEls.docContent) {
+    RaEls.docContent.scrollTop = state.docScrollTop;
+    RaEls.docContent.scrollLeft = state.docScrollLeft;
+  }
+  if (RaEls.docLineNumbers) RaEls.docLineNumbers.scrollTop = state.lineScrollTop;
+  window.scrollTo(state.pageX, state.pageY);
+}
+
+function replaceDocumentSelection(value, options = {}) {
   const input = RaEls.docContent;
   if (!input) return;
   const start = input.selectionStart;
   const end = input.selectionEnd;
+  replaceDocumentRange(start, end, value, options);
+}
+
+function replaceDocumentRange(start, end, value, options = {}) {
+  const input = RaEls.docContent;
+  if (!input) return;
+  const viewport = captureDocumentViewport();
   input.value = `${input.value.slice(0, start)}${value}${input.value.slice(end)}`;
   input.focus();
-  input.selectionStart = start;
-  input.selectionEnd = start + value.length;
+  input.selectionStart = start + (options.selectionStartOffset ?? 0);
+  input.selectionEnd = start + (options.selectionEndOffset ?? value.length);
   syncPostFromDocument({ showMessage: false });
   refreshDocumentStudio();
+  restoreDocumentViewport(viewport);
+  requestAnimationFrame(() => restoreDocumentViewport(viewport));
 }
 
 function setDocStatus(message) {
@@ -2248,6 +2327,13 @@ RaEls.docApplyStyle.addEventListener("click", () => applyDocumentStyle("rich"));
 RaEls.docBold.addEventListener("click", () => applyDocumentStyle("bold"));
 RaEls.docItalic.addEventListener("click", () => applyDocumentStyle("italic"));
 RaEls.docUnderline.addEventListener("click", () => applyDocumentStyle("underline"));
+RaEls.docHeading.addEventListener("change", () => {
+  if (selectedDocumentText()) applyDocumentHeading();
+});
+RaEls.docFontSize.addEventListener("change", applyDocumentStyleIfSelection);
+RaEls.docFontFamily.addEventListener("change", applyDocumentStyleIfSelection);
+RaEls.docTextColor.addEventListener("input", applyDocumentStyleIfSelection);
+RaEls.docBgColor.addEventListener("input", applyDocumentStyleIfSelection);
 RaEls.docLineNumbersToggle.addEventListener("change", updateDocumentChrome);
 RaEls.docRulerToggle.addEventListener("change", updateDocumentChrome);
 RaEls.docGridToggle.addEventListener("change", updateDocumentChrome);
