@@ -63,7 +63,10 @@ export default {
       }
       if (url.pathname === "/api/posts" && request.method === "PUT") {
         await requireSession(request, env);
-        const body = await request.json();
+        const body = await readRequestJson(request, "发布数据");
+        if (!body || typeof body.data !== "object" || Array.isArray(body.data)) {
+          throw httpError(400, "发布数据格式无效，请先保存当前配置后再发布。");
+        }
         const deploy = await writeGitHubData(env, body.data);
         return json({ ok: true, deploy }, request, env);
       }
@@ -389,8 +392,27 @@ async function readGitHubJson(env, path) {
 
   return {
     sha: result.sha,
-    data: JSON.parse(fromBase64(result.content)),
+    data: parseStoredJson(fromBase64(result.content), path),
   };
+}
+
+async function readRequestJson(request, label = "请求数据") {
+  try {
+    return await request.json();
+  } catch (error) {
+    throw httpError(400, `${label}不是有效 JSON，请刷新后台后重试。`);
+  }
+}
+
+function parseStoredJson(text, path) {
+  if (!String(text || "").trim()) {
+    throw httpError(500, `GitHub 数据文件 ${path} 为空，无法发布。请先恢复该 JSON 文件内容。`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw httpError(500, `GitHub 数据文件 ${path} 不是有效 JSON，无法发布。请先修复文件格式后重试。`);
+  }
 }
 
 async function writeGitHubData(env, data) {

@@ -348,9 +348,14 @@ async function publishData(target = "posts") {
       : await raApi("/api/posts", {
           method: "PUT",
           body: JSON.stringify({ data: RaData }),
-        });
+    });
     setPublishResult(result, target);
-    await waitForPagesUpdate(target, result.deploy);
+    await waitForPagesUpdate(target, result.deploy).catch((error) => {
+      const message = `发布已写入 GitHub，但上线检查未完成：${error.message}`;
+      setStatus(message);
+      setDeployStatus(message);
+      setTargetStatus(target, message);
+    });
   } catch (error) {
     const message = `发布失败：${error.message}`;
     setStatus(message);
