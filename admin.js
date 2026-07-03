@@ -305,7 +305,7 @@ async function loadInitialData() {
   try {
     const response = await fetch(`./data/posts.json?t=${Date.now()}`);
     if (!response.ok) throw new Error("Cannot load local posts");
-    RaData = normalizeData(await response.json());
+    RaData = normalizeData(await readJsonResponse(response, "本地数据文件"));
     saveLocalData();
   } catch (error) {
     RaData = getDefaultData();
@@ -2281,11 +2281,28 @@ async function raApi(path, options = {}) {
     throw new Error(`无法连接后台 API：${RA_API_BASE}`);
   }
 
-  const result = await response.json().catch(() => ({}));
+  const result = await readJsonResponse(response, "后台 API", { allowEmpty: true }).catch((error) => ({
+    ok: false,
+    error: error.message,
+  }));
   if (!response.ok || result.ok === false) {
     throw new Error(result.error || `后台服务请求失败：${response.status}`);
   }
   return result;
+}
+
+async function readJsonResponse(response, label = "接口响应", { allowEmpty = false } = {}) {
+  const text = await response.text();
+  if (!text.trim()) {
+    if (allowEmpty) return {};
+    throw new Error(`${label}返回为空，请稍后重试。`);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${label}不是有效 JSON，可能仍在发布或被缓存，请稍后重试。`);
+  }
 }
 
 function authHeaders() {
@@ -2334,7 +2351,7 @@ async function waitForPagesUpdate(target = "posts", deploy = {}) {
         cache: "no-store",
       });
       if (!response.ok) throw new Error(`公开数据读取失败：${response.status}`);
-      const liveData = await response.json();
+      const liveData = await readJsonResponse(response, "公开博客数据");
       if (createDataSignature(liveData) === expectedSignature) {
         const done = `上线完成：公开博客数据已更新。${commitText}现在刷新前台即可看到最新内容。`;
         setStatus(done);
