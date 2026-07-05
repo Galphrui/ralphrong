@@ -389,11 +389,30 @@ async function readGitHubJson(env, path) {
   if (!response.ok) {
     throw httpError(response.status, result.message || "读取 GitHub 数据失败。");
   }
+  let text = result.content ? fromBase64(result.content) : "";
+  if (!String(text || "").trim() && (result.encoding === "none" || result.git_url || result.sha)) {
+    text = await readGitHubBlobText(env, info, result);
+  }
 
   return {
     sha: result.sha,
-    data: parseStoredJson(fromBase64(result.content), path),
+    data: parseStoredJson(text, path),
   };
+}
+
+async function readGitHubBlobText(env, info, file) {
+  const url = file.git_url || `https://api.github.com/repos/${info.owner}/${info.repo}/git/blobs/${file.sha}`;
+  const response = await fetch(url, {
+    headers: githubReadHeaders(env),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw httpError(response.status, result.message || "读取 GitHub 大文件数据失败。");
+  }
+  if (result.encoding !== "base64") {
+    throw httpError(500, "GitHub 大文件数据编码无法识别，无法发布。");
+  }
+  return fromBase64(result.content || "");
 }
 
 async function readRequestJson(request, label = "请求数据") {
