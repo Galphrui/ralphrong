@@ -88,6 +88,8 @@ const RaEls = {
   slug: document.querySelector("#RaSlugInput"),
   date: document.querySelector("#RaDateInput"),
   tags: document.querySelector("#RaTagsInput"),
+  tagPicker: document.querySelector("#RaTagPicker"),
+  clearTags: document.querySelector("#RaClearTagsButton"),
   visibility: document.querySelector("#RaVisibilityInput"),
   accessPassword: document.querySelector("#RaAccessPasswordInput"),
   summary: document.querySelector("#RaSummaryInput"),
@@ -316,6 +318,7 @@ function saveLocalData() {
   RaData.posts = sortPosts(RaData.posts);
   localStorage.setItem(RA_LOCAL_DATA_KEY, JSON.stringify(RaData, null, 2));
   renderPostList();
+  renderTagPicker();
 }
 
 async function loadRemoteData() {
@@ -510,6 +513,24 @@ function renderPostList() {
     : `<div class="RaEmptyState">没有匹配的文章</div>`;
 }
 
+function renderTagPicker() {
+  if (!RaEls.tagPicker) return;
+  const tags = getAllPostTags();
+  const selected = new Set(getEditorTags().map(tagKey));
+  RaEls.tagPicker.innerHTML = tags.length
+    ? tags
+      .map((tag) => {
+        const active = selected.has(tagKey(tag));
+        return `
+          <button class="RaTagOption ${active ? "RaActive" : ""}" type="button" data-ra-tag-option="${escapeAttr(tag)}" aria-pressed="${active}">
+            ${escapeHtml(tag)}
+          </button>
+        `;
+      })
+      .join("")
+    : `<span class="RaTagPickerEmpty">保存第一篇带标签的文章后，这里会出现可选标签</span>`;
+}
+
 function filterPosts(posts, query) {
   const keyword = query.trim().toLowerCase();
   if (!keyword) return posts;
@@ -520,6 +541,51 @@ function filterPosts(posts, query) {
       .toLowerCase();
     return haystack.includes(keyword);
   });
+}
+
+function getAllPostTags() {
+  return normalizeTags(RaData.posts.flatMap((post) => post.tags || [])).sort((a, b) => a.localeCompare(b, "zh-CN"));
+}
+
+function getEditorTags() {
+  return parseTags(RaEls.tags.value);
+}
+
+function setEditorTags(tags, { syncDocument = true } = {}) {
+  const normalized = normalizeTags(Array.isArray(tags) ? tags : parseTags(tags));
+  RaEls.tags.value = normalized.join(", ");
+  if (syncDocument && RaEls.docTags) RaEls.docTags.value = RaEls.tags.value;
+  renderTagPicker();
+  refreshPostPreviewIfOpen();
+}
+
+function toggleEditorTag(tag) {
+  const current = getEditorTags();
+  const key = tagKey(tag);
+  const exists = current.some((item) => tagKey(item) === key);
+  setEditorTags(exists ? current.filter((item) => tagKey(item) !== key) : [...current, tag]);
+}
+
+function parseTags(value) {
+  return normalizeTags(String(value || "").split(/[,，;；\n]/));
+}
+
+function normalizeTags(tags) {
+  const seen = new Set();
+  const normalized = [];
+  (tags || []).forEach((tag) => {
+    const clean = String(tag || "").trim().replace(/\s+/g, " ");
+    if (!clean) return;
+    const key = tagKey(clean);
+    if (seen.has(key)) return;
+    seen.add(key);
+    normalized.push(clean);
+  });
+  return normalized;
+}
+
+function tagKey(tag) {
+  return String(tag || "").trim().toLocaleLowerCase();
 }
 
 function updatePostListCollapsed() {
@@ -607,7 +673,7 @@ function syncDocumentFromPost() {
   RaEls.docTitle.value = RaEls.title.value || "";
   RaEls.docSlug.value = RaEls.slug.value || "";
   RaEls.docDate.value = RaEls.date.value || "";
-  RaEls.docTags.value = RaEls.tags.value || "";
+  RaEls.docTags.value = normalizeTags(getEditorTags()).join(", ");
   RaEls.docVisibility.value = RaEls.visibility.value || "public";
   RaEls.docAccessPassword.value = RaEls.accessPassword.value || "";
   RaEls.docSummary.value = RaEls.summary.value || "";
@@ -625,7 +691,7 @@ function syncPostFromDocument({ showMessage = true } = {}) {
   RaEls.title.value = RaEls.docTitle.value.trim();
   RaEls.slug.value = RaEls.docSlug.value.trim() || slugify(RaEls.docTitle.value);
   RaEls.date.value = RaEls.docDate.value || new Date().toISOString().slice(0, 10);
-  RaEls.tags.value = RaEls.docTags.value;
+  setEditorTags(RaEls.docTags.value);
   RaEls.visibility.value = RaEls.docVisibility.value;
   RaEls.accessPassword.value = RaEls.docAccessPassword.value;
   RaEls.summary.value = RaEls.docSummary.value;
@@ -1170,7 +1236,7 @@ function renderAttachmentList() {
 function renderPostPreview() {
   if (!RaEls.postPreviewPanel || !RaEls.postPreview) return;
   const title = RaEls.title.value.trim() || "未命名文章";
-  const tags = RaEls.tags.value.split(",").map((tag) => tag.trim()).filter(Boolean);
+  const tags = getEditorTags();
   const summary = RaEls.summary.value.trim();
   const meta = [RaEls.date.value || new Date().toISOString().slice(0, 10), `${estimateReadingMinutes(RaEls.content.value)} 分钟阅读`];
   RaEls.postPreview.innerHTML = `
@@ -1932,7 +1998,7 @@ function selectPost(slug) {
   RaEls.title.value = post.title;
   RaEls.slug.value = post.slug;
   RaEls.date.value = post.date;
-  RaEls.tags.value = post.tags.join(", ");
+  setEditorTags(post.tags, { syncDocument: false });
   RaEls.visibility.value = normalizePostVisibility(post.visibility);
   RaEls.accessPassword.value = post.accessPassword || "";
   RaEls.summary.value = post.summary;
@@ -1956,10 +2022,7 @@ function saveCurrentPost(event) {
     date: RaEls.date.value || new Date().toISOString().slice(0, 10),
     createdAt: existing?.createdAt || now,
     updatedAt: now,
-    tags: RaEls.tags.value
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean),
+    tags: getEditorTags(),
     visibility: normalizePostVisibility(RaEls.visibility.value),
     accessPassword: RaEls.accessPassword.value.trim(),
     summary: RaEls.summary.value.trim(),
@@ -2463,7 +2526,7 @@ function normalizeData(input) {
         date: post.date || new Date().toISOString().slice(0, 10),
         createdAt: post.createdAt || post.date || "",
         updatedAt: post.updatedAt || post.modifiedAt || post.lastModified || post.date || "",
-        tags: Array.isArray(post.tags) ? post.tags : [],
+        tags: normalizeTags(Array.isArray(post.tags) ? post.tags : []),
         visibility: normalizePostVisibility(post.visibility),
         accessPassword: post.accessPassword || post.password || "",
         summary: post.summary || "",
@@ -2660,6 +2723,11 @@ RaEls.newPost.addEventListener("click", createNewPost);
 RaEls.form.addEventListener("submit", saveCurrentPost);
 RaEls.previewPost.addEventListener("click", renderPostPreview);
 RaEls.deletePost.addEventListener("click", deleteSelectedPost);
+RaEls.tagPicker.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-ra-tag-option]");
+  if (button) toggleEditorTag(button.dataset.raTagOption);
+});
+RaEls.clearTags.addEventListener("click", () => setEditorTags([]));
 RaEls.textContentFile.addEventListener("change", importTextContent);
 RaEls.attachmentFile.addEventListener("change", addAttachments);
 RaEls.clearAttachments.addEventListener("click", clearAttachments);
@@ -2787,7 +2855,11 @@ RaEls.title.addEventListener("input", () => {
   refreshPostPreviewIfOpen();
 });
 RaEls.date.addEventListener("input", refreshPostPreviewIfOpen);
-RaEls.tags.addEventListener("input", refreshPostPreviewIfOpen);
+RaEls.tags.addEventListener("input", () => {
+  renderTagPicker();
+  refreshPostPreviewIfOpen();
+});
+RaEls.tags.addEventListener("change", () => setEditorTags(RaEls.tags.value));
 RaEls.summary.addEventListener("input", refreshPostPreviewIfOpen);
 RaEls.content.addEventListener("input", () => {
   syncDocumentFromPost();

@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Ra 后台管理</title>
-    <link rel="stylesheet" href="./styles.css?v=ra-20260703-2" />
+    <link rel="stylesheet" href="./styles.css?v=ra-20260708-tags" />
   </head>
   <body class="RaPage RaAdminPage RaAuthPending">
     <header class="RaTopbar">
@@ -80,10 +80,15 @@
                   发布日期
                   <input id="RaDateInput" type="date" required />
                 </label>
-                <label class="RaField">
-                  标签，逗号分隔
-                  <input id="RaTagsInput" placeholder="JavaScript, 架构" />
-                </label>
+                <div class="RaField">
+                  <div class="RaInlineFieldTools">
+                    <span>标签</span>
+                    <button id="RaClearTagsButton" class="RaSecondaryButton RaMiniButton" type="button">清空</button>
+                  </div>
+                  <input id="RaTagsInput" placeholder="输入新标签，用逗号分隔" />
+                  <div class="RaTagPicker" id="RaTagPicker" aria-label="选择已有标签"></div>
+                  <p class="RaHint">可单选或多选已有标签，也可以继续手动输入；新标签保存后会进入可选列表。</p>
+                </div>
                 <label class="RaField">
                   可见权限
                   <select id="RaVisibilityInput">
@@ -580,6 +585,6 @@
     </main>
 
     <script src="./admin-config.js?v=ra-20260703-2"></script>
-    <script src="./admin.js?v=ra-20260703-2"></script>
+    <script src="./admin.js?v=ra-20260708-tags"></script>
   </body>
 </html>

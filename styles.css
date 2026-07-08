@@ -865,6 +865,54 @@ textarea {
   font-size: 12px;
 }
 
+.RaMiniButton {
+  font-size: 12px;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.RaTagPicker {
+  align-items: flex-start;
+  background: #f8fafc;
+  border: 1px solid var(--RaLine);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 112px;
+  min-height: 42px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.RaPage .RaTagOption {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: var(--RaInk);
+  font-size: 12px;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.RaPage .RaTagOption:hover {
+  background: #e0f2fe;
+  border-color: #38bdf8;
+  color: #075985;
+}
+
+.RaPage .RaTagOption.RaActive {
+  background: #ccfbf1;
+  border-color: var(--RaPrimary);
+  color: var(--RaPrimaryStrong);
+}
+
+.RaTagPickerEmpty {
+  align-self: center;
+  color: var(--RaMuted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .RaDangerButton {
   background: #fee4e2;
   color: var(--RaDanger);
