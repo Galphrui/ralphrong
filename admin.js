@@ -1885,6 +1885,9 @@ function fileToDataUrl(file) {
 }
 
 async function uploadAssetAttachment(file, bucket = "tools") {
+  if (!RA_API_BASE) {
+    throw new Error("后台 API 未配置，无法上传到 GitHub。请检查 admin-config.js 的 BLOG_ADMIN_API_BASE。");
+  }
   const dataUrl = await fileToDataUrl(file);
   const result = await raApi("/api/assets", {
     method: "POST",
@@ -1895,13 +1898,15 @@ async function uploadAssetAttachment(file, bucket = "tools") {
       dataUrl,
     }),
   });
+  const url = result.url || result.asset?.url || "";
+  if (!url) throw new Error("后台上传成功但没有返回附件下载地址。");
   return {
     id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: file.name,
     fileName: file.name,
     mimeType: file.type || "application/octet-stream",
     size: file.size,
-    url: result.url || result.asset?.url || "",
+    url,
     path: result.path || result.asset?.path || "",
     createdAt: new Date().toISOString(),
   };
@@ -2345,7 +2350,7 @@ async function addToolAttachments(event) {
   try {
     const next = [];
     for (const file of files) {
-      setToolsStatus(`正在上传 ${file.name} 到 GitHub...`);
+      setToolsStatus(`正在上传 ${file.name} 到 GitHub，后台接口：${RA_API_BASE}/api/assets`);
       next.push(await uploadAssetAttachment(file, "tools"));
     }
     RaSelectedToolAttachments = [...normalizeAttachments(RaSelectedToolAttachments), ...next];
@@ -2984,9 +2989,10 @@ function getSettings() {
 
 async function raApi(path, options = {}) {
   if (!RA_API_BASE) throw new Error("后台 API 未配置。");
+  const endpoint = `${RA_API_BASE}${path}`;
   let response;
   try {
-    response = await fetch(`${RA_API_BASE}${path}`, {
+    response = await fetch(endpoint, {
       method: options.method || "GET",
       credentials: "include",
       headers: {
@@ -3005,7 +3011,11 @@ async function raApi(path, options = {}) {
     error: error.message,
   }));
   if (!response.ok || result.ok === false) {
-    throw new Error(result.error || `后台服务请求失败：${response.status}`);
+    const detail = result.error || `后台服务请求失败：${response.status}`;
+    if (response.status === 404 && path === "/api/assets") {
+      throw new Error(`${detail}。当前后台没有附件上传接口 /api/assets，请部署最新 worker/admin-worker.js 后重试。接口地址：${endpoint}`);
+    }
+    throw new Error(`${detail}。接口地址：${endpoint}，HTTP ${response.status}`);
   }
   return result;
 }

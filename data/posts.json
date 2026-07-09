@@ -1275,6 +1275,24 @@
   "tools": [],
   "devLogs": [
     {
+      "title": "工具附件上传按钮和接口错误修复",
+      "slug": "devlog-tool-attachment-upload-fix-20260709083200",
+      "date": "2026-07-09",
+      "createdAt": "2026-07-09T08:32:00.000Z",
+      "updatedAt": "2026-07-09T08:32:00.000Z",
+      "tags": [
+        "开发日志",
+        "工具库",
+        "附件上传",
+        "部署"
+      ],
+      "summary": "修复工具库附件上传入口不明显和上传失败时只显示 Not found 的问题，明确按钮文案并补充后台 API 诊断提示。",
+      "content": "## 背景\n\n工具库已经支持把附件上传到 GitHub，但是后台页面里按钮只写了“上传到 GitHub”。实际交互是点击这个按钮后弹出系统文件选择窗口，选中文件后自动上传。\n\n用户看到页面时不容易判断应该在哪里选择本地文件，所以需要把按钮文案改成更明确的“选择文件并上传到 GitHub”。\n\n同时上传失败时页面只显示：\n\n    工具附件上传失败：Not found\n\n这个提示不够明确。根据代码检查，工具附件上传调用的是：\n\n    POST /api/assets\n\n线上后台必须通过 admin-config.js 里的 Worker 地址访问这个接口：\n\n    https://ralphrong-blog-admin.ralphrong.workers.dev/api/assets\n\n如果 Worker 没部署最新代码，或者请求没有打到 Worker，就会返回 Not found。\n\n## 修改内容\n\n1. 修改 admin.html，把工具附件按钮从“上传到 GitHub”改成“选择文件并上传到 GitHub”。\n2. 修改工具附件说明，写清楚点击按钮后选择本地文件，选中后会自动上传。\n3. 修改 styles.css，给工具上传按钮固定最小宽度，让按钮更明显。\n4. 修改 admin.js，上传前检查后台 API 是否配置。\n5. 修改 admin.js，上传时显示实际调用的接口地址。\n6. 修改 admin.js，如果 /api/assets 返回 404，会提示需要部署最新 worker/admin-worker.js，而不是只显示 Not found。\n7. 上传成功但没有返回 url 时，主动报错，避免保存一个无法下载的附件。\n8. 更新 admin.html 的 CSS 和 JS 版本号，避免浏览器继续加载旧缓存。\n9. 自动追加本开发日志，记录本次排查和修复过程。\n\n## 文件修改\n\n    admin.html\n    admin.js\n    styles.css\n    data/posts.json\n\n## 小白操作说明\n\n### 1. 进入工具库后台\n\n1. 打开后台页面。\n2. 登录后台。\n3. 顶部点击“工具库”。\n4. 找到“工具附件”区域。\n\n### 2. 上传附件\n\n1. 点击“选择文件并上传到 GitHub”。\n2. 系统会弹出文件选择窗口。\n3. 在电脑里选中要上传的文件。\n4. 点击系统窗口里的“打开”或“选择”。\n5. 页面底部状态会显示正在上传，并显示后台接口地址。\n6. 上传成功后，附件列表里会出现文件名。\n7. 点击“保存工具”。\n8. 点击“保存并发布”。\n\n### 3. 如果还是失败\n\n先看状态栏最后的错误：\n\n1. 如果提示“后台 API 未配置”，检查 admin-config.js。\n2. 如果提示“当前后台没有附件上传接口 /api/assets”，说明 Worker 没部署最新代码，需要执行 wrangler deploy。\n3. 如果提示 401 或登录相关错误，重新登录后台。\n4. 如果提示 GitHub 写入失败，检查 Worker 的 GITHUB_TOKEN 是否有 Contents Read and write 权限。\n5. 如果文件特别大，检查 GitHub 单文件限制和浏览器上传限制。\n\n## 验证命令\n\n    node --check admin.js\n    node --check worker/admin-worker.js\n    ./node_modules/.bin/vite build\n\n## 上线步骤\n\n1. 提交代码。\n2. 推送 main。\n3. 等 GitHub Actions 的 Deploy to GitHub Pages 变成绿色对勾。\n4. 如果 Worker 代码也有变化，执行：\n\n       npx wrangler deploy\n\n5. 刷新后台 admin.html。\n6. 重新进入工具库测试附件上传。",
+      "contentFormat": "markdown",
+      "readingMinutes": 5,
+      "attachments": []
+    },
+    {
       "title": "模块显示设置迁移到后台管理",
       "slug": "devlog-module-settings-moved-to-admin-20260709080100",
       "date": "2026-07-09",

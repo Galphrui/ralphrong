@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Ra 后台管理</title>
-    <link rel="stylesheet" href="./styles.css?v=ra-20260709-admin-modules" />
+    <link rel="stylesheet" href="./styles.css?v=ra-20260709-tool-upload-fix" />
   </head>
   <body class="RaPage RaAdminPage RaAuthPending">
     <header class="RaTopbar">
@@ -478,13 +478,13 @@
                   工具附件
                   <div class="RaAttachmentEditor">
                     <div class="RaActions RaCompactActions">
-                      <label class="RaFileButton">
-                        上传到 GitHub
+                      <label class="RaFileButton RaUploadFileButton">
+                        选择文件并上传到 GitHub
                         <input id="RaToolAttachmentFileInput" type="file" multiple />
                       </label>
                       <button id="RaClearToolAttachmentsButton" class="RaSecondaryButton" type="button">清空附件</button>
                     </div>
-                    <p class="RaHint">这里不做 2MB 限制；实际上限取决于 GitHub 单文件限制和浏览器上传能力。</p>
+                    <p class="RaHint">点击上方按钮选择本地文件，选中后会自动上传到 GitHub。这里不做 2MB 限制；实际上限取决于 GitHub 单文件限制和浏览器上传能力。</p>
                     <div class="RaAttachmentList" id="RaToolAttachmentList"></div>
                   </div>
                 </div>
@@ -754,6 +754,6 @@
     </main>
 
     <script src="./admin-config.js?v=ra-20260703-2"></script>
-    <script src="./admin.js?v=ra-20260709-admin-modules"></script>
+    <script src="./admin.js?v=ra-20260709-tool-upload-fix"></script>
   </body>
 </html>

@@ -865,6 +865,10 @@ textarea {
   font-size: 12px;
 }
 
+.RaUploadFileButton {
+  min-width: 190px;
+}
+
 .RaMiniButton {
   font-size: 12px;
   min-height: 30px;
