@@ -47,6 +47,51 @@ function AttachmentList({ attachments = [] }) {
   )
 }
 
+function ArticleScrollControls() {
+  const scrollToPosition = (position) => {
+    const page = document.documentElement
+    const maxScroll = Math.max(0, page.scrollHeight - window.innerHeight)
+    const top =
+      position === 'top'
+        ? 0
+        : position === 'middle'
+          ? maxScroll / 2
+          : maxScroll
+
+    window.scrollTo({ top, behavior: 'smooth' })
+  }
+
+  const controls = [
+    { id: 'top', label: '↑', title: '回到顶部' },
+    { id: 'middle', label: '中', title: '跳到中部' },
+    { id: 'bottom', label: '↓', title: '跳到底部' },
+  ]
+
+  return (
+    <>
+      {['left', 'right'].map((side) => (
+        <nav
+          key={side}
+          className={`article-scroll-controls article-scroll-controls-${side}`}
+          aria-label={side === 'left' ? '文章左侧快速滚动' : '文章右侧快速滚动'}
+        >
+          {controls.map((control) => (
+            <button
+              key={control.id}
+              type="button"
+              title={control.title}
+              aria-label={control.title}
+              onClick={() => scrollToPosition(control.id)}
+            >
+              {control.label}
+            </button>
+          ))}
+        </nav>
+      ))}
+    </>
+  )
+}
+
 export default function PostDetail({ post }) {
   const { isLoading, postMetrics, setPostMetrics } = useBlogStore()
   const [password, setPassword] = useState('')
@@ -113,76 +158,79 @@ export default function PostDetail({ post }) {
   }
 
   return (
-    <motion.article
-      className="border border-slate-200 bg-white px-6 py-8 shadow-soft sm:px-10 lg:px-12"
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35 }}
-    >
-      <a href="#" className="text-sm font-bold text-primary-700 hover:text-primary-500">
-        返回 Ra 文章列表
-      </a>
+    <>
+      <ArticleScrollControls />
+      <motion.article
+        className="border border-slate-200 bg-white px-6 py-8 shadow-soft sm:px-10 lg:px-12"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+      >
+        <a href="#" className="text-sm font-bold text-primary-700 hover:text-primary-500">
+          返回 Ra 文章列表
+        </a>
 
-      <header className="mt-8 border-b border-slate-200 pb-8">
-        <div className="mb-4 flex flex-wrap gap-2">
-          {post.tags?.map((tag) => (
-            <span key={tag} className="bg-primary-50 px-3 py-1 text-xs font-bold text-primary-700">
-              {tag}
-            </span>
-          ))}
-        </div>
-        <h1 className="max-w-4xl text-4xl font-black leading-tight text-slate-950">
-          {post.title}
-        </h1>
-        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-slate-500">
-          <span>作者：Ralph Rong / Ra</span>
-          <span>{post.date}</span>
-          <span>{post.readingMinutes || 3} 分钟阅读</span>
-          <span>{metrics.views || 0} 点击</span>
-          <span>{metrics.likes || 0} 赞</span>
-          {isPasswordProtected && <span className="font-bold text-amber-700">密码可见</span>}
-          <button
-            type="button"
-            onClick={onLike}
-            className="border border-primary-100 bg-primary-50 px-3 py-1.5 text-xs font-black text-primary-700 hover:border-primary-300"
-          >
-            点赞 {metrics.likes || 0}
-          </button>
-        </div>
-        {post.summary && <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-600">{post.summary}</p>}
-      </header>
-
-      {isUnlocked ? (
-        <>
-          <div className="mt-8">
-            <MarkdownContent content={post.content} attachments={post.attachments || []} mode={post.contentFormat || 'markdown'} />
+        <header className="mt-8 border-b border-slate-200 pb-8">
+          <div className="mb-4 flex flex-wrap gap-2">
+            {post.tags?.map((tag) => (
+              <span key={tag} className="bg-primary-50 px-3 py-1 text-xs font-bold text-primary-700">
+                {tag}
+              </span>
+            ))}
           </div>
-
-          <AttachmentList attachments={bottomAttachments} />
-
-          <div className="mt-10">
-            <Guestbook postSlug={post.slug} title="文章留言" />
-          </div>
-        </>
-      ) : (
-        <form onSubmit={unlockPost} className="mt-8 border border-amber-200 bg-amber-50 p-6">
-          <h2 className="text-xl font-black text-slate-950">这篇文章需要密码授权</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">输入发布者设置的访问密码后，可以在当前浏览会话中阅读正文。</p>
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="min-h-11 flex-1 border border-amber-200 bg-white px-4 text-sm outline-none focus:border-primary-500"
-              placeholder="访问密码"
-            />
-            <button type="submit" className="border border-primary-700 bg-primary-700 px-5 py-2 text-sm font-black text-white">
-              授权阅读
+          <h1 className="max-w-4xl text-4xl font-black leading-tight text-slate-950">
+            {post.title}
+          </h1>
+          <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-slate-500">
+            <span>作者：Ralph Rong / Ra</span>
+            <span>{post.date}</span>
+            <span>{post.readingMinutes || 3} 分钟阅读</span>
+            <span>{metrics.views || 0} 点击</span>
+            <span>{metrics.likes || 0} 赞</span>
+            {isPasswordProtected && <span className="font-bold text-amber-700">密码可见</span>}
+            <button
+              type="button"
+              onClick={onLike}
+              className="border border-primary-100 bg-primary-50 px-3 py-1.5 text-xs font-black text-primary-700 hover:border-primary-300"
+            >
+              点赞 {metrics.likes || 0}
             </button>
           </div>
-          {passwordError && <p className="mt-3 text-sm font-bold text-red-600">{passwordError}</p>}
-        </form>
-      )}
-    </motion.article>
+          {post.summary && <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-600">{post.summary}</p>}
+        </header>
+
+        {isUnlocked ? (
+          <>
+            <div className="mt-8">
+              <MarkdownContent content={post.content} attachments={post.attachments || []} mode={post.contentFormat || 'markdown'} />
+            </div>
+
+            <AttachmentList attachments={bottomAttachments} />
+
+            <div className="mt-10">
+              <Guestbook postSlug={post.slug} title="文章留言" />
+            </div>
+          </>
+        ) : (
+          <form onSubmit={unlockPost} className="mt-8 border border-amber-200 bg-amber-50 p-6">
+            <h2 className="text-xl font-black text-slate-950">这篇文章需要密码授权</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">输入发布者设置的访问密码后，可以在当前浏览会话中阅读正文。</p>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="min-h-11 flex-1 border border-amber-200 bg-white px-4 text-sm outline-none focus:border-primary-500"
+                placeholder="访问密码"
+              />
+              <button type="submit" className="border border-primary-700 bg-primary-700 px-5 py-2 text-sm font-black text-white">
+                授权阅读
+              </button>
+            </div>
+            {passwordError && <p className="mt-3 text-sm font-bold text-red-600">{passwordError}</p>}
+          </form>
+        )}
+      </motion.article>
+    </>
   )
 }

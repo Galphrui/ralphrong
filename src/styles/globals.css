@@ -23,6 +23,79 @@
   }
 }
 
+.article-scroll-controls {
+  display: grid;
+  gap: 10px;
+  position: fixed;
+  top: 52%;
+  transform: translateY(-50%);
+  z-index: 45;
+}
+
+.article-scroll-controls-left {
+  left: 18px;
+}
+
+.article-scroll-controls-right {
+  right: 18px;
+}
+
+.article-scroll-controls button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #c8f4e7;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+  color: #075f51;
+  display: inline-flex;
+  font-size: 18px;
+  font-weight: 950;
+  height: 44px;
+  justify-content: center;
+  line-height: 1;
+  width: 44px;
+}
+
+.article-scroll-controls button:hover,
+.article-scroll-controls button:focus-visible {
+  background: #075f51;
+  border-color: #075f51;
+  color: #fff;
+  outline: none;
+}
+
+.article-scroll-controls button:focus-visible {
+  box-shadow: 0 0 0 4px rgba(15, 159, 127, 0.2), 0 14px 34px rgba(15, 23, 42, 0.14);
+}
+
+@media (max-width: 768px) {
+  .article-scroll-controls {
+    gap: 8px;
+    top: auto;
+    bottom: 18px;
+    transform: none;
+  }
+
+  .article-scroll-controls-left {
+    left: 10px;
+  }
+
+  .article-scroll-controls-right {
+    right: 10px;
+  }
+
+  .article-scroll-controls button {
+    font-size: 15px;
+    height: 36px;
+    width: 36px;
+  }
+}
+
+@media print {
+  .article-scroll-controls {
+    display: none;
+  }
+}
+
 .resume-page {
   margin: 0 auto;
   max-width: 1120px;
