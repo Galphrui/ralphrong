@@ -329,7 +329,7 @@ function PdfDocumentBlock({ item, fallbackId = '' }) {
   const containerRef = useRef(null)
   const [pages, setPages] = useState([])
   const [status, setStatus] = useState('正在加载 PDF...')
-  const source = item?.url || item?.dataUrl || ''
+  const source = item?.rawUrl || item?.url || item?.dataUrl || ''
 
   useEffect(() => {
     let cancelled = false
@@ -392,7 +392,7 @@ function PdfDocumentBlock({ item, fallbackId = '' }) {
           {item.size && <p className="mt-1 text-xs font-bold text-slate-500">{Math.ceil(item.size / 1024)} KB</p>}
         </div>
         <a
-          href={source}
+          href={item.url || source}
           download={item.fileName || item.name || 'document.pdf'}
           target={item.url ? '_blank' : undefined}
           rel={item.url ? 'noreferrer' : undefined}

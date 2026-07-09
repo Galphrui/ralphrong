@@ -499,6 +499,7 @@ async function writeGitHubAsset(env, body = {}) {
     mimeType: body.mimeType || match[1] || "application/octet-stream",
     size: Math.floor((content.length * 3) / 4),
     url: publicAssetUrl(env, path),
+    rawUrl: result.content?.download_url || rawGitHubAssetUrl(info, path),
     commitSha: result.commit?.sha || "",
   };
 }
@@ -626,6 +627,10 @@ function publicAssetUrl(env, path) {
   const owner = info.owner.toLowerCase();
   const repoPath = info.repo.toLowerCase() === `${owner}.github.io` ? "" : `/${info.repo}`;
   return `https://${owner}.github.io${repoPath}/${path}`;
+}
+
+function rawGitHubAssetUrl(info, path) {
+  return `https://raw.githubusercontent.com/${info.owner}/${info.repo}/${info.branch}/${path}`;
 }
 
 function safePathSegment(value) {

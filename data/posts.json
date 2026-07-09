@@ -1089,6 +1089,26 @@
   ],
   "devLogs": [
     {
+      "title": "修复 PDF 导入后后台预览 404",
+      "slug": "devlog-fix-pdf-preview-404-20260709131500",
+      "date": "2026-07-09",
+      "createdAt": "2026-07-09T13:15:00.000Z",
+      "updatedAt": "2026-07-09T13:15:00.000Z",
+      "tags": [
+        "开发日志",
+        "文章",
+        "PDF",
+        "后台"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "修复 PDF 刚上传后后台预览加载 GitHub Pages 地址导致 404 的问题，改为优先使用 GitHub raw 地址即时预览。",
+      "content": "## 背景\n\n文章后台导入 PDF 后，预览区域显示 GitHub Pages 的 404 页面。\n\n现象：\n\n1. 后台提示 PDF 已导入。\n2. 预览区域顶部能看到 PDF 文件名。\n3. iframe 内容显示 404 File not found。\n\n## 根因\n\nPDF 上传后会先写入 GitHub 仓库 public-assets/posts 目录。\n\n但后台预览原来直接使用 GitHub Pages 地址：\n\n    https://galphrui.github.io/ralphrong/public-assets/posts/xxx.pdf\n\nGitHub Pages 需要等待 Actions 构建和部署完成后才会包含这个新文件。PDF 刚上传完成时，Pages 上还没有这个文件，所以 iframe 立刻访问会得到 404。\n\n这不是 PDF 文件损坏，也不是 PDF.js 解析失败，而是上传成功和 Pages 发布之间有时间差。\n\n## 修复内容\n\n1. Worker 上传附件时除了返回 Pages 地址 url，也返回 GitHub raw 地址 rawUrl。\n2. 本地后台上传接口也返回 rawUrl，保持数据结构一致。\n3. 后台 PDF 预览优先使用 rawUrl。\n4. 如果旧附件没有 rawUrl，但有 path，后台会自动按仓库、分支和 path 拼出 raw.githubusercontent.com 预览地址。\n5. 前台 PDF 渲染也优先使用 rawUrl，减少 Pages 缓存或部署延迟导致的 404。\n6. 更新后台资源版本号，刷新页面后能加载新逻辑。\n\n## 用户现在怎么处理\n\n1. 强制刷新后台页面。\n2. 重新进入文章编辑。\n3. 如果旧预览仍然显示 404，可以重新导入一次 PDF，或保存发布后等待 Pages 完成部署。\n4. 新上传的 PDF 会优先走 rawUrl，上传完成后应能立即预览。\n\n## 验证命令\n\n    node --check admin.js\n    node --check worker/admin-worker.js\n    node --check local-admin-server.mjs\n    ./node_modules/.bin/vite build\n\n## 涉及文件\n\n    admin.html\n    admin.js\n    worker/admin-worker.js\n    local-admin-server.mjs\n    src/components/MarkdownContent.jsx\n    data/posts.json",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
+    {
       "title": "文章 PDF 原样导入和详情下载功能",
       "slug": "devlog-post-pdf-upload-export-20260709102800",
       "date": "2026-07-09",

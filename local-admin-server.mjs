@@ -536,6 +536,7 @@ async function writeAssetFile(body = {}) {
     mimeType: body.mimeType || match[1] || "application/octet-stream",
     size: bytes.length,
     url: publicAssetUrl(relativePath),
+    rawUrl: publicAssetUrl(relativePath),
   };
 }
 

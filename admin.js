@@ -1786,16 +1786,32 @@ function renderInlineAttachmentCard(item, fallbackId = "") {
 
 function renderInlinePdfCard(item, fallbackId = "") {
   if (!item) return `<div class="RaInlineAttachmentCard"><span>PDF 不存在：${escapeHtml(fallbackId)}</span></div>`;
-  const href = item.url || item.dataUrl || "#";
+  const href = attachmentPreviewUrl(item);
+  const downloadHref = item.url || href;
   return `
     <section class="RaInlinePdfCard">
       <div class="RaInlinePdfHeader">
         <strong>${escapeHtml(item.name || item.fileName || "PDF 文档")}</strong>
-        <a href="${escapeAttr(href)}" download="${escapeAttr(item.fileName || item.name || "document.pdf")}">下载 PDF</a>
+        <a href="${escapeAttr(downloadHref)}" download="${escapeAttr(item.fileName || item.name || "document.pdf")}">下载 PDF</a>
       </div>
       <iframe src="${escapeAttr(href)}" title="${escapeAttr(item.name || item.fileName || "PDF 预览")}"></iframe>
     </section>
   `;
+}
+
+function attachmentPreviewUrl(item = {}) {
+  if (item.rawUrl) return item.rawUrl;
+  if (item.dataUrl) return item.dataUrl;
+  if (item.path) return rawGitHubAssetUrl(item.path);
+  return item.url || "#";
+}
+
+function rawGitHubAssetUrl(path = "") {
+  const settings = getSettings();
+  const owner = settings.owner || "Galphrui";
+  const repo = settings.repo || "ralphrong";
+  const branch = settings.branch || "main";
+  return `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(branch)}/${String(path).replace(/^\/+/, "")}`;
 }
 
 function parseTokenAttributes(value = "") {
@@ -1964,6 +1980,7 @@ async function uploadAssetAttachment(file, bucket = "tools") {
     mimeType: file.type || "application/octet-stream",
     size: file.size,
     url,
+    rawUrl: result.rawUrl || result.asset?.rawUrl || "",
     path: result.path || result.asset?.path || "",
     createdAt: new Date().toISOString(),
   };
