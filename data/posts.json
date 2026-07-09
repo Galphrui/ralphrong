@@ -1037,7 +1037,56 @@
       "attachments": []
     }
   ],
-  "tools": [],
+  "tools": [
+    {
+      "title": "Android投屏工具",
+      "slug": "android工具",
+      "date": "2026-07-09",
+      "createdAt": "2026-07-09T10:15:30.200Z",
+      "updatedAt": "2026-07-09T10:15:30.200Z",
+      "tags": [
+        "Android工具"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "Android投屏工具",
+      "content": "Android投屏工具",
+      "contentFormat": "markdown",
+      "readingMinutes": 1,
+      "attachments": [
+        {
+          "id": "att-1783592090827-7pxjb6",
+          "name": "scrcpy-win64-v2.0.zip",
+          "fileName": "scrcpy-win64-v2.0.zip",
+          "mimeType": "application/x-zip-compressed",
+          "size": 5997628,
+          "url": "https://galphrui.github.io/ralphrong/public-assets/tools/20260709101450-scrcpy-win64-v2.0.zip",
+          "dataUrl": "",
+          "createdAt": "2026-07-09T10:14:50.827Z"
+        },
+        {
+          "id": "att-1783592105671-xqprir",
+          "name": "scrcpy-win64-v2.1.zip",
+          "fileName": "scrcpy-win64-v2.1.zip",
+          "mimeType": "application/x-zip-compressed",
+          "size": 5956521,
+          "url": "https://galphrui.github.io/ralphrong/public-assets/tools/20260709101505-scrcpy-win64-v2.1.zip",
+          "dataUrl": "",
+          "createdAt": "2026-07-09T10:15:05.671Z"
+        },
+        {
+          "id": "att-1783592111449-tg1430",
+          "name": "scrcpy-win64-v3.3.1.zip",
+          "fileName": "scrcpy-win64-v3.3.1.zip",
+          "mimeType": "application/x-zip-compressed",
+          "size": 7286822,
+          "url": "https://galphrui.github.io/ralphrong/public-assets/tools/20260709101510-scrcpy-win64-v3.3.1.zip",
+          "dataUrl": "",
+          "createdAt": "2026-07-09T10:15:11.450Z"
+        }
+      ]
+    }
+  ],
   "devLogs": [
     {
       "title": "文章 PDF 原样导入和详情下载功能",
@@ -1057,6 +1106,25 @@
       "content": "## 背景\n\n文章模块需要支持两件事：\n\n1. 后台上传文章时可以导入 PDF，并尽量保持 PDF 原样式，包括图片、版式和分页。\n2. 文章详情阅读页底部需要提供下载功能，支持导出 Markdown 或 PDF。\n\n## 实现方式\n\n### 1. 后台 PDF 导入\n\n在文章编辑器正文区域新增“导入 PDF”按钮。\n\n操作步骤：\n\n1. 打开后台 admin.html。\n2. 登录后台。\n3. 点击“文章”。\n4. 新建或选择一篇文章。\n5. 在“正文 Markdown”右侧点击“导入 PDF”。\n6. 选择本地 PDF 文件。\n7. 系统会把 PDF 上传为文章附件。\n8. 正文中自动插入 PDF 阅读标记：\n\n       [[ra-pdf:附件ID]]\n\n9. 保存文章。\n10. 点击“发布到外网”。\n\n线上后台有 Worker API 时，PDF 会上传到 GitHub 的 public-assets/posts 目录；没有后台 API 时，会退回到本地 dataUrl 方式，适合本地临时预览。\n\n### 2. 前台 PDF 原样展示\n\n前台 Markdown 渲染器新增 PDF 块识别：\n\n    [[ra-pdf:附件ID]]\n\n文章详情页读取附件中的 PDF 地址后，通过 PDF.js 逐页渲染成页面图片。这样可以保留 PDF 原有分页、图片和视觉版式，比单纯抽文字更接近原文件。\n\n每个 PDF 块顶部也保留“下载原 PDF”按钮。\n\n### 3. 详情页底部下载\n\n文章详情正文下方新增“下载文章”区域：\n\n1. 点击“导出 Markdown”会下载当前文章的 .md 文件。\n2. 点击“导出 PDF”会打开浏览器打印窗口。\n3. 在打印窗口里选择“保存为 PDF”即可导出当前文章阅读版 PDF。\n\n## 修改文件\n\n    admin.html\n    admin.js\n    styles.css\n    src/components/MarkdownContent.jsx\n    src/components/PostDetail.jsx\n    data/posts.json\n\n## 验证命令\n\n    node --check admin.js\n    ./node_modules/.bin/vite build\n\n## 注意事项\n\n1. PDF 原样导入不是把 PDF 转成普通 Markdown，而是在文章中嵌入可逐页阅读的 PDF 内容。\n2. 大 PDF 会增加加载时间，建议等待页面提示解析完成。\n3. 导出 PDF 依赖浏览器打印能力，弹出窗口被拦截时需要允许当前站点弹窗。\n4. 原 PDF 文件仍可单独下载，适合需要完全保留原文件的场景。",
       "contentFormat": "markdown",
       "readingMinutes": 4,
+      "attachments": []
+    },
+    {
+      "title": "2026-07-09 工具库发布记录",
+      "slug": "auto-deploy-20260709101532-tools",
+      "date": "2026-07-09",
+      "createdAt": "2026-07-09T10:15:32.590Z",
+      "updatedAt": "2026-07-09T10:15:32.590Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "工具库"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 工具库 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-09 工具库发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-09T10:15:32.590Z\n2. 发布模块：工具库\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“工具库”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update tools content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
       "attachments": []
     },
     {
