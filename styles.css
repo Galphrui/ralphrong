@@ -1560,6 +1560,39 @@ textarea {
   margin-top: 3px;
 }
 
+.RaInlinePdfCard {
+  background: #f8fafc;
+  border: 1px solid var(--RaBorder);
+  margin: 14px 0;
+  padding: 12px;
+}
+
+.RaInlinePdfHeader {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--RaLine);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+}
+
+.RaInlinePdfHeader a {
+  color: var(--RaPrimaryStrong);
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.RaInlinePdfCard iframe {
+  background: #fff;
+  border: 1px solid var(--RaLine);
+  display: block;
+  min-height: 720px;
+  width: 100%;
+}
+
 .RaRichText {
   border-radius: 4px;
   padding: 0 2px;

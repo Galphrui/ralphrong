@@ -106,6 +106,7 @@ const RaEls = {
   summary: document.querySelector("#RaSummaryInput"),
   content: document.querySelector("#RaContentInput"),
   textContentFile: document.querySelector("#RaTextContentFileInput"),
+  pdfContentFile: document.querySelector("#RaPdfContentFileInput"),
   previewPost: document.querySelector("#RaPreviewPostButton"),
   postPreviewPanel: document.querySelector("#RaPostPreviewPanel"),
   postPreview: document.querySelector("#RaPostPreview"),
@@ -1631,6 +1632,7 @@ function renderMarkdownPreview(content, attachments = [], mode = "markdown") {
       if (block.type === "code") return `<pre><code>${escapeHtml(block.text)}</code></pre>`;
       if (block.type === "image") return `<img class="RaInlineImage" src="${escapeAttr(block.src)}" alt="${escapeAttr(block.alt || "插入图片")}" />`;
       if (block.type === "attachment") return renderInlineAttachmentCard(attachmentMap.get(block.id), block.id);
+      if (block.type === "pdf") return renderInlinePdfCard(attachmentMap.get(block.id), block.id);
       if (block.type === "ul") {
         return `<ul>${block.items.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("")}</ul>`;
       }
@@ -1705,6 +1707,13 @@ function parseMarkdownBlocks(content) {
       blocks.push({ type: "attachment", id: attachmentMatch[1].trim() });
       return;
     }
+    const pdfMatch = trimmed.match(/^\[\[ra-pdf:([^\]]+)\]\]$/);
+    if (pdfMatch) {
+      flushParagraph();
+      flushList();
+      blocks.push({ type: "pdf", id: pdfMatch[1].trim() });
+      return;
+    }
     if (!trimmed) {
       flushParagraph();
       flushList();
@@ -1763,7 +1772,7 @@ function renderRichTextSpan(text, attrs = {}) {
 
 function renderInlineAttachmentCard(item, fallbackId = "") {
   if (!item) return `<div class="RaInlineAttachmentCard"><span>附件不存在：${escapeHtml(fallbackId)}</span></div>`;
-  const href = item.dataUrl || "#";
+  const href = item.url || item.dataUrl || "#";
   return `
     <a class="RaInlineAttachmentCard" href="${escapeAttr(href)}" download="${escapeAttr(item.fileName || item.name || "attachment")}">
       <span>
@@ -1772,6 +1781,20 @@ function renderInlineAttachmentCard(item, fallbackId = "") {
       </span>
       <strong>下载</strong>
     </a>
+  `;
+}
+
+function renderInlinePdfCard(item, fallbackId = "") {
+  if (!item) return `<div class="RaInlineAttachmentCard"><span>PDF 不存在：${escapeHtml(fallbackId)}</span></div>`;
+  const href = item.url || item.dataUrl || "#";
+  return `
+    <section class="RaInlinePdfCard">
+      <div class="RaInlinePdfHeader">
+        <strong>${escapeHtml(item.name || item.fileName || "PDF 文档")}</strong>
+        <a href="${escapeAttr(href)}" download="${escapeAttr(item.fileName || item.name || "document.pdf")}">下载 PDF</a>
+      </div>
+      <iframe src="${escapeAttr(href)}" title="${escapeAttr(item.name || item.fileName || "PDF 预览")}"></iframe>
+    </section>
   `;
 }
 
@@ -1811,6 +1834,40 @@ async function importTextContent(event) {
   } catch (error) {
     setStatus(`文本导入失败：${error.message}`);
   }
+}
+
+async function importPdfContent(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  try {
+    if (!isSupportedPdfFile(file)) throw new Error("请选择 PDF 文件。");
+    setStatus(`正在导入 PDF：${file.name}`);
+    const attachment = RA_API_BASE ? await uploadAssetAttachment(file, "posts") : await fileToAttachment(file);
+    const pdfToken = `[[ra-pdf:${attachment.id}]]`;
+    RaSelectedAttachments = [...normalizeAttachments(RaSelectedAttachments), attachment];
+    if (!RaEls.title.value.trim()) {
+      RaEls.title.value = file.name.replace(/\.[^.]+$/, "");
+      RaEls.slug.value = slugify(RaEls.title.value);
+    }
+    if (!RaEls.summary.value.trim()) {
+      RaEls.summary.value = `PDF 文档：${file.name}。文章详情会按 PDF 原始版式逐页展示，并保留原文件下载。`;
+    }
+    RaEls.content.value = [RaEls.content.value.trim(), pdfToken].filter(Boolean).join("\n\n");
+    setDocumentMode("markdown");
+    renderAttachmentList();
+    refreshPostPreviewIfOpen();
+    renderPostPreview();
+    setStatus(`已导入 PDF：${file.name}。保存文章后，详情页会原样展示 PDF 并支持下载。`);
+  } catch (error) {
+    setStatus(`PDF 导入失败：${error.message}`);
+  }
+}
+
+function isSupportedPdfFile(file) {
+  const name = (file.name || "").toLowerCase();
+  const type = (file.type || "").toLowerCase();
+  return type === "application/pdf" || name.endsWith(".pdf");
 }
 
 function isSupportedTextFile(file) {
@@ -3454,6 +3511,7 @@ RaEls.tagPicker.addEventListener("click", (event) => {
 });
 RaEls.clearTags.addEventListener("click", () => setEditorTags([]));
 RaEls.textContentFile.addEventListener("change", importTextContent);
+RaEls.pdfContentFile.addEventListener("change", importPdfContent);
 RaEls.attachmentFile.addEventListener("change", addAttachments);
 RaEls.clearAttachments.addEventListener("click", clearAttachments);
 RaEls.attachmentList.addEventListener("click", (event) => {

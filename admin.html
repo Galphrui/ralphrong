@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Ra 后台管理</title>
-    <link rel="stylesheet" href="./styles.css?v=ra-20260709-tool-upload-fix" />
+    <link rel="stylesheet" href="./styles.css?v=ra-20260709-pdf-post-export" />
   </head>
   <body class="RaPage RaAdminPage RaAuthPending">
     <header class="RaTopbar">
@@ -110,10 +110,14 @@
                 <label class="RaField RaWide">
                   正文 Markdown
                   <div class="RaInlineFieldTools">
-                    <span>支持 Markdown 或纯文本</span>
+                    <span>支持 Markdown、纯文本或 PDF 原样导入</span>
                     <label class="RaFileButton RaMiniFileButton">
                       导入文本
                       <input id="RaTextContentFileInput" type="file" accept=".txt,.md,.markdown,.log,.text,text/plain,text/markdown" />
+                    </label>
+                    <label class="RaFileButton RaMiniFileButton">
+                      导入 PDF
+                      <input id="RaPdfContentFileInput" type="file" accept=".pdf,application/pdf" />
                     </label>
                   </div>
                   <textarea id="RaContentInput" rows="16"></textarea>
@@ -754,6 +758,6 @@
     </main>
 
     <script src="./admin-config.js?v=ra-20260703-2"></script>
-    <script src="./admin.js?v=ra-20260709-tool-upload-fix"></script>
+    <script src="./admin.js?v=ra-20260709-pdf-post-export"></script>
   </body>
 </html>

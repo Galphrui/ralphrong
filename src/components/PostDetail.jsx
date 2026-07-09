@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useBlogStore } from '../store/useStore'
 import { likePost } from '../utils/api'
@@ -48,8 +48,119 @@ function AttachmentList({ attachments = [] }) {
   )
 }
 
+function safeFileName(value = 'article') {
+  return String(value || 'article')
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '-')
+    .slice(0, 80) || 'article'
+}
+
+function buildMarkdownExport(post) {
+  const tags = Array.isArray(post.tags) ? post.tags.join(', ') : ''
+  return [
+    '---',
+    `title: ${post.title || ''}`,
+    `date: ${post.date || ''}`,
+    tags ? `tags: ${tags}` : '',
+    post.summary ? `summary: ${post.summary}` : '',
+    '---',
+    '',
+    `# ${post.title || '未命名文章'}`,
+    '',
+    post.summary || '',
+    '',
+    post.content || '',
+    '',
+    ...(post.attachments?.length
+      ? [
+          '## 附件',
+          '',
+          ...post.attachments.map((item) => {
+            const href = item.url || item.dataUrl || ''
+            return `- [${item.name || item.fileName || '附件'}](${href})`
+          }),
+        ]
+      : []),
+  ]
+    .filter((line, index, list) => line || list[index - 1] !== '')
+    .join('\n')
+}
+
+function downloadTextFile(fileName, content, mimeType = 'text/plain;charset=utf-8') {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function ExportPanel({ post, contentRef }) {
+  const exportMarkdown = () => {
+    downloadTextFile(`${safeFileName(post.slug || post.title)}.md`, buildMarkdownExport(post), 'text/markdown;charset=utf-8')
+  }
+
+  const exportPdf = () => {
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer')
+    if (!printWindow) return
+    const title = escapeHtml(post.title || 'Ra Article')
+    const html = contentRef.current?.innerHTML || ''
+    printWindow.document.write(`<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>${title}</title>
+  <style>
+    body { color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 36px; }
+    h1, h2, h3 { color: #020617; page-break-after: avoid; }
+    p, li { font-size: 14px; line-height: 1.8; }
+    pre { background: #020617; color: #f8fafc; overflow-wrap: break-word; padding: 14px; white-space: pre-wrap; }
+    img { max-width: 100%; page-break-inside: avoid; }
+    a { color: #0f766e; }
+    section, article { page-break-inside: auto; }
+    button, .RaNoPrint { display: none !important; }
+  </style>
+</head>
+<body>${html}</body>
+</html>`)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => printWindow.print(), 500)
+  }
+
+  return (
+    <section className="RaNoPrint mt-10 border border-slate-200 bg-slate-50 p-5">
+      <div className="mb-4">
+        <p className="text-xs font-black uppercase text-primary-700">Ra Export</p>
+        <h2 className="mt-1 text-xl font-black text-slate-950">下载文章</h2>
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <button type="button" onClick={exportMarkdown} className="border border-primary-700 bg-primary-700 px-4 py-2 text-sm font-black text-white">
+          导出 Markdown
+        </button>
+        <button type="button" onClick={exportPdf} className="border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-900 hover:border-primary-300">
+          导出 PDF
+        </button>
+      </div>
+    </section>
+  )
+}
+
 export default function PostDetail({ post }) {
   const { isLoading, postMetrics, setPostMetrics } = useBlogStore()
+  const articleContentRef = useRef(null)
   const [password, setPassword] = useState('')
   const [passwordError, setPasswordError] = useState('')
   const [unlockedPosts, setUnlockedPosts] = useState(() => {
@@ -88,7 +199,7 @@ export default function PostDetail({ post }) {
   const metrics = postMetrics?.[post.slug] || { views: 0, likes: 0 }
   const isPasswordProtected = post.visibility === 'password'
   const isUnlocked = !isPasswordProtected || unlockedPosts[post.slug] === true
-  const inlineAttachmentIds = new Set([...String(post.content || '').matchAll(/\[\[ra-attachment:([^\]]+)\]\]/g)].map((match) => match[1].trim()))
+  const inlineAttachmentIds = new Set([...String(post.content || '').matchAll(/\[\[ra-(?:attachment|pdf):([^\]]+)\]\]/g)].map((match) => match[1].trim()))
   const bottomAttachments = (post.attachments || []).filter((item) => !inlineAttachmentIds.has(item.id))
 
   const unlockPost = (event) => {
@@ -157,11 +268,13 @@ export default function PostDetail({ post }) {
 
         {isUnlocked ? (
           <>
-            <div className="mt-8">
+            <div ref={articleContentRef} className="mt-8">
               <MarkdownContent content={post.content} attachments={post.attachments || []} mode={post.contentFormat || 'markdown'} />
             </div>
 
             <AttachmentList attachments={bottomAttachments} />
+
+            <ExportPanel post={post} contentRef={articleContentRef} />
 
             <div className="mt-10">
               <Guestbook postSlug={post.slug} title="文章留言" />

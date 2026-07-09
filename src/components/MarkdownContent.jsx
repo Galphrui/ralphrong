@@ -1,4 +1,8 @@
-import { Fragment } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 function parseTokenAttributes(value = '') {
   const attrs = {}
@@ -167,6 +171,14 @@ export function parseMarkdownBlocks(content) {
       return
     }
 
+    const pdfMatch = trimmed.match(/^\[\[ra-pdf:([^\]]+)\]\]$/)
+    if (pdfMatch) {
+      flushParagraph()
+      flushList()
+      blocks.push({ type: 'pdf', id: pdfMatch[1].trim() })
+      return
+    }
+
     const atxMatch = trimmed.match(/^(#{1,6})\s+(.+)$/)
     if (atxMatch) {
       flushParagraph()
@@ -299,6 +311,10 @@ export default function MarkdownContent({ content, attachments = [], mode = 'mar
           )
         }
 
+        if (block.type === 'pdf') {
+          return <PdfDocumentBlock key={index} item={attachmentMap.get(block.id)} fallbackId={block.id} />
+        }
+
         return (
           <p key={index} className="whitespace-pre-wrap break-words text-base leading-8 text-slate-700">
             {parseInline(block.text)}
@@ -306,5 +322,98 @@ export default function MarkdownContent({ content, attachments = [], mode = 'mar
         )
       })}
     </div>
+  )
+}
+
+function PdfDocumentBlock({ item, fallbackId = '' }) {
+  const containerRef = useRef(null)
+  const [pages, setPages] = useState([])
+  const [status, setStatus] = useState('正在加载 PDF...')
+  const source = item?.url || item?.dataUrl || ''
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function renderPdf() {
+      if (!source) {
+        setStatus(`PDF 不存在：${fallbackId}`)
+        setPages([])
+        return
+      }
+
+      try {
+        setStatus('正在解析 PDF...')
+        const pdf = await pdfjsLib.getDocument(source).promise
+        const width = Math.max(320, Math.min(containerRef.current?.clientWidth || 900, 1100))
+        const nextPages = []
+
+        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+          if (cancelled) return
+          const page = await pdf.getPage(pageNumber)
+          const baseViewport = page.getViewport({ scale: 1 })
+          const scale = Math.min(width / baseViewport.width, 2)
+          const viewport = page.getViewport({ scale })
+          const canvas = document.createElement('canvas')
+          const context = canvas.getContext('2d')
+          canvas.width = Math.ceil(viewport.width)
+          canvas.height = Math.ceil(viewport.height)
+          await page.render({ canvasContext: context, viewport }).promise
+          nextPages.push({ pageNumber, dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height })
+          if (!cancelled) setPages([...nextPages])
+        }
+
+        if (!cancelled) setStatus('')
+      } catch (error) {
+        console.warn(error)
+        if (!cancelled) setStatus(`PDF 解析失败：${error.message || '请下载原文件查看'}`)
+      }
+    }
+
+    renderPdf()
+    return () => {
+      cancelled = true
+    }
+  }, [source, fallbackId])
+
+  if (!item) {
+    return (
+      <div className="border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
+        PDF 不存在：{fallbackId}
+      </div>
+    )
+  }
+
+  return (
+    <section ref={containerRef} className="border border-slate-200 bg-slate-100 p-3 sm:p-5">
+      <div className="mb-4 flex flex-col gap-3 border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase text-primary-700">PDF Document</p>
+          <h3 className="mt-1 break-words text-base font-black text-slate-950">{item.name || item.fileName || 'PDF 文档'}</h3>
+          {item.size && <p className="mt-1 text-xs font-bold text-slate-500">{Math.ceil(item.size / 1024)} KB</p>}
+        </div>
+        <a
+          href={source}
+          download={item.fileName || item.name || 'document.pdf'}
+          target={item.url ? '_blank' : undefined}
+          rel={item.url ? 'noreferrer' : undefined}
+          className="inline-flex min-h-10 items-center justify-center border border-primary-700 bg-primary-700 px-4 text-sm font-black text-white"
+        >
+          下载原 PDF
+        </a>
+      </div>
+      {status && <p className="border border-slate-200 bg-white p-4 text-sm font-bold text-slate-600">{status}</p>}
+      <div className="space-y-4">
+        {pages.map((page) => (
+          <img
+            key={page.pageNumber}
+            src={page.dataUrl}
+            alt={`PDF 第 ${page.pageNumber} 页`}
+            width={page.width}
+            height={page.height}
+            className="mx-auto h-auto w-full max-w-full border border-slate-300 bg-white shadow-sm"
+          />
+        ))}
+      </div>
+    </section>
   )
 }
