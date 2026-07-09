@@ -38,6 +38,9 @@ let RaSelectedSlug = "";
 let RaSelectedAttachments = [];
 let RaSelectedCodeId = "";
 let RaSelectedCodeAttachments = [];
+let RaSelectedToolSlug = "";
+let RaSelectedToolAttachments = [];
+let RaSelectedDevLogSlug = "";
 let RaDocMode = "plain";
 let RaSavedRichRange = null;
 let RaRemoteSha = "";
@@ -165,6 +168,38 @@ const RaEls = {
   saveCode: document.querySelector("#RaSaveCodeButton"),
   publishCode: document.querySelector("#RaPublishCodeButton"),
   codeStatus: document.querySelector("#RaCodeStatusText"),
+  toolList: document.querySelector("#RaToolList"),
+  toolTitle: document.querySelector("#RaToolTitleInput"),
+  toolSlug: document.querySelector("#RaToolSlugInput"),
+  toolDate: document.querySelector("#RaToolDateInput"),
+  toolTags: document.querySelector("#RaToolTagsInput"),
+  toolSummary: document.querySelector("#RaToolSummaryInput"),
+  toolContent: document.querySelector("#RaToolContentInput"),
+  toolAttachmentFile: document.querySelector("#RaToolAttachmentFileInput"),
+  toolAttachmentList: document.querySelector("#RaToolAttachmentList"),
+  clearToolAttachments: document.querySelector("#RaClearToolAttachmentsButton"),
+  newTool: document.querySelector("#RaNewToolButton"),
+  saveTool: document.querySelector("#RaSaveToolButton"),
+  deleteTool: document.querySelector("#RaDeleteToolButton"),
+  publishTools: document.querySelector("#RaPublishToolsButton"),
+  tools: document.querySelector("#RaToolsInput"),
+  saveToolsConfig: document.querySelector("#RaSaveToolsConfigButton"),
+  toolsStatus: document.querySelector("#RaToolsStatusText"),
+  devLogList: document.querySelector("#RaDevLogList"),
+  devLogTitle: document.querySelector("#RaDevLogTitleInput"),
+  devLogSlug: document.querySelector("#RaDevLogSlugInput"),
+  devLogDate: document.querySelector("#RaDevLogDateInput"),
+  devLogTags: document.querySelector("#RaDevLogTagsInput"),
+  devLogSummary: document.querySelector("#RaDevLogSummaryInput"),
+  devLogContent: document.querySelector("#RaDevLogContentInput"),
+  newDevLog: document.querySelector("#RaNewDevLogButton"),
+  appendDeployLog: document.querySelector("#RaAppendDeployLogButton"),
+  saveDevLog: document.querySelector("#RaSaveDevLogButton"),
+  deleteDevLog: document.querySelector("#RaDeleteDevLogButton"),
+  publishDevLogs: document.querySelector("#RaPublishDevLogsButton"),
+  devLogs: document.querySelector("#RaDevLogsInput"),
+  saveDevLogsConfig: document.querySelector("#RaSaveDevLogsConfigButton"),
+  devLogsStatus: document.querySelector("#RaDevLogsStatusText"),
   deployStatus: document.querySelector("#RaDeployStatusText"),
   siteTitle: document.querySelector("#RaSiteTitleInput"),
   siteSubtitle: document.querySelector("#RaSiteSubtitleInput"),
@@ -215,6 +250,8 @@ async function initRaAdmin() {
   renderSiteForm();
   renderProfileForm();
   renderCodeForm();
+  renderToolsForm();
+  renderDevLogsForm();
   renderPostList();
   selectPost(RaData.posts[0]?.slug || "");
   await loadRemoteData();
@@ -333,6 +370,8 @@ async function loadRemoteData() {
     renderSiteForm();
     renderProfileForm();
     renderCodeForm();
+    renderToolsForm();
+    renderDevLogsForm();
     selectPost(RaData.posts[0]?.slug || "");
     setStatus(RA_IS_LOCAL_ADMIN ? "已从本地后台读取数据。" : "已从外网后台读取 GitHub 数据。");
   } catch (error) {
@@ -344,6 +383,7 @@ async function publishData(target = "posts") {
   try {
     setPublishing(true);
     saveSettings();
+    appendAutomaticDevLog(target);
     const result = RA_IS_LOCAL_ADMIN
       ? await raApi("/api/publish", {
           method: "POST",
@@ -368,6 +408,66 @@ async function publishData(target = "posts") {
   } finally {
     setPublishing(false);
   }
+}
+
+function appendAutomaticDevLog(target = "posts") {
+  if (!Array.isArray(RaData.devLogs)) RaData.devLogs = [];
+  const now = new Date();
+  const iso = now.toISOString();
+  const date = iso.slice(0, 10);
+  const labelMap = {
+    posts: "文章",
+    code: "代码库",
+    tools: "工具库",
+    devlogs: "开发日志",
+    profile: "个人页",
+    site: "站点",
+  };
+  const label = labelMap[target] || target;
+  const slug = `auto-deploy-${iso.replace(/[-:.TZ]/g, "").slice(0, 14)}-${target}`;
+  const title = `${date} ${label}发布记录`;
+  const summary = `自动记录 ${label} 模块的一次保存、发布、推送和上线流程。`;
+  const content = [
+    `## ${title}`,
+    "",
+    `- 时间：${iso}`,
+    `- 模块：${label}`,
+    `- 数据文件：${getSettings().path || "data/posts.json"}`,
+    `- 发布方式：${RA_IS_LOCAL_ADMIN ? "本地后台提交并推送 GitHub" : "外网后台通过 Worker 写入 GitHub"}`,
+    "",
+    "## 流程",
+    "",
+    "1. 保存当前后台数据到统一 JSON。",
+    "2. 写入 GitHub 仓库。",
+    "3. 触发 GitHub Pages 构建。",
+    "4. 等待公开站点数据刷新。",
+    "",
+    "## 结果",
+    "",
+    "发布流程已提交，最终上线状态以后台状态栏和 GitHub Actions 为准。",
+  ].join("\n");
+
+  RaData.devLogs.unshift({
+    title,
+    slug,
+    date,
+    createdAt: iso,
+    updatedAt: iso,
+    tags: ["自动记录", "部署", label],
+    summary,
+    content,
+    contentFormat: "markdown",
+    attachments: [],
+  });
+  RaData.devLogs = normalizeCollectionItems(RaData.devLogs, "devlog").slice(0, 200);
+  if (RaEls.devLogs) RaEls.devLogs.value = JSON.stringify(RaData.devLogs, null, 2);
+}
+
+function appendCurrentDeployLog() {
+  appendAutomaticDevLog("devlogs");
+  saveLocalData();
+  renderDevLogsForm();
+  setDevLogsStatus("已追加一条当前发布日志。");
 }
 
 async function publishCurrentPost() {
@@ -664,6 +764,58 @@ function renderCodeForm() {
   RaEls.modules.value = JSON.stringify(RaData.modules || getDefaultModules(), null, 2);
   renderCodeList();
   selectCodeItem(RaSelectedCodeId || RaData.repositories?.[0]?.id || "");
+}
+
+function renderToolsForm() {
+  if (!RaEls.tools) return;
+  RaEls.tools.value = JSON.stringify(RaData.tools || [], null, 2);
+  renderToolList();
+  selectToolItem(RaSelectedToolSlug || RaData.tools?.[0]?.slug || "");
+}
+
+function renderDevLogsForm() {
+  if (!RaEls.devLogs) return;
+  RaEls.devLogs.value = JSON.stringify(RaData.devLogs || [], null, 2);
+  renderDevLogList();
+  selectDevLogItem(RaSelectedDevLogSlug || RaData.devLogs?.[0]?.slug || "");
+}
+
+function saveToolsConfig() {
+  try {
+    const tools = JSON.parse(RaEls.tools.value || "[]");
+    if (!Array.isArray(tools)) throw new Error("tools 必须是数组。");
+    RaData.tools = normalizeCollectionItems(tools, "tool");
+    saveLocalData();
+    renderToolsForm();
+    setToolsStatus("工具库配置已保存到本地数据。");
+    return true;
+  } catch (error) {
+    setToolsStatus(`保存失败：${error.message}`);
+    return false;
+  }
+}
+
+function saveDevLogsConfig() {
+  try {
+    const devLogs = JSON.parse(RaEls.devLogs.value || "[]");
+    if (!Array.isArray(devLogs)) throw new Error("devLogs 必须是数组。");
+    RaData.devLogs = normalizeCollectionItems(devLogs, "devlog");
+    saveLocalData();
+    renderDevLogsForm();
+    setDevLogsStatus("开发日志配置已保存到本地数据。");
+    return true;
+  } catch (error) {
+    setDevLogsStatus(`保存失败：${error.message}`);
+    return false;
+  }
+}
+
+async function publishToolsConfig() {
+  if (saveToolsConfig()) await publishData("tools");
+}
+
+async function publishDevLogsConfig() {
+  if (saveDevLogsConfig()) await publishData("devlogs");
 }
 
 function saveCodeConfig() {
@@ -1563,6 +1715,29 @@ function fileToDataUrl(file) {
   });
 }
 
+async function uploadAssetAttachment(file, bucket = "tools") {
+  const dataUrl = await fileToDataUrl(file);
+  const result = await raApi("/api/assets", {
+    method: "POST",
+    body: JSON.stringify({
+      bucket,
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      dataUrl,
+    }),
+  });
+  return {
+    id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: file.name,
+    fileName: file.name,
+    mimeType: file.type || "application/octet-stream",
+    size: file.size,
+    url: result.url || result.asset?.url || "",
+    path: result.path || result.asset?.path || "",
+    createdAt: new Date().toISOString(),
+  };
+}
+
 function deleteAttachment(index) {
   RaSelectedAttachments = normalizeAttachments(RaSelectedAttachments).filter((_, itemIndex) => itemIndex !== index);
   renderAttachmentList();
@@ -1650,6 +1825,26 @@ function normalizeCodeRepositories(value) {
     notes: repo.notes || "",
     attachments: normalizeAttachments(repo.attachments),
   }));
+}
+
+function normalizeCollectionItems(value, prefix = "item") {
+  return sortPosts(
+    (Array.isArray(value) ? value : []).map((item) => ({
+      title: item.title || item.name || "未命名条目",
+      slug: slugify(item.slug || item.id || item.title || item.name || `${prefix}-${Date.now()}`),
+      date: item.date || item.createdAt?.slice?.(0, 10) || new Date().toISOString().slice(0, 10),
+      createdAt: item.createdAt || item.date || "",
+      updatedAt: item.updatedAt || item.modifiedAt || item.lastModified || item.date || "",
+      tags: normalizeTags(Array.isArray(item.tags) ? item.tags : parseTags(item.tags)),
+      visibility: normalizePostVisibility(item.visibility),
+      accessPassword: item.accessPassword || item.password || "",
+      summary: item.summary || item.description || "",
+      content: item.content || item.notes || "",
+      contentFormat: ["plain", "markdown", "rich"].includes(item.contentFormat) ? item.contentFormat : "markdown",
+      readingMinutes: item.readingMinutes || estimateReadingMinutes(item.content || item.notes || ""),
+      attachments: normalizeAttachments(item.attachments),
+    })),
+  );
 }
 
 function formatCodeByLanguage(source, language) {
@@ -1854,6 +2049,249 @@ function clearCodeAttachments() {
   RaSelectedCodeAttachments = [];
   renderCodeAttachmentList();
   setCodeStatus("代码附件已清空，保存代码条目后生效。");
+}
+
+function renderToolList() {
+  if (!RaEls.toolList) return;
+  const tools = Array.isArray(RaData.tools) ? RaData.tools : [];
+  if (!tools.length) {
+    RaEls.toolList.innerHTML = '<div class="RaEmptyState">暂无工具条目</div>';
+    return;
+  }
+  RaEls.toolList.innerHTML = tools
+    .map((item) => `
+      <article class="RaItem ${item.slug === RaSelectedToolSlug ? "RaActive" : ""}" data-ra-tool-slug="${escapeAttr(item.slug)}">
+        <strong>${escapeHtml(item.title || "未命名工具")}</strong>
+        <small>${escapeHtml(item.date || "")} · ${escapeHtml((item.tags || []).join(" / "))} · ${(item.attachments || []).length} 个附件</small>
+      </article>
+    `)
+    .join("");
+}
+
+function createEmptyToolItem() {
+  const now = new Date().toISOString();
+  return {
+    title: "",
+    slug: "",
+    date: now.slice(0, 10),
+    createdAt: now,
+    updatedAt: now,
+    tags: [],
+    summary: "",
+    content: "## 工具说明\n\n在这里记录工具用途、使用方式和注意事项。\n",
+    contentFormat: "markdown",
+    attachments: [],
+  };
+}
+
+function selectToolItem(slug) {
+  const tools = Array.isArray(RaData.tools) ? RaData.tools : [];
+  const item = tools.find((tool) => tool.slug === slug) || createEmptyToolItem();
+  RaSelectedToolSlug = item.slug || "";
+  RaEls.toolTitle.value = item.title || "";
+  RaEls.toolSlug.value = item.slug || "";
+  RaEls.toolDate.value = item.date || new Date().toISOString().slice(0, 10);
+  RaEls.toolTags.value = (item.tags || []).join(", ");
+  RaEls.toolSummary.value = item.summary || "";
+  RaEls.toolContent.value = item.content || "";
+  RaSelectedToolAttachments = normalizeAttachments(item.attachments);
+  renderToolAttachmentList();
+  renderToolList();
+}
+
+function newToolItem() {
+  RaSelectedToolSlug = "";
+  selectToolItem("");
+}
+
+function toolItemFromForm() {
+  const now = new Date().toISOString();
+  const title = RaEls.toolTitle.value.trim();
+  const slug = slugify(RaEls.toolSlug.value || title || `tool-${Date.now()}`);
+  return {
+    title,
+    slug,
+    date: RaEls.toolDate.value || now.slice(0, 10),
+    createdAt: RaSelectedToolSlug ? (RaData.tools || []).find((item) => item.slug === RaSelectedToolSlug)?.createdAt || now : now,
+    updatedAt: now,
+    tags: parseTags(RaEls.toolTags.value),
+    summary: RaEls.toolSummary.value.trim(),
+    content: RaEls.toolContent.value,
+    contentFormat: "markdown",
+    attachments: normalizeAttachments(RaSelectedToolAttachments),
+  };
+}
+
+function saveToolItem() {
+  const item = toolItemFromForm();
+  if (!item.title) {
+    setToolsStatus("工具名称必填。");
+    return false;
+  }
+  if (!Array.isArray(RaData.tools)) RaData.tools = [];
+  const index = RaData.tools.findIndex((tool) => tool.slug === (RaSelectedToolSlug || item.slug));
+  if (index >= 0) RaData.tools[index] = item;
+  else RaData.tools.unshift(item);
+  RaSelectedToolSlug = item.slug;
+  RaData.tools = normalizeCollectionItems(RaData.tools, "tool");
+  saveLocalData();
+  renderToolsForm();
+  setToolsStatus("工具条目已保存。");
+  return true;
+}
+
+function deleteToolItem() {
+  if (!RaSelectedToolSlug || !Array.isArray(RaData.tools)) return;
+  RaData.tools = RaData.tools.filter((item) => item.slug !== RaSelectedToolSlug);
+  RaSelectedToolSlug = "";
+  saveLocalData();
+  renderToolsForm();
+  setToolsStatus("工具条目已删除。");
+}
+
+function renderToolAttachmentList() {
+  if (!RaEls.toolAttachmentList) return;
+  const attachments = normalizeAttachments(RaSelectedToolAttachments);
+  if (!attachments.length) {
+    RaEls.toolAttachmentList.innerHTML = '<div class="RaEmptyState">暂无附件</div>';
+    return;
+  }
+  RaEls.toolAttachmentList.innerHTML = attachments
+    .map((item, index) => `
+      <article class="RaAttachmentItem">
+        <div>
+          <strong>${escapeHtml(item.name || item.fileName || "附件")}</strong>
+          <small>${escapeHtml(item.fileName || "")}${item.size ? ` · ${formatBytes(item.size)}` : ""}${item.url ? " · GitHub" : ""}</small>
+        </div>
+        <button class="RaDangerButton" type="button" data-ra-delete-tool-attachment="${index}">删除</button>
+      </article>
+    `)
+    .join("");
+}
+
+async function addToolAttachments(event) {
+  const files = [...(event.target.files || [])];
+  event.target.value = "";
+  if (!files.length) return;
+  try {
+    const next = [];
+    for (const file of files) {
+      setToolsStatus(`正在上传 ${file.name} 到 GitHub...`);
+      next.push(await uploadAssetAttachment(file, "tools"));
+    }
+    RaSelectedToolAttachments = [...normalizeAttachments(RaSelectedToolAttachments), ...next];
+    renderToolAttachmentList();
+    setToolsStatus(`已上传 ${next.length} 个工具附件，保存工具条目后生效。`);
+  } catch (error) {
+    setToolsStatus(`工具附件上传失败：${error.message}`);
+  }
+}
+
+function deleteToolAttachment(index) {
+  RaSelectedToolAttachments = normalizeAttachments(RaSelectedToolAttachments).filter((_, itemIndex) => itemIndex !== index);
+  renderToolAttachmentList();
+}
+
+function clearToolAttachments() {
+  RaSelectedToolAttachments = [];
+  renderToolAttachmentList();
+  setToolsStatus("工具附件已清空，保存工具条目后生效。");
+}
+
+function renderDevLogList() {
+  if (!RaEls.devLogList) return;
+  const logs = Array.isArray(RaData.devLogs) ? RaData.devLogs : [];
+  if (!logs.length) {
+    RaEls.devLogList.innerHTML = '<div class="RaEmptyState">暂无开发日志</div>';
+    return;
+  }
+  RaEls.devLogList.innerHTML = logs
+    .map((item) => `
+      <article class="RaItem ${item.slug === RaSelectedDevLogSlug ? "RaActive" : ""}" data-ra-devlog-slug="${escapeAttr(item.slug)}">
+        <strong>${escapeHtml(item.title || "未命名日志")}</strong>
+        <small>${escapeHtml(item.date || "")} · ${escapeHtml((item.tags || []).join(" / "))}</small>
+      </article>
+    `)
+    .join("");
+}
+
+function createEmptyDevLogItem() {
+  const now = new Date().toISOString();
+  return {
+    title: "",
+    slug: "",
+    date: now.slice(0, 10),
+    createdAt: now,
+    updatedAt: now,
+    tags: ["开发日志"],
+    summary: "",
+    content: "## 背景\n\n## 开发过程\n\n## 验证\n\n## 部署\n",
+    contentFormat: "markdown",
+    attachments: [],
+  };
+}
+
+function selectDevLogItem(slug) {
+  const logs = Array.isArray(RaData.devLogs) ? RaData.devLogs : [];
+  const item = logs.find((log) => log.slug === slug) || createEmptyDevLogItem();
+  RaSelectedDevLogSlug = item.slug || "";
+  RaEls.devLogTitle.value = item.title || "";
+  RaEls.devLogSlug.value = item.slug || "";
+  RaEls.devLogDate.value = item.date || new Date().toISOString().slice(0, 10);
+  RaEls.devLogTags.value = (item.tags || []).join(", ");
+  RaEls.devLogSummary.value = item.summary || "";
+  RaEls.devLogContent.value = item.content || "";
+  renderDevLogList();
+}
+
+function newDevLogItem() {
+  RaSelectedDevLogSlug = "";
+  selectDevLogItem("");
+}
+
+function devLogItemFromForm() {
+  const now = new Date().toISOString();
+  const title = RaEls.devLogTitle.value.trim();
+  const slug = slugify(RaEls.devLogSlug.value || title || `devlog-${Date.now()}`);
+  return {
+    title,
+    slug,
+    date: RaEls.devLogDate.value || now.slice(0, 10),
+    createdAt: RaSelectedDevLogSlug ? (RaData.devLogs || []).find((item) => item.slug === RaSelectedDevLogSlug)?.createdAt || now : now,
+    updatedAt: now,
+    tags: parseTags(RaEls.devLogTags.value || "开发日志"),
+    summary: RaEls.devLogSummary.value.trim(),
+    content: RaEls.devLogContent.value,
+    contentFormat: "markdown",
+    attachments: [],
+  };
+}
+
+function saveDevLogItem() {
+  const item = devLogItemFromForm();
+  if (!item.title) {
+    setDevLogsStatus("日志标题必填。");
+    return false;
+  }
+  if (!Array.isArray(RaData.devLogs)) RaData.devLogs = [];
+  const index = RaData.devLogs.findIndex((log) => log.slug === (RaSelectedDevLogSlug || item.slug));
+  if (index >= 0) RaData.devLogs[index] = item;
+  else RaData.devLogs.unshift(item);
+  RaSelectedDevLogSlug = item.slug;
+  RaData.devLogs = normalizeCollectionItems(RaData.devLogs, "devlog");
+  saveLocalData();
+  renderDevLogsForm();
+  setDevLogsStatus("开发日志已保存。");
+  return true;
+}
+
+function deleteDevLogItem() {
+  if (!RaSelectedDevLogSlug || !Array.isArray(RaData.devLogs)) return;
+  RaData.devLogs = RaData.devLogs.filter((item) => item.slug !== RaSelectedDevLogSlug);
+  RaSelectedDevLogSlug = "";
+  saveLocalData();
+  renderDevLogsForm();
+  setDevLogsStatus("开发日志已删除。");
 }
 
 function formatCurrentCodeSnippet() {
@@ -2261,6 +2699,8 @@ function importJson(event) {
     renderSiteForm();
     renderProfileForm();
     renderCodeForm();
+    renderToolsForm();
+    renderDevLogsForm();
     selectPost(RaData.posts[0]?.slug || "");
     setStatus("JSON 已导入当前数据，点击发布写入后端。");
   };
@@ -2519,7 +2959,7 @@ function delay(ms) {
 }
 
 function setPublishing(isPublishing) {
-  [RaEls.publish, RaEls.publishSite, RaEls.publishProfile, RaEls.publishCode, RaEls.syncData, RaEls.docPublish].forEach((button) => {
+  [RaEls.publish, RaEls.publishSite, RaEls.publishProfile, RaEls.publishCode, RaEls.publishTools, RaEls.publishDevLogs, RaEls.syncData, RaEls.docPublish].forEach((button) => {
     if (button) button.disabled = isPublishing;
   });
 }
@@ -2528,6 +2968,8 @@ function setTargetStatus(target, message) {
   if (target === "profile") setProfileStatus(message);
   if (target === "site") setSiteStatus(message);
   if (target === "code") setCodeStatus(message);
+  if (target === "tools") setToolsStatus(message);
+  if (target === "devlogs") setDevLogsStatus(message);
 }
 
 function createEmptyPost() {
@@ -2578,6 +3020,8 @@ function normalizeData(input) {
       })),
     ),
     repositories: normalizeCodeRepositories(input.repositories),
+    tools: normalizeCollectionItems(input.tools, "tool"),
+    devLogs: normalizeCollectionItems(input.devLogs, "devlog"),
     modules: input.modules || getDefaultModules(),
     profile: normalizeProfile(input.profile),
   };
@@ -2596,6 +3040,8 @@ function getDefaultData() {
     },
     posts: [],
     repositories: [],
+    tools: [],
+    devLogs: [],
     modules: getDefaultModules(),
     profile: getDefaultProfile(),
   };
@@ -2607,8 +3053,10 @@ function getDefaultModules() {
     modules: [
       { id: "posts", label: "文章", href: "#posts", enabled: true, order: 10, surface: "top" },
       { id: "code", label: "代码库", href: "#code", enabled: true, order: 20, surface: "top" },
-      { id: "profile", label: "个人", href: "#profile", enabled: true, order: 30, surface: "top" },
-      { id: "guestbook", label: "留言", href: "#guestbook", enabled: true, order: 40, surface: "top" },
+      { id: "tools", label: "工具库", href: "#tools", enabled: true, order: 30, surface: "top" },
+      { id: "devlogs", label: "开发日志", href: "#devlogs", enabled: true, order: 40, surface: "top" },
+      { id: "profile", label: "个人", href: "#profile", enabled: true, order: 50, surface: "top" },
+      { id: "guestbook", label: "留言", href: "#guestbook", enabled: true, order: 60, surface: "top" },
       { id: "modules", label: "设置", href: "#modules", enabled: true, order: 90, surface: "top" },
       { id: "admin", label: "管理", href: "./admin.html", enabled: true, order: 100, surface: "top", external: true },
     ],
@@ -2707,6 +3155,14 @@ function setProfileStatus(message) {
 
 function setCodeStatus(message) {
   if (RaEls.codeStatus) RaEls.codeStatus.textContent = message;
+}
+
+function setToolsStatus(message) {
+  if (RaEls.toolsStatus) RaEls.toolsStatus.textContent = message;
+}
+
+function setDevLogsStatus(message) {
+  if (RaEls.devLogsStatus) RaEls.devLogsStatus.textContent = message;
 }
 
 function setAccountStatus(message) {
@@ -2864,6 +3320,37 @@ RaEls.saveProfile.addEventListener("click", saveProfileInfo);
 RaEls.publishProfile.addEventListener("click", publishProfileInfo);
 RaEls.saveCode.addEventListener("click", saveCodeConfig);
 RaEls.publishCode.addEventListener("click", publishCodeConfig);
+RaEls.saveToolsConfig.addEventListener("click", saveToolsConfig);
+RaEls.publishTools.addEventListener("click", publishToolsConfig);
+RaEls.newTool.addEventListener("click", newToolItem);
+RaEls.saveTool.addEventListener("click", saveToolItem);
+RaEls.deleteTool.addEventListener("click", deleteToolItem);
+RaEls.toolAttachmentFile.addEventListener("change", addToolAttachments);
+RaEls.clearToolAttachments.addEventListener("click", clearToolAttachments);
+RaEls.toolAttachmentList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-ra-delete-tool-attachment]");
+  if (button) deleteToolAttachment(Number(button.dataset.raDeleteToolAttachment));
+});
+RaEls.toolList.addEventListener("click", (event) => {
+  const item = event.target.closest("[data-ra-tool-slug]");
+  if (item) selectToolItem(item.dataset.raToolSlug);
+});
+RaEls.toolTitle.addEventListener("input", () => {
+  if (!RaSelectedToolSlug) RaEls.toolSlug.value = slugify(RaEls.toolTitle.value);
+});
+RaEls.saveDevLogsConfig.addEventListener("click", saveDevLogsConfig);
+RaEls.publishDevLogs.addEventListener("click", publishDevLogsConfig);
+RaEls.newDevLog.addEventListener("click", newDevLogItem);
+RaEls.appendDeployLog.addEventListener("click", appendCurrentDeployLog);
+RaEls.saveDevLog.addEventListener("click", saveDevLogItem);
+RaEls.deleteDevLog.addEventListener("click", deleteDevLogItem);
+RaEls.devLogList.addEventListener("click", (event) => {
+  const item = event.target.closest("[data-ra-devlog-slug]");
+  if (item) selectDevLogItem(item.dataset.raDevlogSlug);
+});
+RaEls.devLogTitle.addEventListener("input", () => {
+  if (!RaSelectedDevLogSlug) RaEls.devLogSlug.value = slugify(RaEls.devLogTitle.value);
+});
 RaEls.newCode.addEventListener("click", newCodeItem);
 RaEls.codeLanguagePreset.addEventListener("change", () => {
   RaEls.codeLanguage.value = "";

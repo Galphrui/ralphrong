@@ -9,6 +9,8 @@ export const useBlogStore = create((set) => ({
   postsPerPage: 20,
   profile: null,
   repositories: [],
+  tools: [],
+  devLogs: [],
   moduleSettings: normalizeModuleSettings(),
   postMetrics: {},
 
@@ -27,6 +29,8 @@ export const useBlogStore = create((set) => ({
   setTotalPosts: (total) => set({ totalPosts: total }),
   setProfile: (profile) => set({ profile }),
   setRepositories: (repositories) => set({ repositories }),
+  setTools: (tools) => set({ tools }),
+  setDevLogs: (devLogs) => set({ devLogs }),
   setModuleSettings: (moduleSettings) => set({ moduleSettings: normalizeModuleSettings(moduleSettings, moduleSettings?.modules) }),
   setPostMetrics: (postMetrics) => set({ postMetrics }),
   setCurrentPage: (page) => set({ currentPage: page }),

@@ -179,6 +179,15 @@ async function handleApi(request, response) {
     return;
   }
 
+  if (url.pathname === "/api/assets" && request.method === "POST") {
+    requireSession(request);
+    const body = await readJson(request);
+    const asset = await writeAssetFile(body);
+    const deploy = await deployDataFiles([asset.path], `chore: upload asset ${asset.fileName}`);
+    sendJson(response, 200, { ok: true, ...asset, deploy });
+    return;
+  }
+
   if (url.pathname === "/api/sync" && request.method === "POST") {
     requireSession(request);
     const deploy = await deployDataFiles(
@@ -506,6 +515,41 @@ async function deployDataFiles(files, message) {
     commit: commit.stdout.trim(),
     push: push.stdout.trim() || push.stderr.trim(),
   };
+}
+
+async function writeAssetFile(body = {}) {
+  const fileName = safeFileName(body.fileName || "attachment");
+  const bucket = safePathSegment(body.bucket || "tools");
+  const dataUrl = String(body.dataUrl || "");
+  const match = dataUrl.match(/^data:([^;,]+)?(?:;[^,]*)?;base64,(.+)$/);
+  if (!match) throw httpError(400, "附件数据格式无效。");
+  const bytes = Buffer.from(match[2], "base64");
+  if (!bytes.length) throw httpError(400, "附件为空。");
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  const relativePath = `public-assets/${bucket}/${stamp}-${fileName}`;
+  const target = join(root, relativePath);
+  await mkdir(join(root, "public-assets", bucket), { recursive: true });
+  await writeFile(target, bytes);
+  return {
+    path: relativePath,
+    fileName,
+    mimeType: body.mimeType || match[1] || "application/octet-stream",
+    size: bytes.length,
+    url: publicAssetUrl(relativePath),
+  };
+}
+
+function publicAssetUrl(path) {
+  return `./${path}`;
+}
+
+function safePathSegment(value) {
+  return String(value || "assets").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "assets";
+}
+
+function safeFileName(value) {
+  const clean = String(value || "attachment").split(/[\\/]/).pop().replace(/[\u0000-\u001f\u007f]/g, "").trim();
+  return clean.replace(/[^\w.\-\u4e00-\u9fff]+/g, "-") || "attachment";
 }
 
 async function getGitStatus(files) {

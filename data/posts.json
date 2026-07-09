@@ -1061,11 +1061,27 @@
         "surface": "top"
       },
       {
+        "id": "tools",
+        "label": "工具库",
+        "href": "#tools",
+        "enabled": true,
+        "order": 30,
+        "surface": "top"
+      },
+      {
+        "id": "devlogs",
+        "label": "开发日志",
+        "href": "#devlogs",
+        "enabled": true,
+        "order": 40,
+        "surface": "top"
+      },
+      {
         "id": "profile",
         "label": "个人",
         "href": "#profile",
         "enabled": true,
-        "order": 30,
+        "order": 50,
         "surface": "top"
       },
       {
@@ -1073,7 +1089,7 @@
         "label": "留言",
         "href": "#guestbook",
         "enabled": true,
-        "order": 40,
+        "order": 60,
         "surface": "top"
       },
       {
@@ -1263,5 +1279,25 @@
         "content": "做事偏工程落地，重视问题复现、日志证据、影响范围和回归验证，能够在版本压力下推进问题闭环。\n熟悉智能手表项目从需求开发到量产维护的节奏，具备跨模块沟通能力和持续维护复杂系统问题的耐心。\n希望继续深耕 Android 系统、Framework、智能穿戴或嵌入式 Android 方向，承担更完整的系统模块和项目交付职责。"
       }
     ]
-  }
+  },
+  "tools": [],
+  "devLogs": [
+    {
+      "title": "工具库与开发日志模块开发上线",
+      "slug": "devlog-tools-and-development-logs-module",
+      "date": "2026-07-09",
+      "createdAt": "2026-07-09T06:26:46.809Z",
+      "updatedAt": "2026-07-09T06:26:46.809Z",
+      "tags": [
+        "开发日志",
+        "工具库",
+        "部署"
+      ],
+      "summary": "新增工具库与开发日志两个前台模块，工具附件改为上传到 GitHub 独立文件路径，并记录本次开发、验证、部署流程。",
+      "content": "## 背景\n\n需要新增一个专门存放工具附件的模块，并增加一个前台可见的开发日志仓库，用 Markdown 记录开发、部署、推送、运行、上线全过程。\n\n## 开发内容\n\n1. 新增工具库模块，支持列表、详情、Markdown 说明和附件下载。\n2. 新增开发日志模块，支持 Markdown 日志列表和详情阅读。\n3. 后台新增工具库和开发日志管理入口。\n4. 工具库附件上传时写入 GitHub 仓库 public-assets/tools 目录，数据 JSON 只保存 URL。\n5. 发布流程会自动追加开发日志，记录保存、写入 GitHub、触发 Pages、等待上线的步骤。\n\n## 验证计划\n\n- 运行前端构建。\n- 检查后台脚本语法。\n- 本地打开工具库和开发日志页面确认 UI 不破版。\n- 推送 main 并等待 GitHub Pages 部署成功。",
+      "contentFormat": "markdown",
+      "readingMinutes": 2,
+      "attachments": []
+    }
+  ]
 }

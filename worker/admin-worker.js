@@ -70,6 +70,12 @@ export default {
         const deploy = await writeGitHubData(env, body.data);
         return json({ ok: true, deploy }, request, env);
       }
+      if (url.pathname === "/api/assets" && request.method === "POST") {
+        await requireSession(request, env);
+        const body = await readRequestJson(request, "附件数据");
+        const asset = await writeGitHubAsset(env, body);
+        return json({ ok: true, ...asset }, request, env);
+      }
 
       return json({ ok: false, error: "Not found" }, request, env, 404);
     } catch (error) {
@@ -465,6 +471,38 @@ async function writeGitHubData(env, data) {
   };
 }
 
+async function writeGitHubAsset(env, body = {}) {
+  const info = githubInfo(env);
+  const fileName = safeFileName(body.fileName || "attachment");
+  const bucket = safePathSegment(body.bucket || "tools");
+  const dataUrl = String(body.dataUrl || "");
+  const match = dataUrl.match(/^data:([^;,]+)?(?:;[^,]*)?;base64,(.+)$/);
+  if (!match) throw httpError(400, "附件数据格式无效。");
+  const content = match[2].replace(/\s/g, "");
+  if (!content) throw httpError(400, "附件为空。");
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  const path = `public-assets/${bucket}/${stamp}-${fileName}`;
+  const response = await fetch(`https://api.github.com/repos/${info.owner}/${info.repo}/contents/${path}`, {
+    method: "PUT",
+    headers: githubWriteHeaders(env),
+    body: JSON.stringify({
+      message: `chore: upload asset ${fileName}`,
+      content,
+      branch: info.branch,
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw httpError(response.status, result.message || "写入 GitHub 附件失败。");
+  return {
+    path,
+    fileName,
+    mimeType: body.mimeType || match[1] || "application/octet-stream",
+    size: Math.floor((content.length * 3) / 4),
+    url: publicAssetUrl(env, path),
+    commitSha: result.commit?.sha || "",
+  };
+}
+
 async function triggerPagesWorkflow(env) {
   const info = githubInfo(env);
   const response = await fetch(
@@ -579,6 +617,24 @@ function githubWriteHeaders(env) {
     ...githubReadHeaders(env),
     Authorization: `Bearer ${requiredGitHubToken(env)}`,
   };
+}
+
+function publicAssetUrl(env, path) {
+  const info = githubInfo(env);
+  const configured = env.PUBLIC_SITE_BASE || "";
+  if (configured) return `${configured.replace(/\/+$/, "")}/${path}`;
+  const owner = info.owner.toLowerCase();
+  const repoPath = info.repo.toLowerCase() === `${owner}.github.io` ? "" : `/${info.repo}`;
+  return `https://${owner}.github.io${repoPath}/${path}`;
+}
+
+function safePathSegment(value) {
+  return String(value || "assets").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "assets";
+}
+
+function safeFileName(value) {
+  const clean = String(value || "attachment").split(/[\\/]/).pop().replace(/[\u0000-\u001f\u007f]/g, "").trim();
+  return clean.replace(/[^\w.\-\u4e00-\u9fff]+/g, "-") || "attachment";
 }
 
 async function verifyUserPassword(password, user) {

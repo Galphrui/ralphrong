@@ -25,6 +25,8 @@
           <button class="RaTabButton RaActive" type="button" data-ra-admin-tab="posts">文章</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="document">文档编译</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="code">代码库</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="tools">工具库</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="devlogs">开发日志</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="site">站点</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="profile">简历</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="accounts" id="RaAccountsNavLink">账号</button>
@@ -400,6 +402,143 @@
             <button id="RaPublishCodeButton" class="RaPublishButton" type="button">保存并发布</button>
           </div>
           <p class="RaStatus" id="RaCodeStatusText" role="status"></p>
+        </div>
+      </section>
+
+      <section class="RaWorkspacePanel" id="RaToolsPanel" data-ra-admin-panel="tools" hidden>
+        <div class="RaPanel">
+          <div class="RaSectionHeading">
+            <p class="RaEyebrow">Tools</p>
+            <h2>工具库</h2>
+          </div>
+          <p class="RaHint">工具库用于存放脚本包、安装包、文档和其他附件。附件会优先上传到 GitHub 仓库的独立文件路径，数据 JSON 只保存下载地址。</p>
+          <div class="RaCodeManager">
+            <aside>
+              <div class="RaSectionHeading RaCompactHeading">
+                <p class="RaEyebrow">Tool Items</p>
+                <h3>工具条目</h3>
+              </div>
+              <div class="RaList RaCodeList" id="RaToolList"></div>
+            </aside>
+            <section>
+              <div class="RaFormGrid">
+                <label class="RaField">
+                  名称
+                  <input id="RaToolTitleInput" placeholder="例如：ADB 日志采集工具包" />
+                </label>
+                <label class="RaField">
+                  标识
+                  <input id="RaToolSlugInput" placeholder="adb-log-kit" />
+                </label>
+                <label class="RaField">
+                  日期
+                  <input id="RaToolDateInput" type="date" />
+                </label>
+                <label class="RaField">
+                  标签，逗号分隔
+                  <input id="RaToolTagsInput" placeholder="Android, 工具" />
+                </label>
+                <label class="RaField RaWide">
+                  摘要
+                  <textarea id="RaToolSummaryInput" rows="3"></textarea>
+                </label>
+                <label class="RaField RaWide">
+                  说明 Markdown
+                  <textarea id="RaToolContentInput" rows="10" spellcheck="false"></textarea>
+                </label>
+                <div class="RaField RaWide">
+                  工具附件
+                  <div class="RaAttachmentEditor">
+                    <div class="RaActions RaCompactActions">
+                      <label class="RaFileButton">
+                        上传到 GitHub
+                        <input id="RaToolAttachmentFileInput" type="file" multiple />
+                      </label>
+                      <button id="RaClearToolAttachmentsButton" class="RaSecondaryButton" type="button">清空附件</button>
+                    </div>
+                    <p class="RaHint">这里不做 2MB 限制；实际上限取决于 GitHub 单文件限制和浏览器上传能力。</p>
+                    <div class="RaAttachmentList" id="RaToolAttachmentList"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="RaActions">
+                <button id="RaNewToolButton" class="RaSecondaryButton" type="button">新建工具</button>
+                <button id="RaSaveToolButton" type="button">保存工具</button>
+                <button id="RaDeleteToolButton" class="RaDangerButton" type="button">删除工具</button>
+                <button id="RaPublishToolsButton" class="RaPublishButton" type="button">保存并发布</button>
+              </div>
+            </section>
+          </div>
+          <label class="RaField RaWide">
+            工具库 tools
+            <textarea id="RaToolsInput" rows="12" spellcheck="false"></textarea>
+          </label>
+          <div class="RaActions">
+            <button id="RaSaveToolsConfigButton" type="button">保存工具库配置</button>
+          </div>
+          <p class="RaStatus" id="RaToolsStatusText" role="status"></p>
+        </div>
+      </section>
+
+      <section class="RaWorkspacePanel" id="RaDevLogsPanel" data-ra-admin-panel="devlogs" hidden>
+        <div class="RaPanel">
+          <div class="RaSectionHeading">
+            <p class="RaEyebrow">Development Logs</p>
+            <h2>开发日志</h2>
+          </div>
+          <p class="RaHint">开发日志存放 Markdown 文档，记录开发、部署、推送、运行、上线全过程。发布时会自动追加一条发布记录，也可以在这里手动补充。</p>
+          <div class="RaCodeManager">
+            <aside>
+              <div class="RaSectionHeading RaCompactHeading">
+                <p class="RaEyebrow">Logs</p>
+                <h3>日志条目</h3>
+              </div>
+              <div class="RaList RaCodeList" id="RaDevLogList"></div>
+            </aside>
+            <section>
+              <div class="RaFormGrid">
+                <label class="RaField">
+                  标题
+                  <input id="RaDevLogTitleInput" placeholder="例如：工具库与开发日志模块上线" />
+                </label>
+                <label class="RaField">
+                  标识
+                  <input id="RaDevLogSlugInput" placeholder="devlog-tools-and-logs" />
+                </label>
+                <label class="RaField">
+                  日期
+                  <input id="RaDevLogDateInput" type="date" />
+                </label>
+                <label class="RaField">
+                  标签，逗号分隔
+                  <input id="RaDevLogTagsInput" placeholder="开发, 部署" />
+                </label>
+                <label class="RaField RaWide">
+                  摘要
+                  <textarea id="RaDevLogSummaryInput" rows="3"></textarea>
+                </label>
+                <label class="RaField RaWide">
+                  Markdown 内容
+                  <textarea id="RaDevLogContentInput" rows="16" spellcheck="false"></textarea>
+                </label>
+              </div>
+              <div class="RaActions">
+                <button id="RaNewDevLogButton" class="RaSecondaryButton" type="button">新建日志</button>
+                <button id="RaAppendDeployLogButton" class="RaSecondaryButton" type="button">追加当前发布日志</button>
+                <button id="RaSaveDevLogButton" type="button">保存日志</button>
+                <button id="RaDeleteDevLogButton" class="RaDangerButton" type="button">删除日志</button>
+                <button id="RaPublishDevLogsButton" class="RaPublishButton" type="button">保存并发布</button>
+              </div>
+            </section>
+          </div>
+          <label class="RaField RaWide">
+            开发日志 devLogs
+            <textarea id="RaDevLogsInput" rows="12" spellcheck="false"></textarea>
+          </label>
+          <div class="RaActions">
+            <button id="RaSaveDevLogsConfigButton" type="button">保存开发日志配置</button>
+          </div>
+          <p class="RaStatus" id="RaDevLogsStatusText" role="status"></p>
         </div>
       </section>
 

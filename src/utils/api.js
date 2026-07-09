@@ -25,11 +25,15 @@ export const fetchSiteData = async () => {
 
   const data = await response.json()
   const posts = sortPosts((data.posts || []).map(normalizePostAccess))
+  const tools = sortPosts((data.tools || []).map(normalizeCollectionItem))
+  const devLogs = sortPosts((data.devLogs || []).map(normalizeCollectionItem))
 
   return {
     site: data.site || {},
     profile: data.profile || null,
     repositories: Array.isArray(data.repositories) ? data.repositories.map(normalizeRepository) : [],
+    tools,
+    devLogs,
     moduleSettings: mergeSiteModuleSettings(data.modules, readModulePreferences()),
     posts,
     total: posts.length,
@@ -111,6 +115,22 @@ const normalizePostAccess = (post) => ({
   visibility: post.visibility === 'password' || post.visibility === 'private' ? 'password' : 'public',
   accessPassword: post.accessPassword || post.password || '',
   attachments: normalizeAttachments(post.attachments),
+})
+
+const normalizeCollectionItem = (item) => ({
+  title: item.title || item.name || '未命名条目',
+  slug: item.slug || item.id || item.title || item.name || `item-${Math.random().toString(36).slice(2)}`,
+  date: item.date || item.createdAt?.slice?.(0, 10) || '',
+  createdAt: item.createdAt || item.date || '',
+  updatedAt: item.updatedAt || item.modifiedAt || item.lastModified || item.date || '',
+  tags: Array.isArray(item.tags) ? item.tags : [],
+  visibility: item.visibility === 'password' || item.visibility === 'private' ? 'password' : 'public',
+  accessPassword: item.accessPassword || item.password || '',
+  summary: item.summary || item.description || '',
+  content: item.content || item.notes || '',
+  contentFormat: ['plain', 'markdown', 'rich'].includes(item.contentFormat) ? item.contentFormat : 'markdown',
+  readingMinutes: item.readingMinutes || 1,
+  attachments: normalizeAttachments(item.attachments),
 })
 
 const normalizeAttachments = (attachments) =>
