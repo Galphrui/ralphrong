@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Ra 后台管理</title>
-    <link rel="stylesheet" href="./styles.css?v=ra-20260708-tags" />
+    <link rel="stylesheet" href="./styles.css?v=ra-20260709-code-tags" />
   </head>
   <body class="RaPage RaAdminPage RaAuthPending">
     <header class="RaTopbar">
@@ -339,6 +339,8 @@
                 <label class="RaField">
                   标签，逗号分隔
                   <input id="RaCodeTagsInput" placeholder="Android, Debug" />
+                  <div class="RaTagPicker" id="RaCodeTagPicker" aria-label="选择已有代码标签"></div>
+                  <p class="RaHint">可选择已有代码库标签，也可以继续手动输入；新标签保存后会进入可选列表。</p>
                 </label>
                 <label class="RaField">
                   源路径
@@ -585,6 +587,6 @@
     </main>
 
     <script src="./admin-config.js?v=ra-20260703-2"></script>
-    <script src="./admin.js?v=ra-20260708-tags"></script>
+    <script src="./admin.js?v=ra-20260709-code-tags"></script>
   </body>
 </html>

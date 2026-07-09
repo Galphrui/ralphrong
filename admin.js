@@ -146,6 +146,7 @@ const RaEls = {
   codeLanguagePreset: document.querySelector("#RaCodeLanguagePresetInput"),
   codeLanguage: document.querySelector("#RaCodeLanguageInput"),
   codeTags: document.querySelector("#RaCodeTagsInput"),
+  codeTagPicker: document.querySelector("#RaCodeTagPicker"),
   codePath: document.querySelector("#RaCodePathInput"),
   codeUrl: document.querySelector("#RaCodeUrlInput"),
   codeDescription: document.querySelector("#RaCodeDescriptionInput"),
@@ -545,6 +546,46 @@ function filterPosts(posts, query) {
 
 function getAllPostTags() {
   return normalizeTags(RaData.posts.flatMap((post) => post.tags || [])).sort((a, b) => a.localeCompare(b, "zh-CN"));
+}
+
+function renderCodeTagPicker() {
+  if (!RaEls.codeTagPicker) return;
+  const tags = getAllCodeTags();
+  const selected = new Set(getCodeEditorTags().map(tagKey));
+  RaEls.codeTagPicker.innerHTML = tags.length
+    ? tags
+      .map((tag) => {
+        const active = selected.has(tagKey(tag));
+        return `
+          <button class="RaTagOption ${active ? "RaActive" : ""}" type="button" data-ra-code-tag-option="${escapeAttr(tag)}" aria-pressed="${active}">
+            ${escapeHtml(tag)}
+          </button>
+        `;
+      })
+      .join("")
+    : `<span class="RaTagPickerEmpty">保存第一条带标签的代码后，这里会出现可选标签</span>`;
+}
+
+function getAllCodeTags() {
+  const repositories = Array.isArray(RaData.repositories) ? RaData.repositories : [];
+  return normalizeTags(repositories.flatMap((repo) => repo.tags || [])).sort((a, b) => a.localeCompare(b, "zh-CN"));
+}
+
+function getCodeEditorTags() {
+  return parseTags(RaEls.codeTags.value);
+}
+
+function setCodeEditorTags(tags) {
+  const normalized = normalizeTags(Array.isArray(tags) ? tags : parseTags(tags));
+  RaEls.codeTags.value = normalized.join(", ");
+  renderCodeTagPicker();
+}
+
+function toggleCodeEditorTag(tag) {
+  const current = getCodeEditorTags();
+  const key = tagKey(tag);
+  const exists = current.some((item) => tagKey(item) === key);
+  setCodeEditorTags(exists ? current.filter((item) => tagKey(item) !== key) : [...current, tag]);
 }
 
 function getEditorTags() {
@@ -1601,7 +1642,7 @@ function normalizeCodeRepositories(value) {
     name: repo.name || "未命名代码",
     description: repo.description || "",
     language: normalizeCodeLanguage(repo.language || "Plain Text"),
-    tags: Array.isArray(repo.tags) ? repo.tags : [],
+    tags: normalizeTags(Array.isArray(repo.tags) ? repo.tags : parseTags(repo.tags)),
     url: repo.url || "",
     sourcePath: repo.sourcePath || "",
     updatedAt: repo.updatedAt || repo.date || "",
@@ -1694,7 +1735,7 @@ function selectCodeItem(id) {
   RaSelectedCodeId = item.id || "";
   RaEls.codeName.value = item.name || "";
   selectCodeLanguage(item.language || "");
-  RaEls.codeTags.value = (item.tags || []).join(", ");
+  setCodeEditorTags(item.tags || []);
   RaEls.codePath.value = item.sourcePath || "";
   RaEls.codeUrl.value = item.url || "";
   RaEls.codeDescription.value = item.description || "";
@@ -1733,7 +1774,7 @@ function saveCodeItem() {
     name: RaEls.codeName.value.trim(),
     description: RaEls.codeDescription.value.trim(),
     language: currentCodeLanguage(),
-    tags: RaEls.codeTags.value.split(",").map((tag) => tag.trim()).filter(Boolean),
+    tags: getCodeEditorTags(),
     url: RaEls.codeUrl.value.trim(),
     sourcePath: RaEls.codePath.value.trim(),
     updatedAt: now,
@@ -2827,6 +2868,12 @@ RaEls.newCode.addEventListener("click", newCodeItem);
 RaEls.codeLanguagePreset.addEventListener("change", () => {
   RaEls.codeLanguage.value = "";
 });
+RaEls.codeTagPicker.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-ra-code-tag-option]");
+  if (button) toggleCodeEditorTag(button.dataset.raCodeTagOption);
+});
+RaEls.codeTags.addEventListener("input", renderCodeTagPicker);
+RaEls.codeTags.addEventListener("change", () => setCodeEditorTags(RaEls.codeTags.value));
 RaEls.formatCode.addEventListener("click", formatCurrentCodeSnippet);
 RaEls.downloadCode.addEventListener("click", downloadCurrentCodeSnippet);
 RaEls.saveCodeItem.addEventListener("click", saveCodeItem);

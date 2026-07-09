@@ -4,6 +4,7 @@ import { useBlogStore } from '../store/useStore'
 import { likePost } from '../utils/api'
 import Guestbook from './Guestbook'
 import MarkdownContent from './MarkdownContent'
+import ScrollPositionControls from './ScrollPositionControls'
 
 function formatBytes(size) {
   const value = Number(size || 0)
@@ -44,51 +45,6 @@ function AttachmentList({ attachments = [] }) {
         })}
       </div>
     </section>
-  )
-}
-
-function ArticleScrollControls() {
-  const scrollToPosition = (position) => {
-    const page = document.documentElement
-    const maxScroll = Math.max(0, page.scrollHeight - window.innerHeight)
-    const top =
-      position === 'top'
-        ? 0
-        : position === 'middle'
-          ? maxScroll / 2
-          : maxScroll
-
-    window.scrollTo({ top, behavior: 'smooth' })
-  }
-
-  const controls = [
-    { id: 'top', label: '↑', title: '回到顶部' },
-    { id: 'middle', label: '中', title: '跳到中部' },
-    { id: 'bottom', label: '↓', title: '跳到底部' },
-  ]
-
-  return (
-    <>
-      {['left', 'right'].map((side) => (
-        <nav
-          key={side}
-          className={`article-scroll-controls article-scroll-controls-${side}`}
-          aria-label={side === 'left' ? '文章左侧快速滚动' : '文章右侧快速滚动'}
-        >
-          {controls.map((control) => (
-            <button
-              key={control.id}
-              type="button"
-              title={control.title}
-              aria-label={control.title}
-              onClick={() => scrollToPosition(control.id)}
-            >
-              {control.label}
-            </button>
-          ))}
-        </nav>
-      ))}
-    </>
   )
 }
 
@@ -159,7 +115,7 @@ export default function PostDetail({ post }) {
 
   return (
     <>
-      <ArticleScrollControls />
+      <ScrollPositionControls ariaLabelPrefix="文章" />
       <motion.article
         className="border border-slate-200 bg-white px-6 py-8 shadow-soft sm:px-10 lg:px-12"
         initial={{ opacity: 0, y: 16 }}

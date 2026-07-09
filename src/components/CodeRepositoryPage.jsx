@@ -9,6 +9,7 @@ import {
   formatCodeByLanguage,
 } from '../utils/codeLibrary'
 import { displayStyleForModule, normalizeDisplayStyle } from '../utils/moduleConfig'
+import ScrollPositionControls from './ScrollPositionControls'
 
 export default function CodeRepositoryPage({ selectedId = '' }) {
   const { repositories, moduleSettings } = useBlogStore()
@@ -211,61 +212,64 @@ function CodeRepositoryDetail({ repo }) {
   const formatted = formatCodeByLanguage(repo.snippet, repo.language)
 
   return (
-    <article className="mx-auto max-w-5xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
-      <a href="#code" className="text-sm font-bold text-primary-700">
-        返回代码库
-      </a>
-      <header className="mt-6 border-b border-slate-200 pb-6">
-        <p className="text-xs font-black uppercase text-primary-700">{repo.language}</p>
-        <h1 className="mt-2 text-3xl font-black leading-tight text-slate-950 sm:text-4xl">{repo.name}</h1>
-        <div className="mt-4 flex flex-wrap gap-3 text-sm font-bold text-slate-500">
-          {repo.updatedAt && <span>{repo.updatedAt}</span>}
-          {repo.sourcePath && <span>{repo.sourcePath}</span>}
-          <span>{codeFileName(repo)}</span>
-        </div>
-        {repo.description && <p className="mt-5 text-base leading-8 text-slate-700">{repo.description}</p>}
-        <div className="mt-5 flex flex-wrap gap-2">
-          {(repo.tags || []).map((item) => (
-            <span key={item} className="border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-600">
-              {item}
-            </span>
-          ))}
-        </div>
-      </header>
-
-      <div className="mt-6 flex flex-wrap gap-2">
-        <a
-          href={codeDownloadHref(repo)}
-          download={codeFileName(repo)}
-          className="border border-primary-700 bg-primary-700 px-4 py-2 text-sm font-black text-white hover:bg-primary-800"
-        >
-          下载为 {codeFileName(repo)}
+    <>
+      <ScrollPositionControls ariaLabelPrefix="代码库详情" />
+      <article className="mx-auto max-w-5xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
+        <a href="#code" className="text-sm font-bold text-primary-700">
+          返回代码库
         </a>
-        {repo.url && (
-          <a
-            href={repo.url}
-            target="_blank"
-            rel="noreferrer"
-            className="border border-primary-100 bg-primary-50 px-4 py-2 text-sm font-black text-primary-700 hover:border-primary-300"
-          >
-            打开仓库
-          </a>
-        )}
-      </div>
+        <header className="mt-6 border-b border-slate-200 pb-6">
+          <p className="text-xs font-black uppercase text-primary-700">{repo.language}</p>
+          <h1 className="mt-2 text-3xl font-black leading-tight text-slate-950 sm:text-4xl">{repo.name}</h1>
+          <div className="mt-4 flex flex-wrap gap-3 text-sm font-bold text-slate-500">
+            {repo.updatedAt && <span>{repo.updatedAt}</span>}
+            {repo.sourcePath && <span>{repo.sourcePath}</span>}
+            <span>{codeFileName(repo)}</span>
+          </div>
+          {repo.description && <p className="mt-5 text-base leading-8 text-slate-700">{repo.description}</p>}
+          <div className="mt-5 flex flex-wrap gap-2">
+            {(repo.tags || []).map((item) => (
+              <span key={item} className="border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-600">
+                {item}
+              </span>
+            ))}
+          </div>
+        </header>
 
-      {formatted && (
-        <pre className="mt-6 overflow-auto border border-slate-800 bg-slate-950 p-5 text-sm leading-7 text-slate-100">
-          <code>{formatted}</code>
-        </pre>
-      )}
-      {repo.notes && (
-        <section className="mt-8 border border-slate-200 bg-slate-50 p-5">
-          <p className="text-xs font-black uppercase text-primary-700">Ra Notes</p>
-          <p className="mt-3 whitespace-pre-wrap text-sm font-medium leading-7 text-slate-700">{repo.notes}</p>
-        </section>
-      )}
-      <AttachmentList attachments={repo.attachments || []} title="代码附件" />
-    </article>
+        <div className="mt-6 flex flex-wrap gap-2">
+          <a
+            href={codeDownloadHref(repo)}
+            download={codeFileName(repo)}
+            className="border border-primary-700 bg-primary-700 px-4 py-2 text-sm font-black text-white hover:bg-primary-800"
+          >
+            下载为 {codeFileName(repo)}
+          </a>
+          {repo.url && (
+            <a
+              href={repo.url}
+              target="_blank"
+              rel="noreferrer"
+              className="border border-primary-100 bg-primary-50 px-4 py-2 text-sm font-black text-primary-700 hover:border-primary-300"
+            >
+              打开仓库
+            </a>
+          )}
+        </div>
+
+        {formatted && (
+          <pre className="mt-6 overflow-auto border border-slate-800 bg-slate-950 p-5 text-sm leading-7 text-slate-100">
+            <code>{formatted}</code>
+          </pre>
+        )}
+        {repo.notes && (
+          <section className="mt-8 border border-slate-200 bg-slate-50 p-5">
+            <p className="text-xs font-black uppercase text-primary-700">Ra Notes</p>
+            <p className="mt-3 whitespace-pre-wrap text-sm font-medium leading-7 text-slate-700">{repo.notes}</p>
+          </section>
+        )}
+        <AttachmentList attachments={repo.attachments || []} title="代码附件" />
+      </article>
+    </>
   )
 }
 
