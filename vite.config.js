@@ -28,8 +28,26 @@ function copyAdminStaticFiles() {
         fs.mkdirSync(path.dirname(target), { recursive: true })
         fs.copyFileSync(source, target)
       })
+      copyDirectory(path.resolve(__dirname, 'public-assets'), path.resolve(__dirname, 'dist', 'public-assets'))
     },
   }
+}
+
+function copyDirectory(sourceDir, targetDir) {
+  if (!fs.existsSync(sourceDir)) return
+  fs.mkdirSync(targetDir, { recursive: true })
+  fs.readdirSync(sourceDir, { withFileTypes: true }).forEach((entry) => {
+    const source = path.join(sourceDir, entry.name)
+    const target = path.join(targetDir, entry.name)
+    if (entry.isDirectory()) {
+      copyDirectory(source, target)
+      return
+    }
+    if (entry.isFile()) {
+      fs.mkdirSync(path.dirname(target), { recursive: true })
+      fs.copyFileSync(source, target)
+    }
+  })
 }
 
 export default ({ command }) => ({
