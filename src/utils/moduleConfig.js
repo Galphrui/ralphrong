@@ -1,5 +1,3 @@
-export const MODULE_STORAGE_KEY = 'ra-module-preferences'
-
 export const DEFAULT_MODULES = [
   { id: 'posts', label: '文章', href: '#posts', enabled: true, order: 10, pinned: true, surface: 'top' },
   { id: 'code', label: '代码库', href: '#code', enabled: true, order: 20, surface: 'top' },
@@ -7,7 +5,6 @@ export const DEFAULT_MODULES = [
   { id: 'devlogs', label: '开发日志', href: '#devlogs', enabled: true, order: 40, surface: 'top' },
   { id: 'profile', label: '个人', href: '#profile', enabled: true, order: 50, surface: 'top' },
   { id: 'guestbook', label: '留言', href: '#guestbook', enabled: true, order: 60, surface: 'top' },
-  { id: 'modules', label: '设置', href: '#modules', enabled: true, order: 90, surface: 'top' },
   { id: 'admin', label: '管理', href: './admin.html', enabled: true, order: 100, surface: 'top', external: true },
 ]
 
@@ -45,38 +42,14 @@ export function normalizeModuleSettings(rawSettings = {}, rawModules = DEFAULT_M
   }
 }
 
-export function readModulePreferences() {
-  try {
-    const stored = JSON.parse(window.localStorage.getItem(MODULE_STORAGE_KEY) || '{}')
-    return normalizeModuleSettings(stored, DEFAULT_MODULES)
-  } catch (error) {
-    return normalizeModuleSettings()
-  }
-}
-
-export function writeModulePreferences(settings) {
-  const normalized = normalizeModuleSettings(settings, settings.modules)
-  window.localStorage.setItem(MODULE_STORAGE_KEY, JSON.stringify(normalized))
-  window.dispatchEvent(new CustomEvent('ra-module-settings-change', { detail: normalized }))
-  return normalized
-}
-
-export function mergeSiteModuleSettings(siteSettings, localSettings) {
+export function mergeSiteModuleSettings(siteSettings) {
   const siteModules = Array.isArray(siteSettings?.modules) ? siteSettings.modules : DEFAULT_MODULES
   const siteDefaults = {
     ...DEFAULT_MODULE_SETTINGS,
     ...(siteSettings?.settings || {}),
     modules: siteModules,
   }
-  if (!localSettings) return normalizeModuleSettings(siteDefaults, siteModules)
-  return normalizeModuleSettings(
-    {
-      ...siteDefaults,
-      ...localSettings,
-      modules: localSettings.modules || siteDefaults.modules,
-    },
-    siteModules,
-  )
+  return normalizeModuleSettings(siteDefaults, siteModules)
 }
 
 export function topModules(settings) {

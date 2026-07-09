@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Ra 后台管理</title>
-    <link rel="stylesheet" href="./styles.css?v=ra-20260709-code-tags" />
+    <link rel="stylesheet" href="./styles.css?v=ra-20260709-admin-modules" />
   </head>
   <body class="RaPage RaAdminPage RaAuthPending">
     <header class="RaTopbar">
@@ -27,6 +27,7 @@
           <button class="RaTabButton" type="button" data-ra-admin-tab="code">代码库</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="tools">工具库</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="devlogs">开发日志</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="modules">模块</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="site">站点</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="profile">简历</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="accounts" id="RaAccountsNavLink">账号</button>
@@ -392,16 +393,43 @@
               代码库 repositories
               <textarea id="RaRepositoriesInput" rows="18" spellcheck="false"></textarea>
             </label>
-            <label class="RaField RaWide">
-              模块配置 modules
-              <textarea id="RaModulesInput" rows="14" spellcheck="false"></textarea>
-            </label>
           </div>
           <div class="RaActions">
             <button id="RaSaveCodeButton" type="button">保存代码库配置</button>
             <button id="RaPublishCodeButton" class="RaPublishButton" type="button">保存并发布</button>
           </div>
           <p class="RaStatus" id="RaCodeStatusText" role="status"></p>
+        </div>
+      </section>
+
+      <section class="RaWorkspacePanel" id="RaModulesPanel" data-ra-admin-panel="modules" hidden>
+        <div class="RaPanel">
+          <div class="RaSectionHeading">
+            <p class="RaEyebrow">Modules</p>
+            <h2>全平台模块显示管理</h2>
+          </div>
+          <p class="RaHint">这里保存的是全站统一配置，发布后所有浏览器、所有设备都会读取同一份 data/posts.json，不再使用用户本地选择。</p>
+          <div class="RaFormGrid">
+            <label class="RaField">
+              顶部最多显示
+              <input id="RaModuleMaxTopInput" type="number" min="3" max="8" />
+            </label>
+            <label class="RaField">
+              全局排版风格
+              <select id="RaModuleGlobalStyleInput"></select>
+            </label>
+          </div>
+          <div class="RaList" id="RaModuleList"></div>
+          <label class="RaField RaWide">
+            模块配置 modules
+            <textarea id="RaModulesInput" rows="14" spellcheck="false"></textarea>
+          </label>
+          <div class="RaActions">
+            <button id="RaApplyModuleVisualButton" class="RaSecondaryButton" type="button">从上方控件同步到 JSON</button>
+            <button id="RaSaveModulesButton" type="button">保存模块配置</button>
+            <button id="RaPublishModulesButton" class="RaPublishButton" type="button">保存并发布</button>
+          </div>
+          <p class="RaStatus" id="RaModulesStatusText" role="status"></p>
         </div>
       </section>
 
@@ -726,6 +754,6 @@
     </main>
 
     <script src="./admin-config.js?v=ra-20260703-2"></script>
-    <script src="./admin.js?v=ra-20260709-code-tags"></script>
+    <script src="./admin.js?v=ra-20260709-admin-modules"></script>
   </body>
 </html>

@@ -1,7 +1,7 @@
 import { sortPosts } from './postSort'
 import { validateGuestMessage } from './moderation'
 import { visitorId } from './visitor'
-import { mergeSiteModuleSettings, readModulePreferences } from './moduleConfig'
+import { mergeSiteModuleSettings } from './moduleConfig'
 
 const DATA_PATH = 'data/posts.json'
 const DATA_URL = `${import.meta.env.BASE_URL}${DATA_PATH}`
@@ -34,7 +34,7 @@ export const fetchSiteData = async () => {
     repositories: Array.isArray(data.repositories) ? data.repositories.map(normalizeRepository) : [],
     tools,
     devLogs,
-    moduleSettings: mergeSiteModuleSettings(data.modules, readModulePreferences()),
+    moduleSettings: mergeSiteModuleSettings(data.modules),
     posts,
     total: posts.length,
   }

@@ -1093,14 +1093,6 @@
         "surface": "top"
       },
       {
-        "id": "modules",
-        "label": "设置",
-        "href": "#modules",
-        "enabled": true,
-        "order": 90,
-        "surface": "top"
-      },
-      {
         "id": "admin",
         "label": "管理",
         "href": "./admin.html",
@@ -1282,6 +1274,23 @@
   },
   "tools": [],
   "devLogs": [
+    {
+      "title": "模块显示设置迁移到后台管理",
+      "slug": "devlog-module-settings-moved-to-admin-20260709080100",
+      "date": "2026-07-09",
+      "createdAt": "2026-07-09T08:01:00.795Z",
+      "updatedAt": "2026-07-09T08:01:00.795Z",
+      "tags": [
+        "开发日志",
+        "模块管理",
+        "部署"
+      ],
+      "summary": "把前台本地模块显示设置迁移到后台管理，保存后写入全局 data/posts.json，所有设备统一读取同一份配置。",
+      "content": "## 背景\n\n前台“设置”页面使用浏览器本地偏好保存模块显示配置，只对当前用户当前浏览器生效，不能作为全平台统一配置。\n\n这次修改把模块显示设置迁移到后台管理中，发布后写入 data/posts.json，所有用户、所有设备、所有浏览器都会读取同一份配置。\n\n## 修改内容\n\n1. 删除前台模块设置页面和 #modules 路由。\n2. 前台不再读取 localStorage 中的 ra-module-preferences。\n3. 模块显示配置只从 data/posts.json 的 modules 字段读取。\n4. 后台新增“模块”管理页，可以设置顶部显示数量、全局排版风格、单模块排版、显示隐藏和顺序。\n5. 后台保存模块配置后写入全局数据，点击保存并发布后全平台同步。\n6. 从默认导航中移除前台“设置”入口，保留后台“管理”入口。\n\n## 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部“模块”。\n4. 设置“顶部最多显示”和“全局排版风格”。\n5. 在模块列表里点击“显示/隐藏”、“上移/下移”，或修改单模块排版风格。\n6. 点击“保存模块配置”。\n7. 点击“保存并发布”。\n8. 打开 GitHub Actions，等待 Deploy to GitHub Pages 绿色对勾。\n9. 刷新前台页面确认导航变化。\n\n## 验证命令\n\n    node --check admin.js\n    ./node_modules/.bin/vite build\n\n## 上线确认\n\n打开 https://galphrui.github.io/ralphrong/，确认顶部不再显示前台“设置”，模块显示顺序和后台保存的 data/posts.json 一致。",
+      "contentFormat": "markdown",
+      "readingMinutes": 4,
+      "attachments": []
+    },
     {
       "title": "工具库与开发日志模块开发上线",
       "slug": "devlog-tools-and-development-logs-module",

@@ -30,6 +30,14 @@ const RA_CODE_LANGUAGE_PRESETS = [
   { label: "Go", value: "Go", extension: "go" },
   { label: "Rust", value: "Rust", extension: "rs" },
 ];
+const RA_DISPLAY_STYLES = [
+  { id: "list", label: "列表" },
+  { id: "code-block", label: "代码块" },
+  { id: "compact", label: "紧凑" },
+  { id: "gallery", label: "画廊" },
+  { id: "timeline", label: "时间线" },
+  { id: "magazine", label: "杂志" },
+];
 const RA_DOC_COLORS = ["#0f172a", "#dc2626", "#ea580c", "#ca8a04", "#16a34a", "#0891b2", "#2563eb", "#7c3aed", "#db2777"];
 const RA_DOC_BACKGROUNDS = ["#ffffff", "#fee2e2", "#ffedd5", "#fef3c7", "#dcfce7", "#cffafe", "#dbeafe", "#ede9fe", "#fce7f3"];
 
@@ -164,7 +172,14 @@ const RaEls = {
   saveCodeItem: document.querySelector("#RaSaveCodeItemButton"),
   deleteCodeItem: document.querySelector("#RaDeleteCodeItemButton"),
   repositories: document.querySelector("#RaRepositoriesInput"),
+  moduleMaxTop: document.querySelector("#RaModuleMaxTopInput"),
+  moduleGlobalStyle: document.querySelector("#RaModuleGlobalStyleInput"),
+  moduleList: document.querySelector("#RaModuleList"),
+  applyModuleVisual: document.querySelector("#RaApplyModuleVisualButton"),
   modules: document.querySelector("#RaModulesInput"),
+  saveModules: document.querySelector("#RaSaveModulesButton"),
+  publishModules: document.querySelector("#RaPublishModulesButton"),
+  modulesStatus: document.querySelector("#RaModulesStatusText"),
   saveCode: document.querySelector("#RaSaveCodeButton"),
   publishCode: document.querySelector("#RaPublishCodeButton"),
   codeStatus: document.querySelector("#RaCodeStatusText"),
@@ -250,6 +265,7 @@ async function initRaAdmin() {
   renderSiteForm();
   renderProfileForm();
   renderCodeForm();
+  renderModuleForm();
   renderToolsForm();
   renderDevLogsForm();
   renderPostList();
@@ -370,6 +386,7 @@ async function loadRemoteData() {
     renderSiteForm();
     renderProfileForm();
     renderCodeForm();
+    renderModuleForm();
     renderToolsForm();
     renderDevLogsForm();
     selectPost(RaData.posts[0]?.slug || "");
@@ -420,6 +437,7 @@ function appendAutomaticDevLog(target = "posts") {
     code: "代码库",
     tools: "工具库",
     devlogs: "开发日志",
+    modules: "模块",
     profile: "个人页",
     site: "站点",
   };
@@ -816,11 +834,108 @@ function renderProfileForm() {
 }
 
 function renderCodeForm() {
-  if (!RaEls.repositories || !RaEls.modules) return;
+  if (!RaEls.repositories) return;
   RaEls.repositories.value = JSON.stringify(RaData.repositories || [], null, 2);
-  RaEls.modules.value = JSON.stringify(RaData.modules || getDefaultModules(), null, 2);
   renderCodeList();
   selectCodeItem(RaSelectedCodeId || RaData.repositories?.[0]?.id || "");
+}
+
+function renderModuleForm() {
+  if (!RaEls.modules) return;
+  RaData.modules = normalizeModuleConfig(RaData.modules || getDefaultModules());
+  RaEls.modules.value = JSON.stringify(RaData.modules, null, 2);
+  if (RaEls.moduleMaxTop) RaEls.moduleMaxTop.value = String(RaData.modules.settings?.maxTopModules || 6);
+  if (RaEls.moduleGlobalStyle) {
+    RaEls.moduleGlobalStyle.innerHTML = RA_DISPLAY_STYLES.map((style) => `<option value="${style.id}">${style.label}</option>`).join("");
+    RaEls.moduleGlobalStyle.value = normalizeDisplayStyle(RaData.modules.settings?.globalDisplayStyle || "list");
+  }
+  renderModuleList();
+}
+
+function renderModuleList() {
+  if (!RaEls.moduleList) return;
+  const config = normalizeModuleConfig(RaData.modules || getDefaultModules());
+  const styleMap = config.settings?.moduleDisplayStyles || {};
+  RaEls.moduleList.innerHTML = config.modules
+    .map((module, index) => {
+      const style = normalizeDisplayStyle(styleMap[module.id] || config.settings?.globalDisplayStyle || "list");
+      return `
+        <article class="RaItem" data-ra-module-id="${escapeAttr(module.id)}">
+          <div>
+            <strong>${escapeHtml(module.label || module.id)}</strong>
+            <small>${escapeHtml(module.href || "")} · ${escapeHtml(module.id)}${module.external ? " · 外部入口" : ""}</small>
+          </div>
+          <div class="RaActions RaCompactActions">
+            <select data-ra-module-style="${escapeAttr(module.id)}">
+              ${RA_DISPLAY_STYLES.map((item) => `<option value="${item.id}" ${item.id === style ? "selected" : ""}>${item.label}</option>`).join("")}
+            </select>
+            <button class="${module.enabled ? "" : "RaSecondaryButton"}" type="button" data-ra-module-toggle="${escapeAttr(module.id)}">${module.enabled ? "显示" : "隐藏"}</button>
+            <button class="RaSecondaryButton" type="button" data-ra-module-move="${escapeAttr(module.id)}" data-ra-direction="-1" ${index === 0 ? "disabled" : ""}>上移</button>
+            <button class="RaSecondaryButton" type="button" data-ra-module-move="${escapeAttr(module.id)}" data-ra-direction="1" ${index === config.modules.length - 1 ? "disabled" : ""}>下移</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function syncModuleJsonFromVisual() {
+  const config = normalizeModuleConfig(RaData.modules || getDefaultModules());
+  config.settings.maxTopModules = clampModuleCount(RaEls.moduleMaxTop?.value || config.settings.maxTopModules);
+  config.settings.globalDisplayStyle = normalizeDisplayStyle(RaEls.moduleGlobalStyle?.value || config.settings.globalDisplayStyle);
+  RaData.modules = normalizeModuleConfig(config);
+  RaEls.modules.value = JSON.stringify(RaData.modules, null, 2);
+  renderModuleList();
+}
+
+function saveModuleConfig() {
+  try {
+    syncModuleJsonFromVisual();
+    const modules = JSON.parse(RaEls.modules.value || "{}");
+    if (!modules || !Array.isArray(modules.modules)) throw new Error("modules.modules 必须是数组。");
+    RaData.modules = normalizeModuleConfig(modules);
+    saveLocalData();
+    renderModuleForm();
+    setModulesStatus("模块配置已保存到全局数据。发布后所有设备同步生效。");
+    return true;
+  } catch (error) {
+    setModulesStatus(`保存失败：${error.message}`);
+    return false;
+  }
+}
+
+async function publishModuleConfig() {
+  if (saveModuleConfig()) await publishData("modules");
+}
+
+function toggleModuleVisibility(id) {
+  const config = normalizeModuleConfig(RaData.modules || getDefaultModules());
+  config.modules = config.modules.map((module) => (module.id === id ? { ...module, enabled: !module.enabled } : module));
+  RaData.modules = normalizeModuleConfig(config);
+  renderModuleForm();
+}
+
+function moveModuleItem(id, direction) {
+  const config = normalizeModuleConfig(RaData.modules || getDefaultModules());
+  const index = config.modules.findIndex((module) => module.id === id);
+  const target = index + Number(direction);
+  if (index < 0 || target < 0 || target >= config.modules.length) return;
+  const next = [...config.modules];
+  const [item] = next.splice(index, 1);
+  next.splice(target, 0, item);
+  config.modules = next.map((module, itemIndex) => ({ ...module, order: (itemIndex + 1) * 10 }));
+  RaData.modules = normalizeModuleConfig(config);
+  renderModuleForm();
+}
+
+function setModuleStyle(id, style) {
+  const config = normalizeModuleConfig(RaData.modules || getDefaultModules());
+  config.settings.moduleDisplayStyles = {
+    ...(config.settings.moduleDisplayStyles || {}),
+    [id]: normalizeDisplayStyle(style),
+  };
+  RaData.modules = normalizeModuleConfig(config);
+  renderModuleForm();
 }
 
 function renderToolsForm() {
@@ -878,11 +993,8 @@ async function publishDevLogsConfig() {
 function saveCodeConfig() {
   try {
     const repositories = JSON.parse(RaEls.repositories.value || "[]");
-    const modules = JSON.parse(RaEls.modules.value || "{}");
     if (!Array.isArray(repositories)) throw new Error("repositories 必须是数组。");
-    if (!modules || !Array.isArray(modules.modules)) throw new Error("modules.modules 必须是数组。");
     RaData.repositories = normalizeCodeRepositories(repositories);
-    RaData.modules = modules;
     saveLocalData();
     renderCodeForm();
     setCodeStatus("代码库和模块配置已保存到本地数据。");
@@ -2756,6 +2868,7 @@ function importJson(event) {
     renderSiteForm();
     renderProfileForm();
     renderCodeForm();
+    renderModuleForm();
     renderToolsForm();
     renderDevLogsForm();
     selectPost(RaData.posts[0]?.slug || "");
@@ -3016,7 +3129,7 @@ function delay(ms) {
 }
 
 function setPublishing(isPublishing) {
-  [RaEls.publish, RaEls.publishSite, RaEls.publishProfile, RaEls.publishCode, RaEls.publishTools, RaEls.publishDevLogs, RaEls.syncData, RaEls.docPublish].forEach((button) => {
+  [RaEls.publish, RaEls.publishSite, RaEls.publishProfile, RaEls.publishCode, RaEls.publishModules, RaEls.publishTools, RaEls.publishDevLogs, RaEls.syncData, RaEls.docPublish].forEach((button) => {
     if (button) button.disabled = isPublishing;
   });
 }
@@ -3025,6 +3138,7 @@ function setTargetStatus(target, message) {
   if (target === "profile") setProfileStatus(message);
   if (target === "site") setSiteStatus(message);
   if (target === "code") setCodeStatus(message);
+  if (target === "modules") setModulesStatus(message);
   if (target === "tools") setToolsStatus(message);
   if (target === "devlogs") setDevLogsStatus(message);
 }
@@ -3079,7 +3193,7 @@ function normalizeData(input) {
     repositories: normalizeCodeRepositories(input.repositories),
     tools: normalizeCollectionItems(input.tools, "tool"),
     devLogs: normalizeCollectionItems(input.devLogs, "devlog"),
-    modules: input.modules || getDefaultModules(),
+    modules: normalizeModuleConfig(input.modules || getDefaultModules()),
     profile: normalizeProfile(input.profile),
   };
 }
@@ -3099,7 +3213,7 @@ function getDefaultData() {
     repositories: [],
     tools: [],
     devLogs: [],
-    modules: getDefaultModules(),
+    modules: normalizeModuleConfig(getDefaultModules()),
     profile: getDefaultProfile(),
   };
 }
@@ -3114,10 +3228,53 @@ function getDefaultModules() {
       { id: "devlogs", label: "开发日志", href: "#devlogs", enabled: true, order: 40, surface: "top" },
       { id: "profile", label: "个人", href: "#profile", enabled: true, order: 50, surface: "top" },
       { id: "guestbook", label: "留言", href: "#guestbook", enabled: true, order: 60, surface: "top" },
-      { id: "modules", label: "设置", href: "#modules", enabled: true, order: 90, surface: "top" },
       { id: "admin", label: "管理", href: "./admin.html", enabled: true, order: 100, surface: "top", external: true },
     ],
   };
+}
+
+function normalizeModuleConfig(value = {}) {
+  const defaults = getDefaultModules();
+  const byId = new Map(defaults.modules.map((module) => [module.id, module]));
+  (Array.isArray(value.modules) ? value.modules : []).forEach((module) => {
+    if (module?.id === "modules") return;
+    if (module?.id) byId.set(module.id, { ...(byId.get(module.id) || {}), ...module });
+  });
+  const settings = {
+    maxTopModules: clampModuleCount(value.settings?.maxTopModules),
+    globalDisplayStyle: normalizeDisplayStyle(value.settings?.globalDisplayStyle),
+    moduleDisplayStyles: normalizeModuleDisplayStyles(value.settings?.moduleDisplayStyles),
+  };
+  return {
+    settings,
+    modules: [...byId.values()]
+      .map((module, index) => ({
+        ...module,
+        enabled: typeof module.enabled === "boolean" ? module.enabled : true,
+        order: Number.isFinite(Number(module.order)) ? Number(module.order) : (index + 1) * 10,
+        surface: module.surface || "top",
+      }))
+      .sort((a, b) => a.order - b.order || String(a.label || a.id).localeCompare(String(b.label || b.id), "zh-CN")),
+  };
+}
+
+function clampModuleCount(value) {
+  const next = Number(value);
+  if (!Number.isFinite(next)) return 6;
+  return Math.min(Math.max(Math.round(next), 3), 8);
+}
+
+function normalizeDisplayStyle(value) {
+  return RA_DISPLAY_STYLES.some((style) => style.id === value) ? value : "list";
+}
+
+function normalizeModuleDisplayStyles(value = {}) {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => key && key !== "modules")
+      .map(([key, style]) => [key, normalizeDisplayStyle(style)]),
+  );
 }
 
 function normalizeProfile(profile = {}) {
@@ -3212,6 +3369,10 @@ function setProfileStatus(message) {
 
 function setCodeStatus(message) {
   if (RaEls.codeStatus) RaEls.codeStatus.textContent = message;
+}
+
+function setModulesStatus(message) {
+  if (RaEls.modulesStatus) RaEls.modulesStatus.textContent = message;
 }
 
 function setToolsStatus(message) {
@@ -3377,6 +3538,27 @@ RaEls.saveProfile.addEventListener("click", saveProfileInfo);
 RaEls.publishProfile.addEventListener("click", publishProfileInfo);
 RaEls.saveCode.addEventListener("click", saveCodeConfig);
 RaEls.publishCode.addEventListener("click", publishCodeConfig);
+RaEls.applyModuleVisual.addEventListener("click", () => {
+  syncModuleJsonFromVisual();
+  setModulesStatus("已从上方控件同步到 JSON，点击保存后生效。");
+});
+RaEls.saveModules.addEventListener("click", saveModuleConfig);
+RaEls.publishModules.addEventListener("click", publishModuleConfig);
+RaEls.moduleMaxTop.addEventListener("change", syncModuleJsonFromVisual);
+RaEls.moduleGlobalStyle.addEventListener("change", syncModuleJsonFromVisual);
+RaEls.moduleList.addEventListener("click", (event) => {
+  const toggle = event.target.closest("[data-ra-module-toggle]");
+  if (toggle) {
+    toggleModuleVisibility(toggle.dataset.raModuleToggle);
+    return;
+  }
+  const move = event.target.closest("[data-ra-module-move]");
+  if (move) moveModuleItem(move.dataset.raModuleMove, Number(move.dataset.raDirection || 0));
+});
+RaEls.moduleList.addEventListener("change", (event) => {
+  const select = event.target.closest("[data-ra-module-style]");
+  if (select) setModuleStyle(select.dataset.raModuleStyle, select.value);
+});
 RaEls.saveToolsConfig.addEventListener("click", saveToolsConfig);
 RaEls.publishTools.addEventListener("click", publishToolsConfig);
 RaEls.newTool.addEventListener("click", newToolItem);

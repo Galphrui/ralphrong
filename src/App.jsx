@@ -5,7 +5,6 @@ import HomePage from './components/HomePage'
 import ProfilePage from './components/ProfilePage'
 import Guestbook from './components/Guestbook'
 import CodeRepositoryPage from './components/CodeRepositoryPage'
-import ModuleSettingsPage from './components/ModuleSettingsPage'
 import CollectionPage from './components/CollectionPage'
 import { useBlogStore } from './store/useStore'
 import { fetchPostMetrics, fetchSiteData, recordPostView } from './utils/api'
@@ -38,9 +37,6 @@ function getRoute() {
   }
   if (hash.startsWith('devlogs/')) {
     return { name: 'devlogs', slug: decodeURIComponent(hash.slice(8)) }
-  }
-  if (hash === 'modules') {
-    return { name: 'modules' }
   }
   return { name: 'home' }
 }
@@ -144,8 +140,6 @@ export default function App() {
             detailBackLabel="返回开发日志"
             attachmentTitle="日志附件"
           />
-        ) : route.name === 'modules' ? (
-          <ModuleSettingsPage />
         ) : route.name === 'post' ? (
           <PostDetail post={selectedPost} />
         ) : (
