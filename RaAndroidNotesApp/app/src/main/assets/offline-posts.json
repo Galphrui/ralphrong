@@ -47,6 +47,32 @@
       ]
     },
     {
+      "title": "Ra：编版本",
+      "slug": "ra编版本",
+      "date": "2026-07-09",
+      "createdAt": "2026-07-09T16:33:12.409Z",
+      "updatedAt": "2026-07-09T16:33:16.535Z",
+      "tags": [],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "PDF 文档：Ra：编版本.pdf。文章详情会按 PDF 原始版式逐页展示，并保留原文件下载。",
+      "content": "## 背景\n\n在这里写下问题背景。\n\n## 方案\n\n记录你的技术方案与取舍。\n\n[[ra-pdf:att-1783614780389-u815j5]]",
+      "contentFormat": "markdown",
+      "readingMinutes": 1,
+      "attachments": [
+        {
+          "id": "att-1783614780389-u815j5",
+          "name": "Ra：编版本.pdf",
+          "fileName": "Ra：编版本.pdf",
+          "mimeType": "application/pdf",
+          "size": 11267005,
+          "url": "https://galphrui.github.io/ralphrong/public-assets/posts/20260709163259-Ra-编版本.pdf",
+          "dataUrl": "",
+          "createdAt": "2026-07-09T16:33:00.389Z"
+        }
+      ]
+    },
+    {
       "title": "SETPERM 撤销权限导致 Netcenter 进程被杀",
       "slug": "权限相关",
       "date": "2026-07-08",
@@ -1106,6 +1132,25 @@
       "content": "## 背景\n\n网页端最近增加了工具库、开发日志、后台统一模块配置、详情页悬浮滚动按钮、附件 rawUrl 兼容、文章 PDF 导入和文章导出功能。Android App 仍然只完整支持旧的文章、代码库、简历、留言、统计和管理入口，导致手机端和网页端功能不一致。\n\n这次目标是让 Android App 读取同一份 data/posts.json，并尽量同步网页端已经上线的公开阅读能力。\n\n## 本次同步内容\n\n1. Android 数据模型新增 tools、devLogs、modules 字段。\n2. 附件模型新增 rawUrl 和 path 字段，打开附件时优先使用 rawUrl，避免 GitHub Pages 部署延迟导致 404。\n3. Android 顶部导航新增工具库和开发日志入口。\n4. 导航显示读取后台 modules 配置，后台隐藏的模块在 Android 端也会同步隐藏。\n5. Android 本机设置保留为附加隐藏开关，不再替代后台全平台配置。\n6. 新增工具库列表和详情页，支持 Markdown 正文和附件下载/打开。\n7. 新增开发日志列表和详情页，支持 Markdown 正文、附件和文章导出操作。\n8. 文章、代码、工具、开发日志详情页新增左右两侧悬浮按钮，支持一键到顶部、中部、底部。\n9. Markdown 渲染新增 [[ra-pdf:附件ID]] 标记识别。\n10. PDF 标记会在 Android 端显示 PDF 附件卡片，支持打开原 PDF 和保存 PDF。\n11. 文章详情底部新增下载文章区域，支持导出 Markdown 和通过系统打印保存 PDF。\n12. 离线数据 offline-posts.json 同步最新 data/posts.json，离线模式也能识别新增模块字段。\n\n## 修改文件\n\n    RaAndroidNotesApp/app/src/main/java/com/ralph/notes/BlogData.java\n    RaAndroidNotesApp/app/src/main/java/com/ralph/notes/ModuleEntry.java\n    RaAndroidNotesApp/app/src/main/java/com/ralph/notes/PostAttachment.java\n    RaAndroidNotesApp/app/src/main/java/com/ralph/notes/JsonMapper.java\n    RaAndroidNotesApp/app/src/main/java/com/ralph/notes/MainActivity.java\n    RaAndroidNotesApp/app/src/main/res/layout/activity_main.xml\n    RaAndroidNotesApp/app/src/main/res/values/styles.xml\n    RaAndroidNotesApp/app/src/main/assets/offline-posts.json\n    data/posts.json\n\n## 关键兼容处理\n\n1. 所有新增数组都使用 optJSONArray 读取，旧数据没有 tools、devLogs 或 modules 时不会崩溃。\n2. modules 不存在时自动回退到默认模块配置。\n3. 附件地址按 rawUrl、url、dataUrl 顺序处理。\n4. PDF 标记找不到附件时显示错误提示卡片，不抛异常。\n5. 模块显示判断同时考虑后台 enabled、顶部最大显示数量和本机附加设置。\n6. 详情页悬浮按钮只操作当前 ScrollView，高度不足时会自动停留在可滚动范围内。\n7. PDF 导出走 Android 系统打印服务，避免直接生成二进制 PDF 引入复杂依赖。\n\n## 本地验证步骤\n\n进入 Android 工程目录：\n\n    cd /Users/galph/Documents/MyPersionWeb/RaAndroidNotesApp\n\n执行 Debug 构建：\n\n    JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" ./gradlew assembleDebug\n\n成功标志：\n\n    BUILD SUCCESSFUL\n\n本次构建结果：\n\n    BUILD SUCCESSFUL in 11s\n    32 actionable tasks: 12 executed, 20 up-to-date\n\n## 手机上验证方式\n\n1. 安装最新 Debug 包。\n2. 打开 App，等待首页提示已同步公网数据。\n3. 顶部确认能看到后台 modules 配置允许显示的模块。\n4. 点击工具库，确认 Android 投屏工具可以显示。\n5. 进入工具详情，确认附件列表可打开或保存。\n6. 进入文章详情，确认底部有下载文章区域。\n7. 点击导出 MD，确认文件保存到 App 下载目录。\n8. 点击导出 PDF，确认系统打印页面弹出，可选择保存为 PDF。\n9. 打开含 PDF 标记的文章，确认 PDF 附件卡片能打开原 PDF。\n10. 在长详情页点击左右悬浮按钮，确认能跳到顶部、中部、底部。\n\n## 推送和上线步骤\n\n本地确认后执行：\n\n    cd /Users/galph/Documents/MyPersionWeb\n    git status --short\n    git add data/posts.json RaAndroidNotesApp/app/src/main/assets/offline-posts.json RaAndroidNotesApp/app/src/main/java/com/ralph/notes/BlogData.java RaAndroidNotesApp/app/src/main/java/com/ralph/notes/ModuleEntry.java RaAndroidNotesApp/app/src/main/java/com/ralph/notes/PostAttachment.java RaAndroidNotesApp/app/src/main/java/com/ralph/notes/JsonMapper.java RaAndroidNotesApp/app/src/main/java/com/ralph/notes/MainActivity.java RaAndroidNotesApp/app/src/main/res/layout/activity_main.xml RaAndroidNotesApp/app/src/main/res/values/styles.xml\n    git commit -m \"Sync Android app with web modules\"\n    git push origin main\n\n推送后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n等待最新 Deploy to GitHub Pages 任务变成绿色对勾。\n\n## 注意事项\n\n1. Android 端目前同步的是公开阅读和下载能力，网页后台仍然是完整内容维护入口。\n2. 如果后台 modules 把开发日志设置为隐藏，Android 顶部也会隐藏开发日志入口，这是同步后台配置的预期行为。\n3. 如果 GitHub Pages 附件刚发布还没生效，Android 会优先使用 rawUrl 打开，减少 404。\n4. 如果系统没有 PDF 查看器，点击打开 PDF 时会由系统提示没有可处理应用，需要安装 PDF 阅读器或用保存功能下载后处理。",
       "contentFormat": "markdown",
       "readingMinutes": 6,
+      "attachments": []
+    },
+    {
+      "title": "2026-07-09 文章发布记录",
+      "slug": "auto-deploy-20260709163316-posts",
+      "date": "2026-07-09",
+      "createdAt": "2026-07-09T16:33:16.571Z",
+      "updatedAt": "2026-07-09T16:33:16.571Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "文章"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 文章 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-09 文章发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-09T16:33:16.571Z\n2. 发布模块：文章\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“文章”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update posts content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
       "attachments": []
     },
     {
