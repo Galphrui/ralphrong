@@ -1,6 +1,7 @@
 package com.ralph.notes;
 
 import android.app.Activity;
+import android.app.DownloadManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
@@ -17,6 +18,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.print.PrintAttributes;
+import android.print.PrintManager;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
@@ -39,6 +42,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.webkit.WebView;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -66,6 +70,8 @@ public class MainActivity extends Activity {
     private static final String KEY_ROTATION_ENABLED = "rotation_enabled";
     private static final String KEY_PROFILE_VISIBLE = "profile_visible";
     private static final String KEY_CODE_VISIBLE = "code_visible";
+    private static final String KEY_TOOLS_VISIBLE = "tools_visible";
+    private static final String KEY_DEVLOGS_VISIBLE = "devlogs_visible";
     private static final String KEY_STATS_VISIBLE = "stats_visible";
     private static final String KEY_MESSAGE_RECORDS_VISIBLE = "message_records_visible";
     private static final String KEY_VOICE_MESSAGE_VISIBLE = "voice_message_visible";
@@ -96,11 +102,15 @@ public class MainActivity extends Activity {
     private LinearLayout floatingSortPanel;
     private TextView navArticles;
     private TextView navCode;
+    private TextView navTools;
+    private TextView navDevLogs;
     private TextView navProfile;
     private TextView navGuestbook;
     private TextView navStats;
     private TextView navAdmin;
     private TextView navSettings;
+    private LinearLayout floatingScrollLeft;
+    private LinearLayout floatingScrollRight;
     private LinearLayout homePostList;
     private LinearLayout homeTagsRow;
     private TextView homeListTitle;
@@ -203,15 +213,21 @@ public class MainActivity extends Activity {
         floatingSortPanel = findViewById(R.id.floating_sort_panel);
         navArticles = findViewById(R.id.nav_articles);
         navCode = findViewById(R.id.nav_code);
+        navTools = findViewById(R.id.nav_tools);
+        navDevLogs = findViewById(R.id.nav_devlogs);
         navProfile = findViewById(R.id.nav_profile);
         navGuestbook = findViewById(R.id.nav_guestbook);
         navStats = findViewById(R.id.nav_stats);
         navAdmin = findViewById(R.id.nav_admin);
         navSettings = findViewById(R.id.nav_settings);
+        floatingScrollLeft = findViewById(R.id.floating_scroll_left);
+        floatingScrollRight = findViewById(R.id.floating_scroll_right);
 
         findViewById(R.id.brand_area).setOnClickListener(v -> renderHome());
         navArticles.setOnClickListener(v -> renderHome());
         navCode.setOnClickListener(v -> renderCodeRepository());
+        navTools.setOnClickListener(v -> renderCollection("tools"));
+        navDevLogs.setOnClickListener(v -> renderCollection("devlogs"));
         navProfile.setOnClickListener(v -> renderProfile());
         navGuestbook.setOnClickListener(v -> renderGuestbook());
         navStats.setOnClickListener(v -> renderStats());
@@ -224,6 +240,7 @@ public class MainActivity extends Activity {
         applySystemBarInsets();
         installPullRefresh();
         bindFloatingSortControls();
+        bindFloatingScrollControls();
         selectTab(navArticles);
         updateNavigation();
     }
@@ -552,12 +569,24 @@ public class MainActivity extends Activity {
             renderProfile();
         } else if ("code".equals(targetPage) && isCodeVisible()) {
             renderCodeRepository();
+        } else if ("tools".equals(targetPage) && isToolsVisible()) {
+            renderCollection("tools");
+        } else if ("devlogs".equals(targetPage) && isDevLogsVisible()) {
+            renderCollection("devlogs");
         } else if ("guestbook".equals(targetPage)) {
             renderGuestbook();
         } else if ("detail".equals(targetPage)) {
             Post post = findPost(targetSlug);
             if (post == null) renderHome();
             else renderPostDetail(post);
+        } else if ("tools-detail".equals(targetPage)) {
+            Post item = findCollectionItem(data == null ? null : data.tools, targetSlug);
+            if (item == null) renderCollection("tools");
+            else renderCollectionDetail("tools", item);
+        } else if ("devlogs-detail".equals(targetPage)) {
+            Post item = findCollectionItem(data == null ? null : data.devLogs, targetSlug);
+            if (item == null) renderCollection("devlogs");
+            else renderCollectionDetail("devlogs", item);
         } else if ("stats".equals(targetPage) && isStatsVisible() && backendAvailable && !data.offlineMode) {
             renderStats();
         } else if ("admin".equals(targetPage) && backendAvailable && !data.offlineMode) {
@@ -573,6 +602,14 @@ public class MainActivity extends Activity {
         if (data == null || slug == null || slug.isEmpty()) return null;
         for (Post post : data.posts) {
             if (slug.equals(post.slug)) return post;
+        }
+        return null;
+    }
+
+    private Post findCollectionItem(List<Post> source, String slug) {
+        if (source == null || slug == null || slug.isEmpty()) return null;
+        for (Post item : source) {
+            if (item != null && slug.equals(item.slug)) return item;
         }
         return null;
     }
@@ -736,6 +773,34 @@ public class MainActivity extends Activity {
         bindFloatingSortControls();
     }
 
+    private void bindFloatingScrollControls() {
+        bindScroll(findViewById(R.id.scroll_left_top), 0f);
+        bindScroll(findViewById(R.id.scroll_left_middle), 0.5f);
+        bindScroll(findViewById(R.id.scroll_left_bottom), 1f);
+        bindScroll(findViewById(R.id.scroll_right_top), 0f);
+        bindScroll(findViewById(R.id.scroll_right_middle), 0.5f);
+        bindScroll(findViewById(R.id.scroll_right_bottom), 1f);
+    }
+
+    private void bindScroll(View view, float ratio) {
+        if (view == null) return;
+        view.setOnClickListener(v -> scrollPageTo(ratio));
+    }
+
+    private void scrollPageTo(float ratio) {
+        if (pageScroll == null || content == null) return;
+        pageScroll.post(() -> {
+            int max = Math.max(0, content.getHeight() - pageScroll.getHeight());
+            pageScroll.smoothScrollTo(0, Math.round(max * ratio));
+        });
+    }
+
+    private void updateFloatingScroll(boolean show) {
+        int visibility = show ? View.VISIBLE : View.GONE;
+        if (floatingScrollLeft != null) floatingScrollLeft.setVisibility(visibility);
+        if (floatingScrollRight != null) floatingScrollRight.setVisibility(visibility);
+    }
+
     private void renderTags() {
         if (homeTagsRow == null) return;
         homeTagsRow.removeAllViews();
@@ -805,6 +870,7 @@ public class MainActivity extends Activity {
         body.removeAllViews();
         if (isPasswordPost(post) && !unlockedPostSlugs.contains(post.slug)) {
             renderPostUnlock(body, post);
+            updateFloatingScroll(true);
             return;
         }
         Button like = primaryButton("点赞 " + metric.likes);
@@ -820,9 +886,11 @@ public class MainActivity extends Activity {
             }, error -> toast("点赞失败：" + error.getMessage()));
         });
         body.addView(like);
-        renderMarkdown(body, post.content);
+        renderMarkdown(body, post.content, post);
         renderAttachments(body, post);
+        renderArticleExportActions(body, post);
         if (isMessageRecordsVisible()) renderArticleMessages(body, post);
+        updateFloatingScroll(true);
     }
 
     private void renderAttachments(LinearLayout parent, Post post) {
@@ -840,7 +908,7 @@ public class MainActivity extends Activity {
             item.addView(title(attachment.name == null || attachment.name.isEmpty() ? attachment.fileName : attachment.name, 16));
             item.addView(paragraph((attachment.fileName == null ? "" : attachment.fileName)
                     + (attachment.size > 0 ? " · " + formatBytes(attachment.size) : "")));
-            Button open = primaryButton(attachment.url == null || attachment.url.isEmpty() ? "保存附件" : "打开附件");
+            Button open = primaryButton(attachmentUrl(attachment).isEmpty() ? "保存附件" : "打开附件");
             open.setOnClickListener(v -> openAttachment(attachment));
             item.addView(open);
             card.addView(item);
@@ -850,8 +918,9 @@ public class MainActivity extends Activity {
 
     private void openAttachment(PostAttachment attachment) {
         try {
-            if (attachment.url != null && !attachment.url.isEmpty()) {
-                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(attachment.url)));
+            String url = attachmentUrl(attachment);
+            if (!url.isEmpty()) {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
                 return;
             }
             File file = saveDataUrlAttachment(attachment);
@@ -859,6 +928,13 @@ public class MainActivity extends Activity {
         } catch (Exception error) {
             toast("附件处理失败：" + error.getMessage());
         }
+    }
+
+    private String attachmentUrl(PostAttachment attachment) {
+        if (attachment == null) return "";
+        if (attachment.rawUrl != null && !attachment.rawUrl.isEmpty()) return attachment.rawUrl;
+        if (attachment.url != null && !attachment.url.isEmpty()) return attachment.url;
+        return "";
     }
 
     private File saveDataUrlAttachment(PostAttachment attachment) throws Exception {
@@ -874,6 +950,31 @@ public class MainActivity extends Activity {
             output.write(bytes);
         }
         return file;
+    }
+
+    private void saveAttachmentToDownloads(PostAttachment attachment) {
+        try {
+            String url = attachmentUrl(attachment);
+            if (!url.isEmpty()) {
+                DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+                String cleanName = sanitizeFileName(attachment == null || attachment.fileName == null || attachment.fileName.isEmpty()
+                        ? (attachment == null ? "attachment" : attachment.name)
+                        : attachment.fileName);
+                request.setTitle(cleanName);
+                request.setDescription("Ra Android Notes 附件下载");
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                request.setDestinationInExternalFilesDir(this, android.os.Environment.DIRECTORY_DOWNLOADS, cleanName);
+                DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                if (manager == null) throw new IllegalStateException("系统下载服务不可用");
+                manager.enqueue(request);
+                toast("已加入系统下载队列。");
+                return;
+            }
+            File file = saveDataUrlAttachment(attachment);
+            toast("附件已保存：" + file.getAbsolutePath());
+        } catch (Exception error) {
+            toast("附件保存失败：" + error.getMessage());
+        }
     }
 
     private String sanitizeFileName(String value) {
@@ -910,6 +1011,77 @@ public class MainActivity extends Activity {
         });
         card.addView(unlock);
         body.addView(card);
+    }
+
+    private void renderArticleExportActions(LinearLayout parent, Post post) {
+        if (post == null) return;
+        LinearLayout card = card();
+        card.addView(label("RA DOWNLOAD"));
+        card.addView(title("下载文章", 20));
+        card.addView(paragraph("支持保存 Markdown，或通过系统打印服务导出 PDF。"));
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        Button markdown = secondaryButton("导出 MD");
+        markdown.setOnClickListener(v -> saveMarkdownArticle(post));
+        Button pdf = secondaryButton("导出 PDF");
+        pdf.setOnClickListener(v -> printArticleAsPdf(post));
+        actions.addView(markdown);
+        actions.addView(pdf);
+        card.addView(actions);
+        parent.addView(card);
+    }
+
+    private void saveMarkdownArticle(Post post) {
+        try {
+            File dir = new File(getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS), "articles");
+            if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("无法创建文章目录");
+            File file = new File(dir, sanitizeFileName(post.title == null || post.title.isEmpty() ? post.slug : post.title) + ".md");
+            try (FileOutputStream output = new FileOutputStream(file)) {
+                output.write(articleMarkdown(post).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            toast("Markdown 已保存：" + file.getAbsolutePath());
+        } catch (Exception error) {
+            toast("Markdown 保存失败：" + error.getMessage());
+        }
+    }
+
+    private void printArticleAsPdf(Post post) {
+        try {
+            PrintManager printManager = (PrintManager) getSystemService(PRINT_SERVICE);
+            if (printManager == null) throw new IllegalStateException("系统打印服务不可用");
+            WebView webView = new WebView(this);
+            String html = "<html><head><meta charset=\"utf-8\"><style>"
+                    + "body{font-family:sans-serif;line-height:1.65;color:#020617;padding:24px;}"
+                    + "h1{font-size:26px;} pre{white-space:pre-wrap;background:#f1f5f9;padding:12px;}"
+                    + "</style></head><body><h1>" + htmlEscape(post.title) + "</h1>"
+                    + "<p>" + htmlEscape(post.date) + " · " + htmlEscape(TextTools.join(post.tags, " / ")) + "</p>"
+                    + "<p>" + htmlEscape(post.summary) + "</p>"
+                    + "<pre>" + htmlEscape(post.content) + "</pre></body></html>";
+            webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null);
+            webView.postDelayed(() -> printManager.print(
+                    sanitizeFileName(post.title == null || post.title.isEmpty() ? "Ra Article" : post.title),
+                    webView.createPrintDocumentAdapter("Ra Article"),
+                    new PrintAttributes.Builder().build()), 500);
+        } catch (Exception error) {
+            toast("PDF 导出失败：" + error.getMessage());
+        }
+    }
+
+    private String articleMarkdown(Post post) {
+        StringBuilder out = new StringBuilder();
+        out.append("# ").append(post.title == null ? "" : post.title).append("\n\n");
+        if (post.date != null && !post.date.isEmpty()) out.append("> ").append(post.date).append("\n\n");
+        if (post.summary != null && !post.summary.isEmpty()) out.append(post.summary).append("\n\n");
+        if (post.content != null) out.append(post.content).append("\n");
+        return out.toString();
+    }
+
+    private String htmlEscape(String value) {
+        return String.valueOf(value == null ? "" : value)
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;");
     }
 
     private void renderArticleMessages(LinearLayout parent, Post post) {
@@ -1037,6 +1209,7 @@ public class MainActivity extends Activity {
         renderAttachmentList(page, repo.attachments, "代码附件");
         content.addView(page);
         updateFloatingSort();
+        updateFloatingScroll(true);
     }
 
     private void saveCodeSnippet(CodeRepository repo) {
@@ -1119,6 +1292,74 @@ public class MainActivity extends Activity {
             if (clean.endsWith("{")) level++;
         }
         return out.toString().trim();
+    }
+
+    private void renderCollection(String type) {
+        boolean tools = "tools".equals(type);
+        currentPage = tools ? "tools" : "devlogs";
+        currentDetailSlug = "";
+        if (tools && !isToolsVisible()) {
+            renderHiddenModule("工具库模块已在后台或本机设置中关闭。");
+            return;
+        }
+        if (!tools && !isDevLogsVisible()) {
+            renderHiddenModule("开发日志模块已在后台或本机设置中关闭。");
+            return;
+        }
+        selectTab(tools ? navTools : navDevLogs);
+        clear();
+
+        LinearLayout page = card();
+        page.addView(label(tools ? "RA TOOLS" : "RA DEVLOGS"));
+        page.addView(title(tools ? "工具库" : "开发日志", 24));
+        page.addView(paragraph(tools
+                ? "存放工具包、脚本、安装包、PDF 说明和可下载附件。"
+                : "记录每次开发、部署、推送、运行和上线全过程。"));
+        List<Post> items = tools ? (data == null ? null : data.tools) : (data == null ? null : data.devLogs);
+        if (items == null || items.isEmpty()) {
+            page.addView(paragraph(tools ? "暂无工具内容。" : "暂无开发日志。"));
+            content.addView(page);
+            return;
+        }
+        for (Post item : items) {
+            LinearLayout card = card();
+            card.addView(label(TextTools.join(item.tags, " / ")));
+            card.addView(title(item.title, 20));
+            card.addView(paragraph((item.date == null ? "" : item.date)
+                    + (item.readingMinutes > 0 ? " · " + item.readingMinutes + " 分钟阅读" : "")
+                    + (!item.attachments.isEmpty() ? " · " + item.attachments.size() + " 个附件" : "")));
+            if (item.summary != null && !item.summary.isEmpty()) card.addView(paragraph(item.summary));
+            card.setOnClickListener(v -> renderCollectionDetail(type, item));
+            page.addView(card);
+        }
+        content.addView(page);
+    }
+
+    private void renderCollectionDetail(String type, Post item) {
+        boolean tools = "tools".equals(type);
+        currentPage = tools ? "tools-detail" : "devlogs-detail";
+        currentDetailSlug = item == null ? "" : item.slug;
+        selectTab(tools ? navTools : navDevLogs);
+        clear();
+        if (item == null) {
+            renderCollection(type);
+            return;
+        }
+
+        LinearLayout page = card();
+        Button back = secondaryButton(tools ? "返回工具库" : "返回开发日志");
+        back.setOnClickListener(v -> renderCollection(type));
+        page.addView(back);
+        page.addView(label(TextTools.join(item.tags, " / ")));
+        page.addView(title(item.title, 24));
+        page.addView(paragraph((item.date == null ? "" : item.date)
+                + (item.updatedAt != null && !item.updatedAt.isEmpty() ? " · 更新 " + item.updatedAt.substring(0, Math.min(10, item.updatedAt.length())) : "")));
+        if (item.summary != null && !item.summary.isEmpty()) page.addView(paragraph(item.summary));
+        renderMarkdown(page, item.content, item);
+        renderAttachmentList(page, item.attachments, tools ? "工具附件" : "日志附件");
+        if (!tools) renderArticleExportActions(page, item);
+        content.addView(page);
+        updateFloatingScroll(true);
     }
 
     private void renderProfile() {
@@ -1336,8 +1577,11 @@ public class MainActivity extends Activity {
             applyRotationPreference();
             toast(checked ? "已允许 App 旋转。" : "已锁定为竖屏。");
         }));
-        page.addView(settingCheckBox("显示代码库模块", KEY_CODE_VISIBLE, true, checked -> updateNavigation()));
-        page.addView(settingCheckBox("显示简历模块", KEY_PROFILE_VISIBLE, true, checked -> updateNavigation()));
+        page.addView(paragraph("模块总开关由网页后台“模块”管理统一控制；这里仅控制当前手机是否额外隐藏。"));
+        page.addView(settingCheckBox("本机显示代码库模块", KEY_CODE_VISIBLE, true, checked -> updateNavigation()));
+        page.addView(settingCheckBox("本机显示工具库模块", KEY_TOOLS_VISIBLE, true, checked -> updateNavigation()));
+        page.addView(settingCheckBox("本机显示开发日志模块", KEY_DEVLOGS_VISIBLE, true, checked -> updateNavigation()));
+        page.addView(settingCheckBox("本机显示简历模块", KEY_PROFILE_VISIBLE, true, checked -> updateNavigation()));
         page.addView(settingCheckBox("显示统计模块", KEY_STATS_VISIBLE, true, checked -> updateNavigation()));
         page.addView(settingCheckBox("显示留言记录", KEY_MESSAGE_RECORDS_VISIBLE, true, checked -> updateNavigation()));
         page.addView(settingCheckBox("显示语音留言", KEY_VOICE_MESSAGE_VISIBLE, true, checked -> updateNavigation()));
@@ -1763,6 +2007,10 @@ public class MainActivity extends Activity {
     }
 
     private void renderMarkdown(LinearLayout parent, String markdown) {
+        renderMarkdown(parent, markdown, null);
+    }
+
+    private void renderMarkdown(LinearLayout parent, String markdown, Post owner) {
         String[] lines = markdown == null ? new String[0] : markdown.replace("\r\n", "\n").replace("\r", "\n").split("\\n", -1);
         boolean inCode = false;
         StringBuilder code = new StringBuilder();
@@ -1795,11 +2043,45 @@ public class MainActivity extends Activity {
                 parent.addView(title(line.substring(4), 18));
             } else if (line.startsWith("- ") || line.startsWith("* ")) {
                 parent.addView(bullet(line.substring(2)));
+            } else if (line.startsWith("[[ra-pdf:") && line.endsWith("]]")) {
+                renderPdfBlock(parent, owner, line.substring("[[ra-pdf:".length(), line.length() - 2).trim());
             } else {
                 parent.addView(paragraph(raw));
             }
         }
         if (code.length() > 0) parent.addView(monoText(code.toString(), 13, TEXT));
+    }
+
+    private void renderPdfBlock(LinearLayout parent, Post owner, String attachmentId) {
+        PostAttachment attachment = findAttachment(owner, attachmentId);
+        LinearLayout card = card();
+        card.addView(label("PDF"));
+        if (attachment == null) {
+            card.addView(title("PDF 附件未找到", 18));
+            card.addView(paragraph("正文引用的 PDF 附件不存在或旧数据没有同步附件信息：" + attachmentId));
+            parent.addView(card);
+            return;
+        }
+        card.addView(title(attachment.name == null || attachment.name.isEmpty() ? attachment.fileName : attachment.name, 18));
+        card.addView(paragraph("Android 端保持 PDF 原文件阅读，点击后使用系统 PDF 查看器打开；也可以保存到 App 下载目录。"));
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        Button open = secondaryButton("打开 PDF");
+        open.setOnClickListener(v -> openAttachment(attachment));
+        Button save = secondaryButton("保存 PDF");
+        save.setOnClickListener(v -> saveAttachmentToDownloads(attachment));
+        actions.addView(open);
+        actions.addView(save);
+        card.addView(actions);
+        parent.addView(card);
+    }
+
+    private PostAttachment findAttachment(Post owner, String id) {
+        if (owner == null || id == null || id.isEmpty()) return null;
+        for (PostAttachment attachment : owner.attachments) {
+            if (attachment != null && id.equals(attachment.id)) return attachment;
+        }
+        return null;
     }
 
     private boolean isSetextUnderline(String line) {
@@ -1814,6 +2096,7 @@ public class MainActivity extends Activity {
             if (floatingSortButton != null) floatingSortButton.setVisibility(View.GONE);
             if (floatingSortPanel != null) floatingSortPanel.setVisibility(View.GONE);
         }
+        updateFloatingScroll(false);
         if (pageScroll != null) pageScroll.post(() -> pageScroll.scrollTo(0, 0));
     }
 
@@ -2003,7 +2286,7 @@ public class MainActivity extends Activity {
     }
 
     private void selectTab(TextView active) {
-        TextView[] tabs = new TextView[]{navArticles, navCode, navProfile, navGuestbook, navStats, navAdmin, navSettings};
+        TextView[] tabs = new TextView[]{navArticles, navCode, navTools, navDevLogs, navProfile, navGuestbook, navStats, navAdmin, navSettings};
         for (TextView tab : tabs) {
             if (tab == null) continue;
             boolean selected = tab == active;
@@ -2014,12 +2297,17 @@ public class MainActivity extends Activity {
 
     private void updateNavigation() {
         boolean readOnly = data != null && (data.offlineMode || !backendAvailable);
+        if (navArticles != null) navArticles.setVisibility(isModuleVisible("posts") ? View.VISIBLE : View.GONE);
         if (navCode != null) navCode.setVisibility(isCodeVisible() ? View.VISIBLE : View.GONE);
+        if (navTools != null) navTools.setVisibility(isToolsVisible() ? View.VISIBLE : View.GONE);
+        if (navDevLogs != null) navDevLogs.setVisibility(isDevLogsVisible() ? View.VISIBLE : View.GONE);
         if (navProfile != null) navProfile.setVisibility(isProfileVisible() ? View.VISIBLE : View.GONE);
         if (navStats != null) navStats.setVisibility(!readOnly && isStatsVisible() ? View.VISIBLE : View.GONE);
-        if (navAdmin != null) navAdmin.setVisibility(readOnly ? View.GONE : View.VISIBLE);
+        if (navAdmin != null) navAdmin.setVisibility(!readOnly && isModuleVisible("admin") ? View.VISIBLE : View.GONE);
         if (navGuestbook != null) navGuestbook.setVisibility(isAnyGuestbookFeatureVisible() ? View.VISIBLE : View.GONE);
         if ("code".equals(currentPage) && !isCodeVisible()) renderHome();
+        if (("tools".equals(currentPage) || "tools-detail".equals(currentPage)) && !isToolsVisible()) renderHome();
+        if (("devlogs".equals(currentPage) || "devlogs-detail".equals(currentPage)) && !isDevLogsVisible()) renderHome();
         if ("profile".equals(currentPage) && !isProfileVisible()) renderHome();
         if ("stats".equals(currentPage) && (!isStatsVisible() || readOnly)) renderHome();
         if ("guestbook".equals(currentPage) && !isAnyGuestbookFeatureVisible()) renderHome();
@@ -2034,11 +2322,19 @@ public class MainActivity extends Activity {
     }
 
     private boolean isProfileVisible() {
-        return settingEnabled(KEY_PROFILE_VISIBLE, true);
+        return settingEnabled(KEY_PROFILE_VISIBLE, true) && isModuleVisible("profile");
     }
 
     private boolean isCodeVisible() {
-        return settingEnabled(KEY_CODE_VISIBLE, true);
+        return settingEnabled(KEY_CODE_VISIBLE, true) && isModuleVisible("code");
+    }
+
+    private boolean isToolsVisible() {
+        return settingEnabled(KEY_TOOLS_VISIBLE, true) && isModuleVisible("tools");
+    }
+
+    private boolean isDevLogsVisible() {
+        return settingEnabled(KEY_DEVLOGS_VISIBLE, true) && isModuleVisible("devlogs");
     }
 
     private boolean isStatsVisible() {
@@ -2054,7 +2350,26 @@ public class MainActivity extends Activity {
     }
 
     private boolean isAnyGuestbookFeatureVisible() {
-        return isMessageRecordsVisible() || isVoiceMessageVisible();
+        return isModuleVisible("guestbook") && (isMessageRecordsVisible() || isVoiceMessageVisible());
+    }
+
+    private boolean isModuleVisible(String id) {
+        if (id == null || id.isEmpty()) return true;
+        if (data == null || data.modules.isEmpty()) return true;
+        int shown = 0;
+        int max = Math.max(1, data.maxTopModules);
+        boolean found = false;
+        boolean enabled = true;
+        for (ModuleEntry entry : data.modules) {
+            if (entry == null || !"top".equals(entry.surface)) continue;
+            if (entry.enabled && shown < max) shown++;
+            if (id.equals(entry.id)) {
+                found = true;
+                enabled = entry.enabled && shown <= max;
+                break;
+            }
+        }
+        return !found || enabled;
     }
 
     private void applyRotationPreference() {
@@ -2073,8 +2388,8 @@ public class MainActivity extends Activity {
 
     private String homeSourceText() {
         if (data == null) return "";
-        if (data.offlineMode) return "离线模式：" + data.sourceMessage + "。当前仅开放文章和简历。";
-        if (!backendAvailable) return "已同步文章和简历；后台 API 当前不可用，当前仅开放文章和简历。";
+        if (data.offlineMode) return "离线模式：" + data.sourceMessage + "。文章、代码库、工具库、开发日志和简历读取内置/缓存数据。";
+        if (!backendAvailable) return "已同步公开内容；后台 API 当前不可用，统计、点赞、留言和管理暂不可用。";
         return "已同步公网数据。";
     }
 

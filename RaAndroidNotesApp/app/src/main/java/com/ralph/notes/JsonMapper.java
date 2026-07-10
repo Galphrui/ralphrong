@@ -36,13 +36,30 @@ public final class JsonMapper {
                 if (item != null) data.repositories.add(parseRepository(item));
             }
         }
+        JSONArray tools = root.optJSONArray("tools");
+        if (tools != null) {
+            for (int i = 0; i < tools.length(); i++) {
+                JSONObject item = tools.optJSONObject(i);
+                if (item != null) data.tools.add(parsePost(item));
+            }
+        }
+        JSONArray devLogs = root.optJSONArray("devLogs");
+        if (devLogs != null) {
+            for (int i = 0; i < devLogs.length(); i++) {
+                JSONObject item = devLogs.optJSONObject(i);
+                if (item != null) data.devLogs.add(parsePost(item));
+            }
+        }
+        parseModules(root.optJSONObject("modules"), data);
 
         Collections.sort(data.posts, new Comparator<Post>() {
             @Override
             public int compare(Post left, Post right) {
-                return right.date.compareTo(left.date);
+                return safe(right.date).compareTo(safe(left.date));
             }
         });
+        sortByDateDesc(data.tools);
+        sortByDateDesc(data.devLogs);
         return data;
     }
 
@@ -105,6 +122,8 @@ public final class JsonMapper {
                 item.put("mimeType", attachment.mimeType);
                 item.put("size", attachment.size);
                 item.put("url", attachment.url);
+                item.put("rawUrl", attachment.rawUrl);
+                item.put("path", attachment.path);
                 item.put("dataUrl", attachment.dataUrl);
                 attachments.put(item);
             }
@@ -198,9 +217,78 @@ public final class JsonMapper {
             attachment.mimeType = item.optString("mimeType", "application/octet-stream");
             attachment.size = item.optInt("size", 0);
             attachment.url = item.optString("url", "");
+            attachment.rawUrl = item.optString("rawUrl", "");
+            attachment.path = item.optString("path", "");
             attachment.dataUrl = item.optString("dataUrl", "");
-            if (!attachment.url.isEmpty() || !attachment.dataUrl.isEmpty()) out.add(attachment);
+            if (!attachment.url.isEmpty() || !attachment.rawUrl.isEmpty() || !attachment.dataUrl.isEmpty()) out.add(attachment);
         }
+    }
+
+    private static void parseModules(JSONObject modulesRoot, BlogData data) {
+        if (modulesRoot == null) {
+            addDefaultModules(data);
+            return;
+        }
+        JSONObject settings = modulesRoot.optJSONObject("settings");
+        if (settings != null) {
+            data.maxTopModules = Math.max(1, settings.optInt("maxTopModules", data.maxTopModules));
+            data.globalDisplayStyle = settings.optString("globalDisplayStyle", data.globalDisplayStyle);
+        }
+        JSONArray modules = modulesRoot.optJSONArray("modules");
+        if (modules != null) {
+            for (int i = 0; i < modules.length(); i++) {
+                JSONObject item = modules.optJSONObject(i);
+                if (item == null) continue;
+                ModuleEntry entry = new ModuleEntry();
+                entry.id = item.optString("id", "");
+                entry.label = item.optString("label", entry.id);
+                entry.href = item.optString("href", "");
+                entry.enabled = item.optBoolean("enabled", true);
+                entry.order = item.optInt("order", i * 10);
+                entry.surface = item.optString("surface", "top");
+                entry.displayStyle = item.optString("displayStyle", data.globalDisplayStyle);
+                entry.external = item.optBoolean("external", false);
+                if (!entry.id.isEmpty()) data.modules.add(entry);
+            }
+        }
+        Collections.sort(data.modules, new Comparator<ModuleEntry>() {
+            @Override
+            public int compare(ModuleEntry left, ModuleEntry right) {
+                return Integer.compare(left.order, right.order);
+            }
+        });
+        if (data.modules.isEmpty()) addDefaultModules(data);
+    }
+
+    private static void addDefaultModules(BlogData data) {
+        addModule(data, "posts", "文章", 10);
+        addModule(data, "code", "代码库", 20);
+        addModule(data, "tools", "工具库", 30);
+        addModule(data, "devlogs", "开发日志", 40);
+        addModule(data, "profile", "个人", 50);
+        addModule(data, "guestbook", "留言", 60);
+        addModule(data, "admin", "管理", 100);
+    }
+
+    private static void addModule(BlogData data, String id, String label, int order) {
+        ModuleEntry entry = new ModuleEntry();
+        entry.id = id;
+        entry.label = label;
+        entry.order = order;
+        data.modules.add(entry);
+    }
+
+    private static void sortByDateDesc(List<Post> posts) {
+        Collections.sort(posts, new Comparator<Post>() {
+            @Override
+            public int compare(Post left, Post right) {
+                return safe(right.date).compareTo(safe(left.date));
+            }
+        });
+    }
+
+    private static String safe(String value) {
+        return value == null ? "" : value;
     }
 
     private static String normalizeVisibility(String value) {

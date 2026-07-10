@@ -95,6 +95,16 @@
                     android:text="代码" />
 
                 <TextView
+                    android:id="@+id/nav_tools"
+                    style="@style/RaNavTab"
+                    android:text="工具" />
+
+                <TextView
+                    android:id="@+id/nav_devlogs"
+                    style="@style/RaNavTab"
+                    android:text="日志" />
+
+                <TextView
                     android:id="@+id/nav_profile"
                     style="@style/RaNavTab"
                     android:text="简历" />
@@ -254,6 +264,78 @@
                 android:textStyle="bold"
                 android:visibility="gone"
                 tools:visibility="visible" />
+
+            <LinearLayout
+                android:id="@+id/floating_scroll_left"
+                android:layout_width="42dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical|left"
+                android:layout_marginLeft="10dp"
+                android:elevation="10dp"
+                android:orientation="vertical"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <TextView
+                    android:id="@+id/scroll_left_top"
+                    style="@style/RaSecondaryAction"
+                    android:layout_width="42dp"
+                    android:paddingLeft="0dp"
+                    android:paddingRight="0dp"
+                    android:text="↑" />
+
+                <TextView
+                    android:id="@+id/scroll_left_middle"
+                    style="@style/RaSecondaryAction"
+                    android:layout_width="42dp"
+                    android:paddingLeft="0dp"
+                    android:paddingRight="0dp"
+                    android:text="中" />
+
+                <TextView
+                    android:id="@+id/scroll_left_bottom"
+                    style="@style/RaSecondaryAction"
+                    android:layout_width="42dp"
+                    android:paddingLeft="0dp"
+                    android:paddingRight="0dp"
+                    android:text="↓" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/floating_scroll_right"
+                android:layout_width="42dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical|right"
+                android:layout_marginRight="10dp"
+                android:elevation="10dp"
+                android:orientation="vertical"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <TextView
+                    android:id="@+id/scroll_right_top"
+                    style="@style/RaSecondaryAction"
+                    android:layout_width="42dp"
+                    android:paddingLeft="0dp"
+                    android:paddingRight="0dp"
+                    android:text="↑" />
+
+                <TextView
+                    android:id="@+id/scroll_right_middle"
+                    style="@style/RaSecondaryAction"
+                    android:layout_width="42dp"
+                    android:paddingLeft="0dp"
+                    android:paddingRight="0dp"
+                    android:text="中" />
+
+                <TextView
+                    android:id="@+id/scroll_right_bottom"
+                    style="@style/RaSecondaryAction"
+                    android:layout_width="42dp"
+                    android:paddingLeft="0dp"
+                    android:paddingRight="0dp"
+                    android:text="↓" />
+            </LinearLayout>
         </FrameLayout>
     </LinearLayout>
 </FrameLayout>

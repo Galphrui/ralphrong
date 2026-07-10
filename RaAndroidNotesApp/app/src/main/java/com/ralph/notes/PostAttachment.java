@@ -7,5 +7,7 @@ public class PostAttachment {
     public String mimeType = "application/octet-stream";
     public int size;
     public String url = "";
+    public String rawUrl = "";
+    public String path = "";
     public String dataUrl = "";
 }
