@@ -86,6 +86,10 @@ public class MainActivity extends Activity {
     private static final int TEXT = Color.rgb(2, 6, 23);
     private static final int MUTED = Color.rgb(100, 116, 139);
     private static final int LINE = Color.rgb(216, 228, 224);
+    private static final int MARKDOWN_CHUNK_LINES = 180;
+    private static final int MAX_INLINE_TEXT_CHARS = 3000;
+    private static final int MAX_CODE_DISPLAY_CHARS = 12000;
+    private static final int MAX_LIST_PREVIEW_CHARS = 900;
 
     private BlogRepository repository;
     private SharedPreferences appSettings;
@@ -982,6 +986,13 @@ public class MainActivity extends Activity {
         return clean.isEmpty() ? "attachment" : clean;
     }
 
+    private String previewText(String value, int maxChars) {
+        String text = value == null ? "" : value;
+        if (maxChars <= 0 || text.length() <= maxChars) return text;
+        return text.substring(0, maxChars)
+                + "\n\n[内容较长，已为避免卡顿截断显示；下载/保存仍使用完整内容。]";
+    }
+
     private String formatBytes(int size) {
         if (size < 1024) return size + " B";
         if (size < 1024 * 1024) return String.format(Locale.US, "%.1f KB", size / 1024f);
@@ -1050,13 +1061,20 @@ public class MainActivity extends Activity {
             PrintManager printManager = (PrintManager) getSystemService(PRINT_SERVICE);
             if (printManager == null) throw new IllegalStateException("系统打印服务不可用");
             WebView webView = new WebView(this);
+            String printableContent = post.content == null ? "" : post.content;
+            boolean contentTrimmed = printableContent.length() > 120000;
+            if (contentTrimmed) {
+                printableContent = printableContent.substring(0, 120000)
+                        + "\n\n[文章过长，Android PDF 预览仅导出前 120000 字符；请使用“导出 MD”保存完整全文。]";
+                toast("文章过长，PDF 预览将导出前段；MD 会保存全文。");
+            }
             String html = "<html><head><meta charset=\"utf-8\"><style>"
                     + "body{font-family:sans-serif;line-height:1.65;color:#020617;padding:24px;}"
                     + "h1{font-size:26px;} pre{white-space:pre-wrap;background:#f1f5f9;padding:12px;}"
                     + "</style></head><body><h1>" + htmlEscape(post.title) + "</h1>"
                     + "<p>" + htmlEscape(post.date) + " · " + htmlEscape(TextTools.join(post.tags, " / ")) + "</p>"
                     + "<p>" + htmlEscape(post.summary) + "</p>"
-                    + "<pre>" + htmlEscape(post.content) + "</pre></body></html>";
+                    + "<pre>" + htmlEscape(printableContent) + "</pre></body></html>";
             webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null);
             webView.postDelayed(() -> printManager.print(
                     sanitizeFileName(post.title == null || post.title.isEmpty() ? "Ra Article" : post.title),
@@ -1154,7 +1172,7 @@ public class MainActivity extends Activity {
             if (repo.description != null && !repo.description.isEmpty()) item.addView(paragraph(repo.description));
             if (repo.sourcePath != null && !repo.sourcePath.isEmpty()) item.addView(paragraph("路径：" + repo.sourcePath));
             if (repo.snippet != null && !repo.snippet.isEmpty()) {
-                TextView snippet = paragraph(repo.snippet);
+                TextView snippet = paragraph(previewText(repo.snippet, MAX_LIST_PREVIEW_CHARS));
                 snippet.setTypeface(Typeface.MONOSPACE);
                 snippet.setTextColor(TEXT);
                 snippet.setBackgroundColor(Color.rgb(241, 245, 249));
@@ -1198,12 +1216,16 @@ public class MainActivity extends Activity {
         page.addView(actions);
 
         if (repo.snippet != null && !repo.snippet.isEmpty()) {
-            TextView snippet = paragraph(formatCodeSnippet(repo.snippet, repo.language));
+            String formatted = formatCodeSnippet(repo.snippet, repo.language);
+            TextView snippet = paragraph(previewText(formatted, MAX_CODE_DISPLAY_CHARS));
             snippet.setTypeface(Typeface.MONOSPACE);
             snippet.setTextColor(Color.WHITE);
             snippet.setBackgroundColor(Color.rgb(2, 6, 23));
             snippet.setPadding(dp(12), dp(10), dp(12), dp(10));
             page.addView(snippet);
+            if (formatted.length() > MAX_CODE_DISPLAY_CHARS) {
+                page.addView(paragraph("代码较长，页面仅展示前 " + MAX_CODE_DISPLAY_CHARS + " 个字符；点击“保存代码”会保存完整内容。"));
+            }
         }
         if (repo.notes != null && !repo.notes.isEmpty()) page.addView(paragraph(repo.notes));
         renderAttachmentList(page, repo.attachments, "代码附件");
@@ -2012,14 +2034,19 @@ public class MainActivity extends Activity {
 
     private void renderMarkdown(LinearLayout parent, String markdown, Post owner) {
         String[] lines = markdown == null ? new String[0] : markdown.replace("\r\n", "\n").replace("\r", "\n").split("\\n", -1);
+        renderMarkdownChunk(parent, lines, owner, 0);
+    }
+
+    private void renderMarkdownChunk(LinearLayout parent, String[] lines, Post owner, int start) {
+        int end = Math.min(lines.length, start + MARKDOWN_CHUNK_LINES);
         boolean inCode = false;
         StringBuilder code = new StringBuilder();
-        for (int i = 0; i < lines.length; i++) {
+        for (int i = start; i < end; i++) {
             String raw = lines[i];
             String line = raw.trim();
             if (line.startsWith("```")) {
                 if (inCode) {
-                    parent.addView(monoText(code.toString(), 13, TEXT));
+                    parent.addView(monoText(previewText(code.toString(), MAX_CODE_DISPLAY_CHARS), 13, TEXT));
                     code.setLength(0);
                     inCode = false;
                 } else {
@@ -2030,7 +2057,7 @@ public class MainActivity extends Activity {
                 code.append(raw);
             } else if (isSetextUnderline(line) && parent.getChildCount() == 0) {
                 parent.addView(spacer(6));
-            } else if (i + 1 < lines.length && isSetextUnderline(lines[i + 1].trim()) && !line.isEmpty()) {
+            } else if (i + 1 < end && isSetextUnderline(lines[i + 1].trim()) && !line.isEmpty()) {
                 parent.addView(title(line, lines[i + 1].trim().startsWith("=") ? 22 : 20));
                 i++;
             } else if (line.isEmpty()) {
@@ -2046,10 +2073,20 @@ public class MainActivity extends Activity {
             } else if (line.startsWith("[[ra-pdf:") && line.endsWith("]]")) {
                 renderPdfBlock(parent, owner, line.substring("[[ra-pdf:".length(), line.length() - 2).trim());
             } else {
-                parent.addView(paragraph(raw));
+                parent.addView(paragraph(previewText(raw, MAX_INLINE_TEXT_CHARS)));
             }
         }
-        if (code.length() > 0) parent.addView(monoText(code.toString(), 13, TEXT));
+        if (code.length() > 0) {
+            parent.addView(monoText(previewText(code.toString(), MAX_CODE_DISPLAY_CHARS), 13, TEXT));
+        }
+        if (end < lines.length) {
+            Button more = secondaryButton("继续加载正文 " + end + " / " + lines.length);
+            more.setOnClickListener(v -> {
+                parent.removeView(more);
+                renderMarkdownChunk(parent, lines, owner, end);
+            });
+            parent.addView(more);
+        }
     }
 
     private void renderPdfBlock(LinearLayout parent, Post owner, String attachmentId) {

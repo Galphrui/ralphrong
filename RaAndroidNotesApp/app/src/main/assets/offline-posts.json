@@ -1115,6 +1115,26 @@
   ],
   "devLogs": [
     {
+      "title": "修复 Android 超长文章渲染导致的 ANR",
+      "slug": "devlog-android-anr-long-content-fix-20260710",
+      "date": "2026-07-10",
+      "createdAt": "2026-07-10T03:20:00.000Z",
+      "updatedAt": "2026-07-10T03:20:00.000Z",
+      "tags": [
+        "开发日志",
+        "Android",
+        "ANR",
+        "性能"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "定位日志中 com.ralph.notes 高负载引发系统 ANR，改为 Markdown 分段渲染并限制超长代码/打印内容，避免打开长文章卡死。",
+      "content": "## 背景\n\n用户提供 Android 日志，表现为 App 使用过程中设备出现卡死/崩溃感知。\n\n日志里没有看到 com.ralph.notes 的 FATAL EXCEPTION，也没有 Java 崩溃堆栈。真正出现的是系统 ANR：SystemUI、Dialer、GMS 等进程相继超时，同时 ANR 统计窗口中 com.ralph.notes 占用较高 CPU，并出现大量 minor fault。\n\n这说明问题更接近“主线程/内存压力导致系统整体卡顿”，不是普通空指针崩溃。\n\n## 关键日志判断\n\n日志重点：\n\n    ANR in com.android.systemui\n    Reason: Input dispatching timed out\n    CPU usage:\n      22% 1839/com.ralph.notes\n\n同时还有大量：\n\n    FrameEvents com.ralph.notes addLatch/addRelease Did not find frame\n\n这类日志不是根因，但说明 App 渲染阶段产生了异常帧事件和较重负载。\n\n## 根因\n\n检查 data/posts.json 后发现，当前数据里有超长文章：\n\n1. Android13修改充电动画，正文约 780115 字符。\n2. Android Studio CC GUI / Claude Code 插件问题，正文约 437179 字符。\n3. 工作记录，正文约 135539 字符。\n\nAndroid 端原来的 Markdown 渲染方式会一次性：\n\n1. 把全文按行拆开。\n2. 给每一行创建 TextView 或标题 View。\n3. 对代码块创建超长 TextView。\n4. 在主线程一次性加入 ScrollView。\n\n这种方式遇到几十万字符的文章，会造成主线程长时间工作、内存大量分配、系统缺页增加，最终触发 ANR 或看起来像 App 崩溃。\n\n## 修复内容\n\n1. Markdown 正文改为分段渲染。\n2. 首次只渲染 180 行。\n3. 底部显示“继续加载正文 当前/总行数”按钮。\n4. 用户点击后再加载下一段正文。\n5. 单行超长文本限制为 3000 字符显示。\n6. 代码块显示限制为 12000 字符。\n7. 代码库列表只显示 900 字符预览。\n8. 代码详情页只显示前 12000 字符，并提示保存代码仍保存完整内容。\n9. 文章导出 Markdown 仍保存完整原文。\n10. Android 系统打印导出 PDF 对超长正文限制为 120000 字符，并提示使用 MD 保存全文，避免 WebView 打印再次造成 ANR。\n\n## 修改文件\n\n    RaAndroidNotesApp/app/src/main/java/com/ralph/notes/MainActivity.java\n    data/posts.json\n    RaAndroidNotesApp/app/src/main/assets/offline-posts.json\n\n## 验证命令\n\n进入 Android 工程：\n\n    cd /Users/galph/Documents/MyPersionWeb/RaAndroidNotesApp\n\n执行构建：\n\n    JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" ./gradlew assembleDebug\n\n本次验证结果：\n\n    BUILD SUCCESSFUL in 17s\n\n## 手机上的验证方式\n\n1. 安装新 APK。\n2. 打开 App。\n3. 进入超长文章详情。\n4. 页面应快速显示前 180 行内容。\n5. 滚动到底部点击“继续加载正文”。\n6. 多次加载正文时 App 不应卡死或触发系统 ANR。\n7. 点击“导出 MD”应保存完整文章。\n8. 点击“导出 PDF”时，如果文章特别长，会提示 PDF 只导出前段，避免系统打印卡死。\n\n## 维护注意\n\nAndroid 端不适合一次性把几十万字拆成上千个 TextView。后续新增文章、工具、日志，只要可能很长，都应走分段加载或 WebView/分页渲染，而不是一次性创建全部 View。",
+      "contentFormat": "markdown",
+      "readingMinutes": 4,
+      "attachments": []
+    },
+    {
       "title": "Android App 同步网页端模块和详情功能",
       "slug": "devlog-android-web-feature-sync-20260710",
       "date": "2026-07-10",
