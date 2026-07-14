@@ -23,8 +23,10 @@
       "slug": "bootreceiver-详细讲解与开发指南",
       "date": "2026-07-14",
       "createdAt": "2026-07-14T01:39:36.273Z",
-      "updatedAt": "2026-07-14T01:39:41.343Z",
-      "tags": [],
+      "updatedAt": "2026-07-14T01:43:13.792Z",
+      "tags": [
+        "Android基础"
+      ],
       "visibility": "public",
       "accessPassword": "",
       "summary": "BootReceiver是什么，怎么用，用途是什么，需要注意什么，限制点，优缺点以及开发时注意事项",
@@ -1129,6 +1131,25 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-07-14 文章发布记录",
+      "slug": "auto-deploy-20260714014313-posts",
+      "date": "2026-07-14",
+      "createdAt": "2026-07-14T01:43:13.829Z",
+      "updatedAt": "2026-07-14T01:43:13.829Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "文章"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 文章 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-14 文章发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-14T01:43:13.829Z\n2. 发布模块：文章\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“文章”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update posts content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-07-14 文章发布记录",
       "slug": "auto-deploy-20260714013941-posts",
