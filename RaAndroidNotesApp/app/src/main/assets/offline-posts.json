@@ -1132,6 +1132,26 @@
   ],
   "devLogs": [
     {
+      "title": "工具附件透明分包上传与整包下载",
+      "slug": "devlog-transparent-chunked-tool-assets-20260715",
+      "date": "2026-07-15",
+      "createdAt": "2026-07-15T15:20:00.000+08:00",
+      "updatedAt": "2026-07-15T15:20:00.000+08:00",
+      "tags": [
+        "开发日志",
+        "工具库",
+        "附件上传",
+        "分包存储"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "工具库大附件上传从 90MB 单文件限制改为后台自动分包：用户选择和下载仍是一个完整文件，GitHub 存储为多个 20MB 左右的 part 文件，公开页面下载时自动合并。",
+      "contentFormat": "markdown",
+      "readingMinutes": 6,
+      "attachments": [],
+      "content": "## 背景\n\n工具库用于存放 APK 工具、压缩包、脚本包等附件。实际上传 APK 重签名工具.zip 时文件大小约 165.1 MB，后台显示：\n\n    超过当前 GitHub/Worker 单文件上传安全上限 90.0 MB。请拆分压缩包。\n\n这个提示虽然能避免 Chrome 或 Worker 崩溃，但使用体验不对：工具库的目标就是保存附件，用户不应该手动拆分压缩包，也不应该在下载时面对多个 part 文件。\n\n## 目标\n\n1. 后台管理页仍然只需要点击一次选择文件。\n2. 大附件由网页自动切分成多个分包上传。\n3. GitHub 仓库存储使用分包，降低单次请求体、Worker 内存和 GitHub Contents API 写入压力。\n4. 前台公开页面下载时仍然是一个完整文件。\n5. 这个过程对用户无感：上传是整包，下载也是整包。\n6. 文章附件、代码附件、工具附件、正文内联附件的显示逻辑保持一致。\n\n## 根因\n\n上一版已经把 FileReader.readAsDataURL 改成 multipart/form-data，解决了浏览器把大文件转 base64 导致的 Out of Memory。\n\n但 GitHub Contents API 和 Cloudflare Worker 仍然不适合一次性处理 100MB 以上的单文件：\n\n1. Worker 需要接收完整请求体。\n2. GitHub Contents API 写入内容需要 base64。\n3. base64 会让体积增加约三分之一。\n4. 单次上传越大，浏览器、Worker、网络和 GitHub 任意一层失败概率越高。\n\n所以正确方案不是让用户手动拆包，而是后台自动拆包。\n\n## 本次修改\n\n### 1. 后台管理页上传逻辑\n\n修改文件：\n\n    admin.js\n\n操作逻辑：\n\n1. 用户进入后台。\n2. 点击顶部“工具库”。\n3. 点击“选择文件并上传到 GitHub”。\n4. 选择一个完整压缩包，例如 APK重签名工具.zip。\n5. 如果文件小于约 20MB，仍按普通附件直接上传。\n6. 如果文件大于约 20MB，前端自动用 file.slice() 切成多个分包。\n7. 每个分包用 FormData 上传到 /api/assets。\n8. 页面状态会显示当前进度，例如：\n\n       正在上传 APK重签名工具.zip：第 3/9 个分包\n\n9. 所有分包上传完成后，工具附件只显示一个文件，不显示多个 part。\n\n### 2. 分包数据结构\n\n保存到 data/posts.json 的附件字段仍然属于一个附件对象，只是内部多了 chunks 清单。\n\n示例结构：\n\n    {\n      \"name\": \"APK重签名工具.zip\",\n      \"fileName\": \"APK重签名工具.zip\",\n      \"mimeType\": \"application/zip\",\n      \"size\": 173120000,\n      \"chunked\": true,\n      \"chunkCount\": 9,\n      \"chunks\": [\n        { \"index\": 0, \"path\": \"public-assets/tools/chunks/.../part-00001-of-00009.bin\" },\n        { \"index\": 1, \"path\": \"public-assets/tools/chunks/.../part-00002-of-00009.bin\" }\n      ]\n    }\n\n用户看不到这个结构，但前台会用它自动合并下载。\n\n### 3. Worker 写入 GitHub\n\n修改文件：\n\n    worker/admin-worker.js\n\n处理逻辑：\n\n1. /api/assets 继续支持 multipart/form-data。\n2. Worker 读取表单字段：assetId、chunkIndex、chunkCount、originalSize、originalFileName。\n3. 单个分包安全上限设置为约 24MB。\n4. 分包写入路径：\n\n       public-assets/tools/chunks/{assetId}/part-00001-of-00009.bin\n\n5. 每个分包单独提交到 GitHub。\n6. Worker 返回该分包的 path、url、rawUrl、chunkIndex、chunkCount。\n\n这样避免一次性上传 165MB 到 Worker 和 GitHub Contents API。\n\n### 4. 本地后台保持一致\n\n修改文件：\n\n    local-admin-server.mjs\n\n本地调试时的处理方式与线上 Worker 一致：\n\n1. 解析 multipart/form-data。\n2. 识别 chunked 字段。\n3. 将分包写入 public-assets/{bucket}/chunks/{assetId}/。\n4. 返回与线上 Worker 相同的数据结构。\n\n这样本地测试和线上行为不会分裂。\n\n### 5. 前台整包下载\n\n新增文件：\n\n    src/utils/attachments.js\n\n公开页面下载逻辑：\n\n1. 如果附件不是分包，直接打开原始 url/rawUrl/dataUrl。\n2. 如果附件是分包，按 chunks.index 排序。\n3. 依次 fetch 每个分包。\n4. 使用 ArrayBuffer 拼回 Blob。\n5. 使用 URL.createObjectURL 生成临时下载地址。\n6. 自动触发浏览器下载。\n7. 下载文件名仍然是原始文件名，例如 APK重签名工具.zip。\n\n用户看到的是一个“下载”按钮，不需要知道 GitHub 上实际存了多个 part。\n\n### 6. 页面同步范围\n\n修改文件：\n\n    src/components/CollectionPage.jsx\n    src/components/PostDetail.jsx\n    src/components/CodeRepositoryPage.jsx\n    src/components/MarkdownContent.jsx\n    src/utils/api.js\n\n同步内容：\n\n1. 工具库详情页支持分包附件整包下载。\n2. 文章详情页底部附件支持分包附件整包下载。\n3. 代码库详情页附件支持分包附件整包下载。\n4. Markdown 正文内联附件支持分包附件整包下载。\n5. PDF 附件如果未来走分包，会先合并为临时 Blob URL，再交给 pdf.js 预览。\n6. 数据归一化保留 rawUrl、path、chunked、chunkCount、chunks 字段。\n\n## 性能考虑\n\n1. 上传分包串行执行，不并发堆积大请求，避免浏览器和 Worker 内存飙升。\n2. 每个分包约 20MB，低于后台 24MB 单分包安全上限。\n3. 下载时按顺序拉取分包，避免同时打开大量网络请求。\n4. 合并后的 Blob 使用临时 object URL，触发下载后自动释放。\n5. 小文件不走分包流程，保持原来的轻量下载。\n\n## 小白维护步骤\n\n### 上传大工具包\n\n1. 打开 Chrome。\n2. 访问后台：\n\n       https://galphrui.github.io/ralphrong/admin.html#tools\n\n3. 登录后台。\n4. 点击顶部“工具库”。\n5. 找到“工具附件”。\n6. 点击“选择文件并上传到 GitHub”。\n7. 在文件选择窗口里选择 zip/apk/rar 等完整文件。\n8. 等待页面提示分包上传进度。\n9. 上传完成后，点击“保存工具”。\n10. 点击“保存并发布”。\n11. 等 GitHub Pages 部署完成后，刷新前台工具库页面查看。\n\n### 前台下载大工具包\n\n1. 打开前台工具库。\n2. 进入工具详情页。\n3. 点击附件区域的“下载”。\n4. 如果是大附件，页面会显示“合并中 1/9、2/9...”之类的进度。\n5. 合并完成后，浏览器下载栏里得到的是原来的完整 zip 文件。\n\n### 开发部署命令\n\n本次开发验证执行：\n\n    node --check admin.js\n    node --check worker/admin-worker.js\n    node --check local-admin-server.mjs\n    npm run build\n\n部署 Worker：\n\n    npx wrangler deploy\n\n提交并推送：\n\n    git add admin.js worker/admin-worker.js local-admin-server.mjs src data RaAndroidNotesApp RaIosNotesApp\n    git commit -m \"Add transparent chunked asset uploads\"\n    git push origin main\n\n查看 GitHub Pages：\n\n1. 打开 GitHub 仓库。\n2. 点击 Actions。\n3. 查看 pages build and deployment。\n4. 等状态变成绿色成功。\n5. 打开前台和后台强制刷新。\n\n## 注意事项\n\n1. GitHub 上会看到 public-assets/tools/chunks/ 目录，这是正常的分包存储。\n2. 不要手动删除 chunks 目录里的 part 文件，否则前台整包下载会失败。\n3. data/posts.json 里的 chunks 清单必须和 GitHub 上的 part 文件对应。\n4. 如果上传中途失败，重新选择原始文件上传即可，不需要手动处理已经上传的分包。\n5. 如果文件非常巨大，上传时间会变长，这是 GitHub 多次写入导致的正常现象。"
+    },
+    {
       "title": "修复工具附件上传导致 Chrome Out of Memory",
       "slug": "devlog-tool-upload-oom-multipart-fix-20260715",
       "date": "2026-07-15",
@@ -1505,6 +1525,14 @@
         "order": 70,
         "surface": "top",
         "external": true
+      },
+      {
+        "id": "modules",
+        "label": "设置",
+        "href": "#modules",
+        "enabled": true,
+        "order": 90,
+        "surface": "top"
       }
     ]
   },

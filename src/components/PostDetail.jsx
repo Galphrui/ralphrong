@@ -5,13 +5,7 @@ import { likePost } from '../utils/api'
 import Guestbook from './Guestbook'
 import MarkdownContent from './MarkdownContent'
 import ScrollPositionControls from './ScrollPositionControls'
-
-function formatBytes(size) {
-  const value = Number(size || 0)
-  if (value < 1024) return `${value} B`
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
-  return `${(value / 1024 / 1024).toFixed(1)} MB`
-}
+import { attachmentDirectUrl, attachmentName, downloadAttachment, formatAttachmentBytes, isChunkedAttachment } from '../utils/attachments'
 
 function AttachmentList({ attachments = [] }) {
   if (!attachments.length) return null
@@ -22,29 +16,46 @@ function AttachmentList({ attachments = [] }) {
         <h2 className="mt-1 text-xl font-black text-slate-950">文章附件</h2>
       </div>
       <div className="grid gap-3">
-        {attachments.map((item) => {
-          const href = item.url || item.dataUrl
-          return (
-            <a
-              key={item.id || item.fileName}
-              href={href}
-              download={item.fileName || item.name}
-              target={item.url ? '_blank' : undefined}
-              rel={item.url ? 'noreferrer' : undefined}
-              className="flex flex-col gap-2 border border-slate-200 bg-white p-4 text-left transition hover:border-primary-300 hover:bg-primary-50 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <span className="min-w-0">
-                <span className="block break-words text-sm font-black text-slate-950">{item.name || item.fileName}</span>
-                <span className="mt-1 block text-xs font-bold text-slate-500">
-                  {item.fileName || 'attachment'}{item.size ? ` · ${formatBytes(item.size)}` : ''}
-                </span>
-              </span>
-              <span className="shrink-0 text-xs font-black text-primary-700">下载</span>
-            </a>
-          )
-        })}
+        {attachments.map((item) => <AttachmentDownloadItem key={item.id || item.fileName} item={item} />)}
       </div>
     </section>
+  )
+}
+
+function AttachmentDownloadItem({ item }) {
+  const [downloading, setDownloading] = useState(false)
+  const [progress, setProgress] = useState('')
+  const chunked = isChunkedAttachment(item)
+  const handleDownload = async () => {
+    if (!chunked) {
+      const href = attachmentDirectUrl(item)
+      if (href) window.open(href, '_blank', 'noreferrer')
+      return
+    }
+    try {
+      setDownloading(true)
+      setProgress('')
+      await downloadAttachment(item, ({ index, total }) => setProgress(` ${Math.min(index + 1, total)}/${total}`))
+    } catch (error) {
+      setProgress(` 失败：${error.message || '请稍后重试'}`)
+    } finally {
+      setDownloading(false)
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={handleDownload}
+      className="flex flex-col gap-2 border border-slate-200 bg-white p-4 text-left transition hover:border-primary-300 hover:bg-primary-50 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <span className="min-w-0">
+        <span className="block break-words text-sm font-black text-slate-950">{item.name || item.fileName}</span>
+        <span className="mt-1 block text-xs font-bold text-slate-500">
+          {attachmentName(item)}{item.size ? ` · ${formatAttachmentBytes(item.size)}` : ''}{chunked ? ` · ${item.chunkCount || item.chunks.length} 个分包` : ''}
+        </span>
+      </span>
+      <span className="shrink-0 text-xs font-black text-primary-700">{downloading ? `合并中${progress}` : `下载${progress}`}</span>
+    </button>
   )
 }
 

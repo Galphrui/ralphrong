@@ -142,10 +142,27 @@ const normalizeAttachments = (attachments) =>
       mimeType: item.mimeType || 'application/octet-stream',
       size: Number(item.size || 0),
       url: item.url || '',
+      rawUrl: item.rawUrl || '',
+      path: item.path || '',
       dataUrl: item.dataUrl || '',
+      chunked: Boolean(item.chunked),
+      chunkSize: Number(item.chunkSize || 0),
+      chunkCount: Number(item.chunkCount || (Array.isArray(item.chunks) ? item.chunks.length : 0)),
+      chunks: Array.isArray(item.chunks)
+        ? item.chunks
+            .map((chunk, index) => ({
+              index: Number(chunk.index ?? index),
+              path: chunk.path || '',
+              url: chunk.url || '',
+              rawUrl: chunk.rawUrl || '',
+              size: Number(chunk.size || 0),
+            }))
+            .filter((chunk) => chunk.url || chunk.rawUrl || chunk.path)
+            .sort((a, b) => a.index - b.index)
+        : [],
       createdAt: item.createdAt || '',
     }))
-    .filter((item) => item.url || item.dataUrl)
+    .filter((item) => item.url || item.rawUrl || item.dataUrl || (item.chunked && item.chunks.length))
 
 const normalizeRepository = (repo) => ({
   id: repo.id || repo.slug || repo.name || `repo-${Math.random().toString(36).slice(2)}`,

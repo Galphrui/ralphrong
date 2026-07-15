@@ -6,7 +6,7 @@ const PASSWORD_ITERATIONS = 100000;
 const ADMIN_USER_INDEX_KEY = "admin-user-index";
 const GUEST_MESSAGES_KEY = "guest-messages";
 const POST_METRICS_KEY = "post-metrics";
-const MAX_ASSET_BYTES = 90 * 1024 * 1024;
+const MAX_ASSET_CHUNK_BYTES = 24 * 1024 * 1024;
 
 export default {
   async fetch(request, env) {
@@ -100,15 +100,20 @@ async function readAssetRequest(request) {
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
     if (!bytes.length) throw httpError(400, "附件为空。");
-    if (bytes.length > MAX_ASSET_BYTES) {
-      throw httpError(413, `附件过大：${formatBytes(bytes.length)}，当前 GitHub/Worker 单文件上传安全上限为 ${formatBytes(MAX_ASSET_BYTES)}。`);
+    if (bytes.length > MAX_ASSET_CHUNK_BYTES) {
+      throw httpError(413, `单个分包过大：${formatBytes(bytes.length)}，当前后台分包安全上限为 ${formatBytes(MAX_ASSET_CHUNK_BYTES)}。请刷新后台使用自动分包上传。`);
     }
     return {
       bucket: form.get("bucket") || "tools",
-      fileName: file.name || "attachment",
-      mimeType: file.type || "application/octet-stream",
+      fileName: form.get("originalFileName") || file.name || "attachment",
+      mimeType: form.get("mimeType") || file.type || "application/octet-stream",
       contentBase64: base64EncodeBytes(bytes),
       size: bytes.length,
+      chunked: form.get("chunked") === "1" || form.get("chunked") === "true",
+      assetId: form.get("assetId") || "",
+      chunkIndex: Number(form.get("chunkIndex") || 0),
+      chunkCount: Number(form.get("chunkCount") || 0),
+      originalSize: Number(form.get("originalSize") || 0),
     };
   }
   return readRequestJson(request, "附件数据");
@@ -504,12 +509,22 @@ async function writeGitHubAsset(env, body = {}) {
   const content = parsed.content;
   if (!content) throw httpError(400, "附件为空。");
   const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
-  const path = `public-assets/${bucket}/${stamp}-${fileName}`;
+  const chunked = Boolean(body.chunked);
+  const chunkCount = Math.max(0, Number(body.chunkCount || 0));
+  const chunkIndex = Math.max(0, Number(body.chunkIndex || 0));
+  const assetId = safePathSegment(body.assetId || `${stamp}-${fileName}`);
+  if (chunked && (!chunkCount || chunkIndex >= chunkCount)) throw httpError(400, "附件分包参数无效。");
+  const partName = `part-${String(chunkIndex + 1).padStart(5, "0")}-of-${String(chunkCount).padStart(5, "0")}.bin`;
+  const path = chunked
+    ? `public-assets/${bucket}/chunks/${assetId}/${partName}`
+    : `public-assets/${bucket}/${stamp}-${fileName}`;
   const response = await fetch(`https://api.github.com/repos/${info.owner}/${info.repo}/contents/${path}`, {
     method: "PUT",
     headers: githubWriteHeaders(env),
     body: JSON.stringify({
-      message: `chore: upload asset ${fileName}`,
+      message: chunked
+        ? `chore: upload asset chunk ${fileName} ${chunkIndex + 1}/${chunkCount}`
+        : `chore: upload asset ${fileName}`,
       content,
       branch: info.branch,
     }),
@@ -521,6 +536,11 @@ async function writeGitHubAsset(env, body = {}) {
     fileName,
     mimeType: parsed.mimeType,
     size: parsed.size,
+    chunked,
+    assetId: chunked ? assetId : "",
+    chunkIndex: chunked ? chunkIndex : undefined,
+    chunkCount: chunked ? chunkCount : undefined,
+    originalSize: chunked ? Number(body.originalSize || 0) : undefined,
     url: publicAssetUrl(env, path),
     rawUrl: result.content?.download_url || rawGitHubAssetUrl(info, path),
     commitSha: result.commit?.sha || "",

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
+import { attachmentDirectUrl, attachmentName, attachmentObjectUrl, downloadAttachment, isChunkedAttachment } from '../utils/attachments'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -294,21 +295,7 @@ export default function MarkdownContent({ content, attachments = [], mode = 'mar
         }
 
         if (block.type === 'attachment') {
-          const item = attachmentMap.get(block.id)
-          return (
-            <a
-              key={index}
-              href={item?.dataUrl || '#'}
-              download={item?.fileName || item?.name || 'attachment'}
-              className="flex items-center justify-between gap-4 border border-blue-200 bg-blue-50 p-4 text-slate-900 no-underline"
-            >
-              <span>
-                <strong className="block font-black">{item?.name || item?.fileName || `附件不存在：${block.id}`}</strong>
-                {item && <small className="mt-1 block text-sm text-slate-500">{[item.fileName, item.size ? `${Math.ceil(item.size / 1024)} KB` : ''].filter(Boolean).join(' · ')}</small>}
-              </span>
-              {item && <strong className="text-sm text-primary-700">下载</strong>}
-            </a>
-          )
+          return <InlineAttachmentBlock key={index} item={attachmentMap.get(block.id)} fallbackId={block.id} />
         }
 
         if (block.type === 'pdf') {
@@ -325,25 +312,66 @@ export default function MarkdownContent({ content, attachments = [], mode = 'mar
   )
 }
 
+function InlineAttachmentBlock({ item, fallbackId = '' }) {
+  const [downloading, setDownloading] = useState(false)
+  const [progress, setProgress] = useState('')
+  const handleDownload = async () => {
+    if (!item) return
+    if (!isChunkedAttachment(item)) {
+      const href = attachmentDirectUrl(item)
+      if (href) window.open(href, '_blank', 'noreferrer')
+      return
+    }
+    try {
+      setDownloading(true)
+      setProgress('')
+      await downloadAttachment(item, ({ index, total }) => setProgress(` ${Math.min(index + 1, total)}/${total}`))
+    } catch (error) {
+      setProgress(` 失败：${error.message || '请稍后重试'}`)
+    } finally {
+      setDownloading(false)
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={handleDownload}
+      className="flex w-full items-center justify-between gap-4 border border-blue-200 bg-blue-50 p-4 text-left text-slate-900"
+    >
+      <span>
+        <strong className="block font-black">{item?.name || item?.fileName || `附件不存在：${fallbackId}`}</strong>
+        {item && <small className="mt-1 block text-sm text-slate-500">{[attachmentName(item), item.size ? `${Math.ceil(item.size / 1024)} KB` : '', isChunkedAttachment(item) ? `${item.chunkCount || item.chunks.length} 个分包` : ''].filter(Boolean).join(' · ')}</small>}
+      </span>
+      {item && <strong className="text-sm text-primary-700">{downloading ? `合并中${progress}` : `下载${progress}`}</strong>}
+    </button>
+  )
+}
+
 function PdfDocumentBlock({ item, fallbackId = '' }) {
   const containerRef = useRef(null)
   const [pages, setPages] = useState([])
   const [status, setStatus] = useState('正在加载 PDF...')
-  const source = item?.rawUrl || item?.url || item?.dataUrl || ''
 
   useEffect(() => {
     let cancelled = false
+    let objectUrl = ''
 
     async function renderPdf() {
-      if (!source) {
+      if (!item) {
         setStatus(`PDF 不存在：${fallbackId}`)
         setPages([])
         return
       }
 
       try {
+        setStatus(isChunkedAttachment(item) ? '正在合并 PDF 分包...' : '正在解析 PDF...')
+        const nextSource = await attachmentObjectUrl(item, ({ index, total }) => {
+          if (!cancelled) setStatus(`正在合并 PDF 分包 ${Math.min(index + 1, total)}/${total}...`)
+        })
+        if (cancelled) return
+        objectUrl = nextSource.startsWith('blob:') ? nextSource : ''
         setStatus('正在解析 PDF...')
-        const pdf = await pdfjsLib.getDocument(source).promise
+        const pdf = await pdfjsLib.getDocument(nextSource).promise
         const width = Math.max(320, Math.min(containerRef.current?.clientWidth || 900, 1100))
         const nextPages = []
 
@@ -372,8 +400,9 @@ function PdfDocumentBlock({ item, fallbackId = '' }) {
     renderPdf()
     return () => {
       cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [source, fallbackId])
+  }, [item, fallbackId])
 
   if (!item) {
     return (
@@ -391,15 +420,13 @@ function PdfDocumentBlock({ item, fallbackId = '' }) {
           <h3 className="mt-1 break-words text-base font-black text-slate-950">{item.name || item.fileName || 'PDF 文档'}</h3>
           {item.size && <p className="mt-1 text-xs font-bold text-slate-500">{Math.ceil(item.size / 1024)} KB</p>}
         </div>
-        <a
-          href={item.url || source}
-          download={item.fileName || item.name || 'document.pdf'}
-          target={item.url ? '_blank' : undefined}
-          rel={item.url ? 'noreferrer' : undefined}
+        <button
+          type="button"
+          onClick={() => downloadAttachment(item).catch((error) => setStatus(`PDF 下载失败：${error.message || '请稍后重试'}`))}
           className="inline-flex min-h-10 items-center justify-center border border-primary-700 bg-primary-700 px-4 text-sm font-black text-white"
         >
           下载原 PDF
-        </a>
+        </button>
       </div>
       {status && <p className="border border-slate-200 bg-white p-4 text-sm font-bold text-slate-600">{status}</p>}
       <div className="space-y-4">

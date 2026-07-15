@@ -16,7 +16,7 @@ const metricsPath = join(root, "data", "post-metrics.json");
 const sessions = new Map();
 const execFileAsync = promisify(execFile);
 const PASSWORD_ITERATIONS = 100000;
-const MAX_ASSET_BYTES = 90 * 1024 * 1024;
+const MAX_ASSET_CHUNK_BYTES = 24 * 1024 * 1024;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -525,15 +525,28 @@ async function writeAssetFile(body = {}) {
   const bytes = parsed.bytes;
   if (!bytes.length) throw httpError(400, "附件为空。");
   const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
-  const relativePath = `public-assets/${bucket}/${stamp}-${fileName}`;
+  const chunked = Boolean(body.chunked);
+  const chunkCount = Math.max(0, Number(body.chunkCount || 0));
+  const chunkIndex = Math.max(0, Number(body.chunkIndex || 0));
+  const assetId = safePathSegment(body.assetId || `${stamp}-${fileName}`);
+  if (chunked && (!chunkCount || chunkIndex >= chunkCount)) throw httpError(400, "附件分包参数无效。");
+  const partName = `part-${String(chunkIndex + 1).padStart(5, "0")}-of-${String(chunkCount).padStart(5, "0")}.bin`;
+  const relativePath = chunked
+    ? `public-assets/${bucket}/chunks/${assetId}/${partName}`
+    : `public-assets/${bucket}/${stamp}-${fileName}`;
   const target = join(root, relativePath);
-  await mkdir(join(root, "public-assets", bucket), { recursive: true });
+  await mkdir(join(root, "public-assets", bucket, ...(chunked ? ["chunks", assetId] : [])), { recursive: true });
   await writeFile(target, bytes);
   return {
     path: relativePath,
     fileName,
     mimeType: parsed.mimeType,
     size: bytes.length,
+    chunked,
+    assetId: chunked ? assetId : "",
+    chunkIndex: chunked ? chunkIndex : undefined,
+    chunkCount: chunked ? chunkCount : undefined,
+    originalSize: chunked ? Number(body.originalSize || 0) : undefined,
     url: publicAssetUrl(relativePath),
     rawUrl: publicAssetUrl(relativePath),
   };
@@ -637,16 +650,22 @@ async function readAssetRequest(request) {
   const file = parts.find((part) => part.name === "file" && part.fileName);
   if (!file) throw httpError(400, "没有选择附件文件。");
   if (!file.data.length) throw httpError(400, "附件为空。");
-  if (file.data.length > MAX_ASSET_BYTES) {
-    throw httpError(413, `附件过大：${formatBytes(file.data.length)}，当前 GitHub/Worker 单文件上传安全上限为 ${formatBytes(MAX_ASSET_BYTES)}。`);
+  if (file.data.length > MAX_ASSET_CHUNK_BYTES) {
+    throw httpError(413, `单个分包过大：${formatBytes(file.data.length)}，当前后台分包安全上限为 ${formatBytes(MAX_ASSET_CHUNK_BYTES)}。请刷新后台使用自动分包上传。`);
   }
   const bucket = parts.find((part) => part.name === "bucket")?.data.toString("utf8") || "tools";
+  const field = (name, fallback = "") => parts.find((part) => part.name === name)?.data.toString("utf8") || fallback;
   return {
     bucket,
-    fileName: file.fileName,
-    mimeType: file.contentType || "application/octet-stream",
+    fileName: field("originalFileName", file.fileName),
+    mimeType: field("mimeType", file.contentType || "application/octet-stream"),
     contentBase64: file.data.toString("base64"),
     size: file.data.length,
+    chunked: field("chunked") === "1" || field("chunked") === "true",
+    assetId: field("assetId"),
+    chunkIndex: Number(field("chunkIndex", "0")),
+    chunkCount: Number(field("chunkCount", "0")),
+    originalSize: Number(field("originalSize", "0")),
   };
 }
 

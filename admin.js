@@ -8,7 +8,8 @@ const RA_SESSION_TOKEN_KEY = "RaBlogAdminSessionToken";
 const RA_PUBLISH_POLL_ATTEMPTS = 36;
 const RA_PUBLISH_POLL_DELAY_MS = 5000;
 const RA_DEFAULT_PANEL = "posts";
-const RA_GITHUB_ASSET_MAX_BYTES = 90 * 1024 * 1024;
+const RA_ASSET_DIRECT_UPLOAD_BYTES = 20 * 1024 * 1024;
+const RA_ASSET_CHUNK_BYTES = 20 * 1024 * 1024;
 const RA_CODE_LANGUAGE_PRESETS = [
   { label: "Plain Text", value: "Plain Text", extension: "txt" },
   { label: "C", value: "C", extension: "c" },
@@ -1958,15 +1959,11 @@ function fileToDataUrl(file) {
   });
 }
 
-async function uploadAssetAttachment(file, bucket = "tools") {
+async function uploadAssetAttachment(file, bucket = "tools", options = {}) {
   if (!RA_API_BASE) {
     throw new Error("后台 API 未配置，无法上传到 GitHub。请检查 admin-config.js 的 BLOG_ADMIN_API_BASE。");
   }
-  if (file.size > RA_GITHUB_ASSET_MAX_BYTES) {
-    throw new Error(
-      `${file.name} 大小为 ${formatBytes(file.size)}，超过当前 GitHub/Worker 单文件上传安全上限 ${formatBytes(RA_GITHUB_ASSET_MAX_BYTES)}。请拆分压缩包，或改用 GitHub Release / 网盘链接后在工具说明中记录。`,
-    );
-  }
+  if (file.size > RA_ASSET_DIRECT_UPLOAD_BYTES) return uploadChunkedAssetAttachment(file, bucket, options);
   const form = new FormData();
   form.append("bucket", bucket);
   form.append("file", file, file.name);
@@ -1986,6 +1983,58 @@ async function uploadAssetAttachment(file, bucket = "tools") {
     url,
     rawUrl: result.rawUrl || result.asset?.rawUrl || "",
     path: result.path || result.asset?.path || "",
+    createdAt: new Date().toISOString(),
+  };
+}
+
+async function uploadChunkedAssetAttachment(file, bucket = "tools", options = {}) {
+  const chunkCount = Math.ceil(file.size / RA_ASSET_CHUNK_BYTES);
+  const assetId = `asset-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const chunks = [];
+  for (let index = 0; index < chunkCount; index += 1) {
+    const start = index * RA_ASSET_CHUNK_BYTES;
+    const end = Math.min(file.size, start + RA_ASSET_CHUNK_BYTES);
+    const part = file.slice(start, end, file.type || "application/octet-stream");
+    const form = new FormData();
+    form.append("bucket", bucket);
+    form.append("assetId", assetId);
+    form.append("chunked", "1");
+    form.append("chunkIndex", String(index));
+    form.append("chunkCount", String(chunkCount));
+    form.append("originalSize", String(file.size));
+    form.append("originalFileName", file.name);
+    form.append("mimeType", file.type || "application/octet-stream");
+    form.append("file", part, `${file.name}.part${String(index + 1).padStart(5, "0")}`);
+    options.onProgress?.({ index, chunkCount, start, end, file });
+    const result = await raApi("/api/assets", {
+      method: "POST",
+      body: form,
+      uploadFile: file,
+      uploadChunk: { index, chunkCount, size: part.size },
+    });
+    const chunk = result.asset || result;
+    if (!chunk.path || !(chunk.url || chunk.rawUrl)) {
+      throw new Error(`第 ${index + 1}/${chunkCount} 个分包上传成功但没有返回下载地址。`);
+    }
+    chunks.push({
+      index: Number(chunk.chunkIndex ?? index),
+      path: chunk.path,
+      url: chunk.url || "",
+      rawUrl: chunk.rawUrl || "",
+      size: Number(chunk.size || part.size),
+    });
+  }
+  chunks.sort((a, b) => a.index - b.index);
+  return {
+    id: assetId,
+    name: file.name,
+    fileName: file.name,
+    mimeType: file.type || "application/octet-stream",
+    size: file.size,
+    chunked: true,
+    chunkSize: RA_ASSET_CHUNK_BYTES,
+    chunkCount,
+    chunks,
     createdAt: new Date().toISOString(),
   };
 }
@@ -2010,10 +2059,27 @@ function normalizeAttachments(value) {
       mimeType: item.mimeType || item.type || "application/octet-stream",
       size: Number(item.size || 0),
       url: item.url || "",
+      rawUrl: item.rawUrl || "",
+      path: item.path || "",
       dataUrl: item.dataUrl || "",
+      chunked: Boolean(item.chunked),
+      chunkSize: Number(item.chunkSize || 0),
+      chunkCount: Number(item.chunkCount || (Array.isArray(item.chunks) ? item.chunks.length : 0)),
+      chunks: Array.isArray(item.chunks)
+        ? item.chunks
+            .map((chunk, index) => ({
+              index: Number(chunk.index ?? index),
+              path: chunk.path || "",
+              url: chunk.url || "",
+              rawUrl: chunk.rawUrl || "",
+              size: Number(chunk.size || 0),
+            }))
+            .filter((chunk) => chunk.url || chunk.rawUrl || chunk.path)
+            .sort((a, b) => a.index - b.index)
+        : [],
       createdAt: item.createdAt || "",
     }))
-    .filter((item) => item.url || item.dataUrl);
+    .filter((item) => item.url || item.rawUrl || item.dataUrl || (item.chunked && item.chunks.length));
 }
 
 function setupCodeLanguagePresetOptions() {
@@ -2413,7 +2479,7 @@ function renderToolAttachmentList() {
       <article class="RaAttachmentItem">
         <div>
           <strong>${escapeHtml(item.name || item.fileName || "附件")}</strong>
-          <small>${escapeHtml(item.fileName || "")}${item.size ? ` · ${formatBytes(item.size)}` : ""}${item.url ? " · GitHub" : ""}</small>
+          <small>${escapeHtml(item.fileName || "")}${item.size ? ` · ${formatBytes(item.size)}` : ""}${item.chunked ? ` · ${item.chunkCount || item.chunks.length} 个分包` : ""}${item.url ? " · GitHub" : ""}</small>
         </div>
         <button class="RaDangerButton" type="button" data-ra-delete-tool-attachment="${index}">删除</button>
       </article>
@@ -2429,7 +2495,12 @@ async function addToolAttachments(event) {
     const next = [];
     for (const file of files) {
       setToolsStatus(`正在上传 ${file.name} 到 GitHub，后台接口：${RA_API_BASE}/api/assets`);
-      next.push(await uploadAssetAttachment(file, "tools"));
+      next.push(
+        await uploadAssetAttachment(file, "tools", {
+          onProgress: ({ index, chunkCount }) =>
+            setToolsStatus(`正在上传 ${file.name}：第 ${index + 1}/${chunkCount} 个分包，后台接口：${RA_API_BASE}/api/assets`),
+        }),
+      );
     }
     RaSelectedToolAttachments = [...normalizeAttachments(RaSelectedToolAttachments), ...next];
     renderToolAttachmentList();
@@ -3084,8 +3155,11 @@ async function raApi(path, options = {}) {
     });
   } catch (error) {
     if (isFormData && options.uploadFile) {
+      const chunkText = options.uploadChunk
+        ? `，当前分包 ${options.uploadChunk.index + 1}/${options.uploadChunk.chunkCount}（${formatBytes(options.uploadChunk.size)}）`
+        : "";
       throw new Error(
-        `无法连接后台 API：${RA_API_BASE}。本次上传文件 ${options.uploadFile.name}（${formatBytes(options.uploadFile.size)}）可能被浏览器、网络、Cloudflare Worker 请求体限制或 GitHub 单文件限制中断。请确认文件小于 ${formatBytes(RA_GITHUB_ASSET_MAX_BYTES)}，并强制刷新后台后重试。`,
+        `无法连接后台 API：${RA_API_BASE}。本次上传文件 ${options.uploadFile.name}（${formatBytes(options.uploadFile.size)}）${chunkText} 上传中断，请检查网络、Worker 部署状态或 GitHub 写入权限后重试。`,
       );
     }
     throw new Error(`无法连接后台 API：${RA_API_BASE}`);
