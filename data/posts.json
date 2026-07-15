@@ -1132,6 +1132,26 @@
   ],
   "devLogs": [
     {
+      "title": "降低分包大小并增强工具附件上传重试",
+      "slug": "devlog-stabilize-chunked-tool-upload-20260715",
+      "date": "2026-07-15",
+      "createdAt": "2026-07-15T15:55:00.000+08:00",
+      "updatedAt": "2026-07-15T15:55:00.000+08:00",
+      "tags": [
+        "开发日志",
+        "工具库",
+        "附件上传",
+        "稳定性"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "针对 165MB 工具包在第 3/9 个 20MB 分包处容易中断的问题，将分包降到 5MB，增加单分包自动重试，并让 Worker 复用已经成功写入 GitHub 的分包。",
+      "contentFormat": "markdown",
+      "readingMinutes": 5,
+      "attachments": [],
+      "content": "## 背景\n\n工具库已经支持透明分包上传，但实际上传 APK重签名工具.zip 时仍然容易失败。页面提示类似：\n\n    当前分包 3/9（20.0 MB）上传中断\n\n这说明问题不再是 90MB 单文件限制，而是单个 20MB 分包在浏览器、Cloudflare Worker、base64 编码和 GitHub Contents API 写入之间仍然偏大。\n\n## 根因\n\n一个 20MB 原始分包并不等于后台只处理 20MB：\n\n1. 浏览器用 multipart/form-data 发送时会有请求体开销。\n2. Worker 读取 File.arrayBuffer() 时会持有二进制内容。\n3. Worker 写 GitHub Contents API 前需要转成 base64。\n4. base64 体积约增加三分之一。\n5. GitHub 写入每个分包都是一次独立 API 请求和 commit。\n\n所以第 3 个分包失败，本质是单分包仍然太大，而且失败后没有足够强的自动恢复能力。\n\n## 本次修复\n\n### 1. 降低前端分包大小\n\n修改文件：\n\n    admin.js\n\n调整内容：\n\n    RA_ASSET_DIRECT_UPLOAD_BYTES = 5 * 1024 * 1024\n    RA_ASSET_CHUNK_BYTES = 5 * 1024 * 1024\n\n含义：\n\n1. 小于约 5MB 的附件直接上传。\n2. 大于约 5MB 的附件自动分包。\n3. 165MB 文件大约会拆成 34 个分包。\n4. 分包数量变多，但每次请求更小，成功率更高。\n\n### 2. 增加单分包自动重试\n\n修改文件：\n\n    admin.js\n\n新增逻辑：\n\n1. 每个分包最多自动重试 5 次。\n2. 每次失败后等待几秒再重试。\n3. 页面会显示当前分包、尝试次数和等待时间。\n4. 只有同一个分包连续失败 5 次，才会真正停止上传。\n\n页面提示示例：\n\n    APK重签名工具.zip 第 3/34 个分包上传中断，4 秒后自动重试（2/5）。\n\n### 3. 使用稳定 assetId\n\n修改文件：\n\n    admin.js\n\n之前每次选择文件都会生成随机 assetId。\n\n现在 assetId 根据以下信息生成：\n\n1. bucket\n2. 文件名\n3. 文件大小\n4. lastModified\n5. 当前分包大小\n\n这样同一个文件重复选择时，分包路径保持稳定。\n\n### 4. Worker 复用已上传分包\n\n修改文件：\n\n    worker/admin-worker.js\n\n新增逻辑：\n\n1. Worker 写入分包前，先检查 GitHub 上是否已经存在这个 part 文件。\n2. 如果已经存在，直接返回成功，不重复写入。\n3. 如果 GitHub 返回 422 路径已存在，也会再次读取已存在文件并返回成功。\n\n这解决一种常见情况：\n\n1. Worker 实际已经把分包写入 GitHub。\n2. 浏览器因为网络波动没有收到响应。\n3. 前端自动重试同一个分包。\n4. Worker 发现 GitHub 已有这个分包，直接告诉前端成功。\n\n### 5. Worker 和本地后台安全上限同步\n\n修改文件：\n\n    worker/admin-worker.js\n    local-admin-server.mjs\n\n调整内容：\n\n    MAX_ASSET_CHUNK_BYTES = 8 * 1024 * 1024\n\n前端实际发 5MB，后台允许 8MB，给 multipart 和边界误差留出空间。\n\n### 6. 更新后台提示文案\n\n修改文件：\n\n    admin.html\n\n旧提示仍然容易让人理解成“上传能力取决于单文件限制”。\n\n新提示改成：\n\n    大文件会自动分包、失败自动重试，前台下载时仍然合并为一个完整文件。\n\n## 小白使用步骤\n\n1. 打开后台：\n\n       https://galphrui.github.io/ralphrong/admin.html#tools\n\n2. 点击顶部“工具库”。\n3. 点击“选择文件并上传到 GitHub”。\n4. 选择完整 zip 文件。\n5. 不要关闭页面，等待分包进度走完。\n6. 如果某个分包失败，页面会自动重试，不需要手动操作。\n7. 上传完成后点击“保存工具”。\n8. 点击“保存并发布”。\n9. 打开前台工具详情页，点击附件下载，前台会自动合并分包。\n\n## 验证命令\n\n本次执行：\n\n    node --check admin.js\n    node --check worker/admin-worker.js\n    node --check local-admin-server.mjs\n    npm run build\n\n验证结果：全部通过。\n\n## 部署命令\n\n因为修改了 Worker，必须部署后台：\n\n    npx wrangler deploy\n\n然后提交并推送：\n\n    git add admin.html admin.js worker/admin-worker.js local-admin-server.mjs data/posts.json\n    git commit -m \"Stabilize chunked asset uploads\"\n    git push origin main\n\n## 注意事项\n\n1. 5MB 分包会让上传次数变多，这是为了换取成功率。\n2. 上传时不要刷新后台页面。\n3. 如果网络完全断开，重新选择同一个文件上传即可，已成功写入 GitHub 的分包会被复用。\n4. GitHub 上 public-assets/tools/chunks/ 目录中的 part 文件不要手动删除。"
+    },
+    {
       "title": "工具附件透明分包上传与整包下载",
       "slug": "devlog-transparent-chunked-tool-assets-20260715",
       "date": "2026-07-15",

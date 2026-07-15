@@ -8,8 +8,9 @@ const RA_SESSION_TOKEN_KEY = "RaBlogAdminSessionToken";
 const RA_PUBLISH_POLL_ATTEMPTS = 36;
 const RA_PUBLISH_POLL_DELAY_MS = 5000;
 const RA_DEFAULT_PANEL = "posts";
-const RA_ASSET_DIRECT_UPLOAD_BYTES = 20 * 1024 * 1024;
-const RA_ASSET_CHUNK_BYTES = 20 * 1024 * 1024;
+const RA_ASSET_DIRECT_UPLOAD_BYTES = 5 * 1024 * 1024;
+const RA_ASSET_CHUNK_BYTES = 5 * 1024 * 1024;
+const RA_ASSET_CHUNK_RETRY_ATTEMPTS = 5;
 const RA_CODE_LANGUAGE_PRESETS = [
   { label: "Plain Text", value: "Plain Text", extension: "txt" },
   { label: "C", value: "C", extension: "c" },
@@ -1989,7 +1990,7 @@ async function uploadAssetAttachment(file, bucket = "tools", options = {}) {
 
 async function uploadChunkedAssetAttachment(file, bucket = "tools", options = {}) {
   const chunkCount = Math.ceil(file.size / RA_ASSET_CHUNK_BYTES);
-  const assetId = `asset-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const assetId = stableAssetUploadId(file, bucket);
   const chunks = [];
   for (let index = 0; index < chunkCount; index += 1) {
     const start = index * RA_ASSET_CHUNK_BYTES;
@@ -2005,13 +2006,7 @@ async function uploadChunkedAssetAttachment(file, bucket = "tools", options = {}
     form.append("originalFileName", file.name);
     form.append("mimeType", file.type || "application/octet-stream");
     form.append("file", part, `${file.name}.part${String(index + 1).padStart(5, "0")}`);
-    options.onProgress?.({ index, chunkCount, start, end, file });
-    const result = await raApi("/api/assets", {
-      method: "POST",
-      body: form,
-      uploadFile: file,
-      uploadChunk: { index, chunkCount, size: part.size },
-    });
+    const result = await uploadAssetChunkWithRetry(form, file, { index, chunkCount, start, end, size: part.size }, options);
     const chunk = result.asset || result;
     if (!chunk.path || !(chunk.url || chunk.rawUrl)) {
       throw new Error(`第 ${index + 1}/${chunkCount} 个分包上传成功但没有返回下载地址。`);
@@ -2037,6 +2032,46 @@ async function uploadChunkedAssetAttachment(file, bucket = "tools", options = {}
     chunks,
     createdAt: new Date().toISOString(),
   };
+}
+
+async function uploadAssetChunkWithRetry(form, file, chunk, options = {}) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= RA_ASSET_CHUNK_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      options.onProgress?.({ ...chunk, file, attempt, retrying: attempt > 1 });
+      return await raApi("/api/assets", {
+        method: "POST",
+        body: form,
+        uploadFile: file,
+        uploadChunk: { index: chunk.index, chunkCount: chunk.chunkCount, size: chunk.size, attempt },
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt >= RA_ASSET_CHUNK_RETRY_ATTEMPTS) break;
+      const delay = Math.min(2000 * attempt, 8000);
+      options.onProgress?.({ ...chunk, file, attempt, retryDelay: delay, error });
+      await sleep(delay);
+    }
+  }
+  throw lastError || new Error(`第 ${chunk.index + 1}/${chunk.chunkCount} 个分包上传失败。`);
+}
+
+function stableAssetUploadId(file, bucket = "tools") {
+  const source = `${bucket}|${file.name}|${file.size}|${file.lastModified || 0}|${RA_ASSET_CHUNK_BYTES}`;
+  let hash = 5381;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = ((hash << 5) + hash + source.charCodeAt(index)) >>> 0;
+  }
+  const safeName = String(file.name || "attachment")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return `asset-${hash.toString(36)}-${safeName || "file"}`;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function deleteAttachment(index) {
@@ -2497,8 +2532,17 @@ async function addToolAttachments(event) {
       setToolsStatus(`正在上传 ${file.name} 到 GitHub，后台接口：${RA_API_BASE}/api/assets`);
       next.push(
         await uploadAssetAttachment(file, "tools", {
-          onProgress: ({ index, chunkCount }) =>
-            setToolsStatus(`正在上传 ${file.name}：第 ${index + 1}/${chunkCount} 个分包，后台接口：${RA_API_BASE}/api/assets`),
+          onProgress: ({ index, chunkCount, attempt, retryDelay, error }) => {
+            if (retryDelay) {
+              setToolsStatus(
+                `${file.name} 第 ${index + 1}/${chunkCount} 个分包上传中断，${Math.ceil(retryDelay / 1000)} 秒后自动重试（${attempt}/${RA_ASSET_CHUNK_RETRY_ATTEMPTS}）。${error?.message || ""}`,
+              );
+              return;
+            }
+            setToolsStatus(
+              `正在上传 ${file.name}：第 ${index + 1}/${chunkCount} 个分包${attempt > 1 ? `，第 ${attempt} 次尝试` : ""}，后台接口：${RA_API_BASE}/api/assets`,
+            );
+          },
         }),
       );
     }

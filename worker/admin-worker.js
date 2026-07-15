@@ -6,7 +6,7 @@ const PASSWORD_ITERATIONS = 100000;
 const ADMIN_USER_INDEX_KEY = "admin-user-index";
 const GUEST_MESSAGES_KEY = "guest-messages";
 const POST_METRICS_KEY = "post-metrics";
-const MAX_ASSET_CHUNK_BYTES = 24 * 1024 * 1024;
+const MAX_ASSET_CHUNK_BYTES = 8 * 1024 * 1024;
 
 export default {
   async fetch(request, env) {
@@ -518,6 +518,26 @@ async function writeGitHubAsset(env, body = {}) {
   const path = chunked
     ? `public-assets/${bucket}/chunks/${assetId}/${partName}`
     : `public-assets/${bucket}/${stamp}-${fileName}`;
+  if (chunked) {
+    const existing = await readExistingGitHubAsset(env, info, path);
+    if (existing) {
+      return {
+        path,
+        fileName,
+        mimeType: parsed.mimeType,
+        size: parsed.size,
+        chunked,
+        assetId,
+        chunkIndex,
+        chunkCount,
+        originalSize: Number(body.originalSize || 0),
+        url: publicAssetUrl(env, path),
+        rawUrl: existing.download_url || rawGitHubAssetUrl(info, path),
+        commitSha: "",
+        reused: true,
+      };
+    }
+  }
   const response = await fetch(`https://api.github.com/repos/${info.owner}/${info.repo}/contents/${path}`, {
     method: "PUT",
     headers: githubWriteHeaders(env),
@@ -530,7 +550,29 @@ async function writeGitHubAsset(env, body = {}) {
     }),
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw httpError(response.status, result.message || "写入 GitHub 附件失败。");
+  if (!response.ok) {
+    if (chunked && response.status === 422) {
+      const existing = await readExistingGitHubAsset(env, info, path);
+      if (existing) {
+        return {
+          path,
+          fileName,
+          mimeType: parsed.mimeType,
+          size: parsed.size,
+          chunked,
+          assetId,
+          chunkIndex,
+          chunkCount,
+          originalSize: Number(body.originalSize || 0),
+          url: publicAssetUrl(env, path),
+          rawUrl: existing.download_url || rawGitHubAssetUrl(info, path),
+          commitSha: "",
+          reused: true,
+        };
+      }
+    }
+    throw httpError(response.status, result.message || "写入 GitHub 附件失败。");
+  }
   return {
     path,
     fileName,
@@ -545,6 +587,17 @@ async function writeGitHubAsset(env, body = {}) {
     rawUrl: result.content?.download_url || rawGitHubAssetUrl(info, path),
     commitSha: result.commit?.sha || "",
   };
+}
+
+async function readExistingGitHubAsset(env, info, path) {
+  const response = await fetch(
+    `https://api.github.com/repos/${info.owner}/${info.repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(info.branch)}`,
+    { headers: githubWriteHeaders(env) },
+  );
+  if (response.status === 404) return null;
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) return null;
+  return result && result.type !== "dir" ? result : null;
 }
 
 function parseAssetBody(body = {}) {
@@ -694,6 +747,13 @@ function publicAssetUrl(env, path) {
 
 function rawGitHubAssetUrl(info, path) {
   return `https://raw.githubusercontent.com/${info.owner}/${info.repo}/${info.branch}/${path}`;
+}
+
+function encodePath(path = "") {
+  return String(path)
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
 }
 
 function safePathSegment(value) {

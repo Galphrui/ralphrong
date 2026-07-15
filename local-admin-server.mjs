@@ -16,7 +16,7 @@ const metricsPath = join(root, "data", "post-metrics.json");
 const sessions = new Map();
 const execFileAsync = promisify(execFile);
 const PASSWORD_ITERATIONS = 100000;
-const MAX_ASSET_CHUNK_BYTES = 24 * 1024 * 1024;
+const MAX_ASSET_CHUNK_BYTES = 8 * 1024 * 1024;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",

@@ -488,7 +488,7 @@
                       </label>
                       <button id="RaClearToolAttachmentsButton" class="RaSecondaryButton" type="button">清空附件</button>
                     </div>
-                    <p class="RaHint">点击上方按钮选择本地文件，选中后会自动上传到 GitHub。这里不做 2MB 限制；实际上限取决于 GitHub 单文件限制和浏览器上传能力。</p>
+                    <p class="RaHint">点击上方按钮选择本地文件，选中后会自动上传到 GitHub。大文件会自动分包、失败自动重试，前台下载时仍然合并为一个完整文件。</p>
                     <div class="RaAttachmentList" id="RaToolAttachmentList"></div>
                   </div>
                 </div>
