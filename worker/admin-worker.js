@@ -6,6 +6,7 @@ const PASSWORD_ITERATIONS = 100000;
 const ADMIN_USER_INDEX_KEY = "admin-user-index";
 const GUEST_MESSAGES_KEY = "guest-messages";
 const POST_METRICS_KEY = "post-metrics";
+const MAX_ASSET_BYTES = 90 * 1024 * 1024;
 
 export default {
   async fetch(request, env) {
@@ -99,6 +100,9 @@ async function readAssetRequest(request) {
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
     if (!bytes.length) throw httpError(400, "附件为空。");
+    if (bytes.length > MAX_ASSET_BYTES) {
+      throw httpError(413, `附件过大：${formatBytes(bytes.length)}，当前 GitHub/Worker 单文件上传安全上限为 ${formatBytes(MAX_ASSET_BYTES)}。`);
+    }
     return {
       bucket: form.get("bucket") || "tools",
       fileName: file.name || "attachment",
@@ -679,6 +683,13 @@ function safePathSegment(value) {
 function safeFileName(value) {
   const clean = String(value || "attachment").split(/[\\/]/).pop().replace(/[\u0000-\u001f\u007f]/g, "").trim();
   return clean.replace(/[^\w.\-\u4e00-\u9fff]+/g, "-") || "attachment";
+}
+
+function formatBytes(size) {
+  const value = Number(size || 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 async function verifyUserPassword(password, user) {

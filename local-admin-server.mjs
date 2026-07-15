@@ -16,6 +16,7 @@ const metricsPath = join(root, "data", "post-metrics.json");
 const sessions = new Map();
 const execFileAsync = promisify(execFile);
 const PASSWORD_ITERATIONS = 100000;
+const MAX_ASSET_BYTES = 90 * 1024 * 1024;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -636,6 +637,9 @@ async function readAssetRequest(request) {
   const file = parts.find((part) => part.name === "file" && part.fileName);
   if (!file) throw httpError(400, "没有选择附件文件。");
   if (!file.data.length) throw httpError(400, "附件为空。");
+  if (file.data.length > MAX_ASSET_BYTES) {
+    throw httpError(413, `附件过大：${formatBytes(file.data.length)}，当前 GitHub/Worker 单文件上传安全上限为 ${formatBytes(MAX_ASSET_BYTES)}。`);
+  }
   const bucket = parts.find((part) => part.name === "bucket")?.data.toString("utf8") || "tools";
   return {
     bucket,
@@ -718,6 +722,13 @@ function publicUser(user) {
 
 function fileSha(content) {
   return createHash("sha1").update(content).digest("hex");
+}
+
+function formatBytes(size) {
+  const value = Number(size || 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function getCookie(request, name) {

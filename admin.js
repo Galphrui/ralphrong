@@ -8,6 +8,7 @@ const RA_SESSION_TOKEN_KEY = "RaBlogAdminSessionToken";
 const RA_PUBLISH_POLL_ATTEMPTS = 36;
 const RA_PUBLISH_POLL_DELAY_MS = 5000;
 const RA_DEFAULT_PANEL = "posts";
+const RA_GITHUB_ASSET_MAX_BYTES = 90 * 1024 * 1024;
 const RA_CODE_LANGUAGE_PRESETS = [
   { label: "Plain Text", value: "Plain Text", extension: "txt" },
   { label: "C", value: "C", extension: "c" },
@@ -1961,12 +1962,18 @@ async function uploadAssetAttachment(file, bucket = "tools") {
   if (!RA_API_BASE) {
     throw new Error("后台 API 未配置，无法上传到 GitHub。请检查 admin-config.js 的 BLOG_ADMIN_API_BASE。");
   }
+  if (file.size > RA_GITHUB_ASSET_MAX_BYTES) {
+    throw new Error(
+      `${file.name} 大小为 ${formatBytes(file.size)}，超过当前 GitHub/Worker 单文件上传安全上限 ${formatBytes(RA_GITHUB_ASSET_MAX_BYTES)}。请拆分压缩包，或改用 GitHub Release / 网盘链接后在工具说明中记录。`,
+    );
+  }
   const form = new FormData();
   form.append("bucket", bucket);
   form.append("file", file, file.name);
   const result = await raApi("/api/assets", {
     method: "POST",
     body: form,
+    uploadFile: file,
   });
   const url = result.url || result.asset?.url || "";
   if (!url) throw new Error("后台上传成功但没有返回附件下载地址。");
@@ -3076,6 +3083,11 @@ async function raApi(path, options = {}) {
       body: options.body,
     });
   } catch (error) {
+    if (isFormData && options.uploadFile) {
+      throw new Error(
+        `无法连接后台 API：${RA_API_BASE}。本次上传文件 ${options.uploadFile.name}（${formatBytes(options.uploadFile.size)}）可能被浏览器、网络、Cloudflare Worker 请求体限制或 GitHub 单文件限制中断。请确认文件小于 ${formatBytes(RA_GITHUB_ASSET_MAX_BYTES)}，并强制刷新后台后重试。`,
+      );
+    }
     throw new Error(`无法连接后台 API：${RA_API_BASE}`);
   }
 
