@@ -19,6 +19,23 @@
   },
   "posts": [
     {
+      "title": "BootReceiver 详解",
+      "slug": "bootreceiver-详细讲解与开发指南",
+      "date": "2026-07-14",
+      "createdAt": "2026-07-14T01:39:36.273Z",
+      "updatedAt": "2026-07-14T01:43:13.792Z",
+      "tags": [
+        "Android基础"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "BootReceiver是什么，怎么用，用途是什么，需要注意什么，限制点，优缺点以及开发时注意事项",
+      "content": "## 1. BootReceiver 是什么\n\n`BootReceiver` 通常不是 Android 框架中某个固定类名，而是开发者自定义的一个 `BroadcastReceiver`。\n\n它的职责是监听设备启动相关的系统广播，并在收到广播后执行应用自己的开机初始化逻辑，例如：\n\n- 恢复闹钟；\n- 重新注册周期任务；\n- 启动协议服务；\n- 恢复后台同步；\n- 检查配置；\n- 初始化硬件连接；\n- 恢复通知、定时器或状态监听。\n\n典型继承关系：\n\n```java\npublic class BootReceiver extends BroadcastReceiver {\n    @Override\n    public void onReceive(Context context, Intent intent) {\n        // 处理系统启动广播\n    }\n}\n```\n\n`BootReceiver` 本质上仍然是广播接收器。它并不是一个可以长期运行的后台组件，也不是一个服务。\n\n---\n\n## 2. Android 开机相关广播\n\n### 2.1 ACTION_BOOT_COMPLETED\n\n完整值：\n\n```text\nandroid.intent.action.BOOT_COMPLETED\n```\n\n设备完成启动，并且当前用户已经进入可正常使用状态后，系统发送此广播。\n\n常见用途：\n\n- 恢复普通应用任务；\n- 重设闹钟；\n- 启动应用后台服务；\n- 恢复应用配置；\n- 恢复网络连接或协议监听。\n\n接收它需要声明：\n\n```xml\n<uses-permission android:name=\"android.permission.RECEIVE_BOOT_COMPLETED\" />\n```\n\n### 2.2 ACTION_LOCKED_BOOT_COMPLETED\n\n完整值：\n\n```text\nandroid.intent.action.LOCKED_BOOT_COMPLETED\n```\n\nAndroid 7.0 引入 Direct Boot 后，设备开机但用户尚未解锁时，系统可以先发送此广播。\n\n它适用于必须在解锁前运行的功能，例如：\n\n- 闹钟；\n- 关键通知；\n- 电话、短信相关功能；\n- 必须在锁屏前恢复的系统服务。\n\n接收该广播时，组件必须配置：\n\n```xml\nandroid:directBootAware=\"true\"\n```\n\n并且只能访问设备加密存储（Device Encrypted Storage），不能直接访问尚未解锁的凭据加密存储。\n\n### 2.3 两个广播的关系\n\n支持 Direct Boot 的设备上，顺序通常是：\n\n```text\n开机\n  ↓\nLOCKED_BOOT_COMPLETED\n  ↓\n用户解锁\n  ↓\nBOOT_COMPLETED\n```\n\n如果同一个接收器同时监听两个 Action，就可能执行两次初始化。因此业务逻辑必须是幂等的，或者明确区分“解锁前初始化”和“解锁后初始化”。\n\n---\n\n## 3. BootReceiver 的完整使用流程\n\n### 3.1 声明权限\n\n```xml\n<uses-permission android:name=\"android.permission.RECEIVE_BOOT_COMPLETED\" />\n```\n\n### 3.2 在 Manifest 注册 Receiver\n\n```xml\n<receiver\n    android:name=\"core.BootReceiver\"\n    android:enabled=\"true\"\n    android:exported=\"true\">\n    <intent-filter>\n        <action android:name=\"android.intent.action.BOOT_COMPLETED\" />\n    </intent-filter>\n</receiver>\n```\n\n### 3.3 编写 Receiver\n\n```java\npackage core;\n\nimport android.content.BroadcastReceiver;\nimport android.content.Context;\nimport android.content.Intent;\n\npublic final class BootReceiver extends BroadcastReceiver {\n\n    @Override\n    public void onReceive(Context context, Intent intent) {\n        if (intent == null) {\n            return;\n        }\n\n        if (!Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {\n            return;\n        }\n\n        Intent serviceIntent =\n                new Intent(context, AlarmDeliveryProtocolService.class);\n        context.startService(serviceIntent);\n    }\n}\n```\n\n### 3.4 注册目标 Service\n\n```xml\n<service\n    android:name=\"core.AlarmDeliveryProtocolService\"\n    android:enabled=\"true\"\n    android:exported=\"false\" />\n```\n\n---\n\n## 4. 对示例代码的逐段讲解\n\n原始结构：\n\n```java\npublic class BootReceiver extends BroadcastReceiver {\n```\n\n说明该类是一个广播接收器，不能像普通 Java 类一样自己运行。只有系统或应用发送匹配广播后，Android 才会创建或调用它。\n\n### 4.1 STARTUP_DELAY_MILLIS\n\n```java\nprivate static final long STARTUP_DELAY_MILLIS = 5000;\n```\n\n表示收到开机广播后延迟 5 秒启动服务。\n\n目的通常是：\n\n- 避免开机瞬间争抢 CPU；\n- 避免与 PackageManager、SystemUI、网络服务等同时初始化；\n- 等待系统服务进一步稳定；\n- 减少开机阶段卡顿。\n\n但延迟不能只看业务需求，还必须考虑 `BroadcastReceiver` 生命周期和广播超时。\n\n### 4.2 sHasBooted\n\n```java\nprivate static boolean sHasBooted = false;\n```\n\n它只是在当前应用进程内保存状态。\n\n它不能真正代表“本次设备启动已经处理过”，原因是：\n\n1. 应用进程被杀后，静态变量会恢复为 `false`；\n2. 应用更新或进程重启后，状态丢失；\n3. 多进程应用中，不同进程有不同的静态变量；\n4. 它不能跨设备重启持久化；\n5. `BOOT_COMPLETED` 本来通常只发送一次，没有必要仅依靠静态变量去重。\n\n更可靠的原则是让 Service 的初始化逻辑具备幂等性。\n\n所谓幂等性，是指重复执行初始化不会造成：\n\n- 重复线程；\n- 重复网络连接；\n- 重复注册监听；\n- 重复闹钟；\n- 重复数据库写入；\n- 重复发送协议。\n\n### 4.3 判断广播 Action\n\n```java\nif (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {\n```\n\n这种写法比下面的写法安全：\n\n```java\nintent.getAction().equals(Intent.ACTION_BOOT_COMPLETED)\n```\n\n因为 `Intent.ACTION_BOOT_COMPLETED` 是非空常量，即使 `getAction()` 返回 `null` 也不会触发空指针异常。\n\n但仍建议先判断 `intent == null`。\n\n### 4.4 Handler 延迟启动\n\n```java\nnew Handler(Looper.getMainLooper()).postDelayed(() -> {\n    startAlarmService(context);\n}, STARTUP_DELAY_MILLIS);\n```\n\n这段代码看起来能够延迟 5 秒，但存在生命周期隐患。\n\n`onReceive()` 执行结束后，系统会认为广播已经处理完成。此时如果应用没有 Activity、Service 或其他活跃组件，系统可以回收应用进程。\n\n一旦进程在 5 秒内被回收，Handler 中的 Runnable 就不会执行，服务也不会启动。\n\n因此：\n\n```text\nHandler.postDelayed()\n```\n\n本身不等于可靠的后台调度。\n\n### 4.5 startService\n\n```java\ncontext.startService(serviceIntent);\n```\n\n在 Android 8.0 以前，这是常见写法。\n\nAndroid 8.0 开始引入后台服务限制。是否允许直接启动后台 Service，与以下条件有关：\n\n- Android 系统版本；\n- targetSdkVersion；\n- 应用当前前后台状态；\n- 是否为系统应用；\n- 是否处于临时白名单；\n- Service 是否为前台服务；\n- 厂商系统是否增加额外限制。\n\nManifest 中 `targetSdkVersion=\"25\"`，因此在 Android 8.1 上通常仍可沿用 `startService()`。\n\n但如果未来将 targetSdkVersion 提升到 26 或更高，就不能只保留现有设计，需要评估：\n\n- `startForegroundService()`；\n- Service 在规定时间内调用 `startForeground()`；\n- `JobScheduler`；\n- `WorkManager`；\n- `AlarmManager`；\n- 绑定服务或其他系统调度机制。\n\n---\n\n## 5. 原始代码存在的问题\n\n### 5.1 延迟任务可能不执行\n\n问题代码：\n\n```java\nnew Handler(Looper.getMainLooper()).postDelayed(...)\n```\n\n`onReceive()` 返回后，广播接收器生命周期结束，进程可能被回收。\n\n解决方案：\n\n- 使用 `goAsync()`，并在短时间任务结束后调用 `finish()`；\n- 或立即启动 Service，让 Service 自己延迟执行；\n- 或交给 JobScheduler、WorkManager、AlarmManager。\n\n### 5.2 静态变量不能可靠防重复\n\n```java\nprivate static boolean sHasBooted = false;\n```\n\n只在当前进程生命周期有效，不能作为跨进程或跨重启状态。\n\n建议：\n\n- 删除；\n- 或使用持久化状态；\n- 更推荐让服务初始化幂等。\n\n### 5.3 捕获 Receiver Context\n\n延迟 Runnable 直接持有 `onReceive()` 传入的 Context 不够稳妥。\n\n建议转换为：\n\n```java\nContext appContext = context.getApplicationContext();\n```\n\n### 5.4 Build 导入未使用\n\n原代码导入：\n\n```java\nimport android.os.Build;\n```\n\n但没有使用，会产生无意义代码或 IDE 警告。\n\n### 5.5 未支持 Direct Boot\n\n原 Receiver 没有：\n\n```xml\nandroid:directBootAware=\"true\"\n```\n\n也没有监听：\n\n```xml\nandroid.intent.action.LOCKED_BOOT_COMPLETED\n```\n\n所以只有在用户解锁、系统发送普通 `BOOT_COMPLETED` 后才运行。\n\n闹钟类应用是否需要解锁前运行，应根据产品要求决定。\n\n### 5.6 Service 启动兼容性不足\n\n未来 targetSdkVersion 提升后，直接从后台调用 `startService()` 可能抛出：\n\n```text\nIllegalStateException\n```\n\n但不能机械地改为 `startForegroundService()`。目标 Service 必须同步实现前台服务通知和 `startForeground()`。\n\n### 5.7 异常处理过于宽泛\n\n原代码：\n\n```java\ncatch (Exception e)\n```\n\n虽然不会漏掉常见异常，但不利于区分：\n\n- 权限问题；\n- 后台执行限制；\n- Service 声明错误；\n- 运行时初始化错误。\n\n建议分别捕获：\n\n```java\nSecurityException\nIllegalStateException\nRuntimeException\n```\n\n### 5.8 Service 可能被外部应用启动\n\n如果 Service 只供应用内部使用：\n\n```xml\nandroid:exported=\"true\"\n```\n\n会扩大攻击面。\n\n建议改为：\n\n```xml\nandroid:exported=\"false\"\n```\n\n除非确实需要其他应用显式调用该 Service，并且已经设计好权限保护。\n\n### 5.9 项目中可能存在重复的开机接收器\n\n一个应用可以注册多个 `BOOT_COMPLETED` Receiver。\n\n系统会分别调用每个匹配组件。如果多个 Receiver 都执行相同初始化，就可能产生：\n\n- 重复启动 Service；\n- 重复注册监听器；\n- 重复加载闹钟；\n- 重复连接服务器；\n- 重复发送协议；\n- 开机性能下降。\n\n开发时应全面搜索：\n\n```text\nandroid.intent.action.BOOT_COMPLETED\nandroid.intent.action.LOCKED_BOOT_COMPLETED\n```\n\n确认各 Receiver 的职责不重叠。\n\n---\n\n## 6. 推荐的可直接替换版本\n\n以下代码保持原来的设计：\n\n```text\n收到 BOOT_COMPLETED\n  ↓\n延迟 5 秒\n  ↓\n启动 AlarmDeliveryProtocolService\n```\n\n但增加了：\n\n- null 防护；\n- Action 白名单；\n- Application Context；\n- `goAsync()`；\n- `PendingResult.finish()`；\n- Android 8.0 后台服务兼容分支；\n- 分类型异常日志；\n- 清晰注释。\n\n```java\npackage core;\n\nimport android.content.BroadcastReceiver;\nimport android.content.Context;\nimport android.content.Intent;\nimport android.os.Build;\nimport android.os.Handler;\nimport android.os.Looper;\n\nimport utils.LogUtils;\n\npublic final class BootReceiver extends BroadcastReceiver {\n\n    private static final String TAG = \"BootReceiver\";\n    private static final long STARTUP_DELAY_MILLIS = 5_000L;\n    public static final String ACTION_START_FROM_BOOT =\n            \"com.android.deskclock.action.START_ALARM_PROTOCOL_FROM_BOOT\";\n\n    private static final Handler MAIN_HANDLER =\n            new Handler(Looper.getMainLooper());\n\n    @Override\n    public void onReceive(Context context, Intent intent) {\n        if (context == null) {\n            LogUtils.e(TAG, \"onReceive: context is null\");\n            return;\n        }\n\n        if (intent == null) {\n            LogUtils.e(TAG, \"onReceive: intent is null\");\n            return;\n        }\n\n        String action = intent.getAction();\n        if (!Intent.ACTION_BOOT_COMPLETED.equals(action)) {\n            LogUtils.d(TAG, \"Ignore unsupported action: \" + action);\n            return;\n        }\n\n        final Context appContext =\n                context.getApplicationContext() != null\n                        ? context.getApplicationContext()\n                        : context;\n\n        final PendingResult pendingResult = goAsync();\n\n        LogUtils.d(TAG,\n                \"BOOT_COMPLETED received, service will start after \"\n                        + STARTUP_DELAY_MILLIS + \" ms.\");\n\n        boolean posted = MAIN_HANDLER.postDelayed(new Runnable() {\n            @Override\n            public void run() {\n                try {\n                    startAlarmService(appContext);\n                } finally {\n                    pendingResult.finish();\n                }\n            }\n        }, STARTUP_DELAY_MILLIS);\n\n        if (!posted) {\n            LogUtils.e(TAG, \"Failed to post delayed task.\");\n            pendingResult.finish();\n        }\n    }\n\n    private static void startAlarmService(Context context) {\n        Intent serviceIntent =\n                new Intent(context, AlarmDeliveryProtocolService.class);\n        serviceIntent.setAction(ACTION_START_FROM_BOOT);\n\n        try {\n            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O\n                    && context.getApplicationInfo().targetSdkVersion\n                    >= Build.VERSION_CODES.O) {\n                context.startForegroundService(serviceIntent);\n            } else {\n                context.startService(serviceIntent);\n            }\n\n            LogUtils.d(TAG,\n                    \"AlarmDeliveryProtocolService start requested.\");\n        } catch (SecurityException e) {\n            LogUtils.e(TAG, \"Service start denied by permission.\", e);\n        } catch (IllegalStateException e) {\n            LogUtils.e(TAG,\n                    \"Service start blocked by background restriction.\", e);\n        } catch (RuntimeException e) {\n            LogUtils.e(TAG, \"Service start failed.\", e);\n        }\n    }\n}\n```\n\n---\n\n## 7. Service 需要配合实现的启动 Action\n\n`BootReceiver` 已经公开定义：\n\n```java\npublic static final String ACTION_START_FROM_BOOT =\n        \"com.android.deskclock.action.START_ALARM_PROTOCOL_FROM_BOOT\";\n```\n\nService 不判断该 Action 也可以正常启动。需要区分启动来源时，在 `onStartCommand()` 中判断：\n\n```java\n@Override\npublic int onStartCommand(Intent intent, int flags, int startId) {\n    String action = intent == null ? null : intent.getAction();\n\n    if (BootReceiver.ACTION_START_FROM_BOOT.equals(action)) {\n        initializeFromBoot();\n    }\n\n    return START_STICKY;\n}\n```\n\n初始化函数必须避免重复创建资源：\n\n```java\nprivate final Object mInitLock = new Object();\nprivate boolean mInitialized;\n\nprivate void initializeFromBoot() {\n    synchronized (mInitLock) {\n        if (mInitialized) {\n            LogUtils.d(TAG, \"Service already initialized, skip.\");\n            return;\n        }\n        mInitialized = true;\n    }\n\n    // 在工作线程中执行真正初始化。\n    // 不要在主线程执行网络连接、数据库扫描或大量文件 I/O。\n}\n```\n\n注意：上面的 `mInitialized` 只能防止同一个 Service 实例重复初始化。若进程重启后也必须避免重复操作，还要根据具体业务增加持久化状态、连接状态检查或任务唯一标识。\n\n---\n\n## 8. 推荐 Manifest\n\n```xml\n<uses-permission android:name=\"android.permission.RECEIVE_BOOT_COMPLETED\" />\n\n<application>\n\n    <receiver\n        android:name=\"core.BootReceiver\"\n        android:enabled=\"true\"\n        android:exported=\"true\">\n        <intent-filter>\n            <action android:name=\"android.intent.action.BOOT_COMPLETED\" />\n        </intent-filter>\n    </receiver>\n\n    <service\n        android:name=\"core.AlarmDeliveryProtocolService\"\n        android:enabled=\"true\"\n        android:exported=\"false\" />\n\n</application>\n```\n\n如果确实要在用户解锁前启动：\n\n```xml\n<receiver\n    android:name=\"core.BootReceiver\"\n    android:directBootAware=\"true\"\n    android:enabled=\"true\"\n    android:exported=\"true\">\n    <intent-filter>\n        <action android:name=\"android.intent.action.LOCKED_BOOT_COMPLETED\" />\n        <action android:name=\"android.intent.action.BOOT_COMPLETED\" />\n    </intent-filter>\n</receiver>\n\n<service\n    android:name=\"core.AlarmDeliveryProtocolService\"\n    android:directBootAware=\"true\"\n    android:enabled=\"true\"\n    android:exported=\"false\" />\n```\n\n此时必须确保 Service 在 Direct Boot 阶段只访问 Device Protected Storage。\n\n---\n\n## 9. 为什么不推荐在 Receiver 中做重业务\n\n`BroadcastReceiver` 是事件入口，而不是长期任务容器。\n\n不应在 `onReceive()` 中直接执行：\n\n- 网络请求；\n- Socket 长连接；\n- 数据库全表扫描；\n- 大量文件读写；\n- 睡眠等待；\n- 无限循环；\n- 线程阻塞；\n- Binder 长调用；\n- 大量对象初始化。\n\n正确职责应为：\n\n```text\nReceiver 接收事件\n  ↓\n校验 Action 和参数\n  ↓\n将任务交给 Service / JobScheduler / WorkManager\n  ↓\n立即结束 Receiver\n```\n\n---\n\n## 10. goAsync() 的作用和限制\n\n调用：\n\n```java\nPendingResult result = goAsync();\n```\n\n后，`onReceive()` 可以先返回，异步任务继续完成。\n\n任务完成后必须调用：\n\n```java\nresult.finish();\n```\n\n限制：\n\n1. `goAsync()` 不是长期后台执行许可；\n2. 仍必须在广播允许的时间窗口内完成；\n3. 不适合分钟级任务；\n4. 不适合网络长连接；\n5. 不调用 `finish()` 可能造成广播超时或 ANR；\n6. 5 秒延迟已经占用较多广播处理时间，不建议继续增加。\n\n如果希望延迟 30 秒、1 分钟或更久，应改用：\n\n- JobScheduler；\n- WorkManager；\n- AlarmManager；\n- 立即启动 Service 后由 Service 调度。\n\n---\n\n## 11. BootReceiver 的优点\n\n### 11.1 自动恢复\n\n无需用户打开应用，系统启动后即可恢复任务。\n\n### 11.2 适合系统状态初始化\n\n开机广播天然适合：\n\n- 闹钟恢复；\n- 定时任务恢复；\n- 系统协议初始化；\n- 状态监听恢复。\n\n### 11.3 实现简单\n\n只需权限、Manifest 和一个 Receiver。\n\n### 11.4 与应用 UI 解耦\n\n即使没有 Activity，也可以接收系统启动事件。\n\n---\n\n## 12. BootReceiver 的缺点\n\n### 12.1 增加开机负载\n\n所有应用同时响应开机广播，会产生 CPU、I/O 和内存峰值。\n\n### 12.2 不保证长期运行\n\n收到广播只代表获得一次短暂执行机会，不代表应用可以一直驻留后台。\n\n### 12.3 受系统版本和厂商策略影响\n\n后台限制、省电策略、自启动管理都可能影响行为。\n\n### 12.4 调试成本较高\n\n真实开机流程比普通 Activity 调试慢，且涉及：\n\n- 用户解锁状态；\n- 系统服务启动顺序；\n- 存储解密状态；\n- 多用户；\n- 应用停止状态；\n- 厂商开机优化。\n\n### 12.5 容易重复初始化\n\n同时监听多个启动广播，或项目中存在多个 Receiver 时，容易重复执行。\n\n---\n\n## 13. 开发注意事项\n\n### 13.1 Receiver 只做调度\n\n不要把业务核心代码写进 BootReceiver。\n\n### 13.2 Service 初始化必须幂等\n\n即使 Receiver 只收到一次广播，Service 仍可能因为：\n\n- 系统重启服务；\n- 应用更新；\n- 其他组件启动；\n- 异常重试；\n- 多个 Receiver；\n\n而多次进入初始化逻辑。\n\n### 13.3 不要依赖 static 变量保存开机状态\n\nstatic 只属于当前进程。\n\n### 13.4 区分 BOOT_COMPLETED 和 LOCKED_BOOT_COMPLETED\n\n不要在未解锁阶段访问普通 SharedPreferences、普通数据库或用户凭据文件。\n\n### 13.5 谨慎设置 exported\n\n只接收系统广播时可以导出 Receiver；内部 Service 通常不应导出。\n\n### 13.6 Android 8.0 以后检查后台服务限制\n\ntargetSdkVersion 升级时必须重新审查启动逻辑。\n\n### 13.7 Android 12 以后检查前台服务后台启动限制\n\n即使使用前台服务，也并非任何后台场景都允许启动。\n\n### 13.8 Android 14/15 检查前台服务类型限制\n\n部分前台服务类型不能从 `BOOT_COMPLETED` Receiver 启动，尤其涉及：\n\n- 相机；\n- 麦克风；\n- 媒体投影；\n- 通话；\n- 数据同步；\n- 媒体播放。\n\n具体限制取决于 Android 版本、targetSdkVersion 和前台服务类型。\n\n### 13.9 应用被强制停止后可能收不到\n\n应用进入 stopped 状态后，系统广播投递可能受到限制。普通应用通常至少需要被用户启动过一次。\n\n系统应用、预装应用和定制 AOSP 的行为还可能受产品配置影响。\n\n### 13.10 开机后网络不一定立即可用\n\n收到 `BOOT_COMPLETED` 不代表：\n\n- Wi-Fi 已连接；\n- 移动网络已注册；\n- DNS 可用；\n- 服务器可达；\n- Netcenter 已初始化。\n\n如果 Service 依赖网络，应实现：\n\n- 网络状态监听；\n- 指数退避重试；\n- 超时；\n- 去重；\n- 离线恢复。\n\n不能只依赖固定延迟 5 秒。\n\n---\n\n## 14. 项目中特别需要检查的内容\n\n当前 Manifest 中已经有一个 `AlarmInitReceiver`，并监听：\n\n```xml\nandroid.intent.action.BOOT_COMPLETED\nandroid.intent.action.LOCKED_BOOT_COMPLETED\n```\n\n同时又注册了：\n\n```xml\ncore.BootReceiver\n```\n\n监听：\n\n```xml\nandroid.intent.action.BOOT_COMPLETED\n```\n\n因此普通开机完成后，两个 Receiver 都会被系统调用。\n\n必须检查 `AlarmInitReceiver` 是否已经执行以下操作：\n\n- 启动 `AlarmDeliveryProtocolService`；\n- 初始化闹钟协议；\n- 恢复网络；\n- 注册闹钟；\n- 初始化数据库；\n- 加载全部闹钟。\n\n如果职责重复，建议二选一：\n\n1. 把协议服务启动逻辑合并到 `AlarmInitReceiver`；\n2. 保留独立 `BootReceiver`，但明确两个 Receiver 的职责边界。\n\n此外，当前 `AlarmDeliveryProtocolService` 设置为：\n\n```xml\nandroid:exported=\"true\"\n```\n\n如果它只通过应用内部显式 Intent 启动，建议改为：\n\n```xml\nandroid:exported=\"false\"\n```\n\n---\n\n## 15. 测试方法\n\n### 15.1 查看日志\n\n```bash\nadb logcat -c\nadb logcat -s BootReceiver AlarmDeliveryProtocolService\n```\n\n### 15.2 真实重启测试\n\n```bash\nadb reboot\n```\n\n重启后检查：\n\n```bash\nadb logcat -b all -d | grep -E \"BootReceiver|AlarmDeliveryProtocolService\"\n```\n\n### 15.3 手动发送开机广播\n\n在可调试 AOSP 或具有足够 shell 权限的设备上：\n\n```bash\nadb shell am broadcast \\\n  -a android.intent.action.BOOT_COMPLETED \\\n  -p com.android.deskclock\n```\n\n部分正式系统会限制手动发送受保护系统广播，此时应使用真实重启测试。\n\n### 15.4 检查组件注册\n\n```bash\nadb shell dumpsys package com.android.deskclock\n```\n\n搜索：\n\n```text\nBootReceiver\nBOOT_COMPLETED\nAlarmDeliveryProtocolService\n```\n\n### 15.5 检查服务状态\n\n```bash\nadb shell dumpsys activity services com.android.deskclock\n```\n\n### 15.6 检查重复启动\n\n在 Service 中记录：\n\n```java\nLogUtils.d(TAG,\n        \"onStartCommand, action=\" + action\n                + \", startId=\" + startId);\n```\n\n一次开机若出现多次初始化日志，应检查：\n\n- 是否两个 Receiver 都启动服务；\n- Service 是否返回 `START_STICKY` 后被系统重启；\n- 是否其他组件也在启动服务；\n- 是否同时处理 LOCKED_BOOT_COMPLETED 和 BOOT_COMPLETED。\n\n---\n\n## 16. 常见问题\n\n### 问题 1：为什么收不到 BOOT_COMPLETED？\n\n检查：\n\n1. 是否声明 `RECEIVE_BOOT_COMPLETED`；\n2. Receiver 名称和包路径是否正确；\n3. Receiver 是否被禁用；\n4. 应用是否处于 force-stop 状态；\n5. 是否真实完成启动和用户解锁；\n6. 是否被厂商自启动策略限制；\n7. 是否安装在正确用户；\n8. Logcat 是否被清空；\n9. 是否错误地只监听了 LOCKED_BOOT_COMPLETED；\n10. 是否使用了错误的 Manifest 合并结果。\n\n### 问题 2：日志显示收到广播，但 Service 没启动\n\n检查：\n\n1. Service 是否在 Manifest 注册；\n2. Service 类路径是否正确；\n3. 是否被后台执行限制拦截；\n4. 是否抛出 `SecurityException`；\n5. 是否抛出 `IllegalStateException`；\n6. Handler 延迟期间进程是否被回收；\n7. targetSdkVersion 是否已经升级；\n8. 前台服务是否及时调用 `startForeground()`。\n\n### 问题 3：服务启动了两次\n\n检查：\n\n1. 是否存在多个开机 Receiver；\n2. 是否同时监听两个启动广播；\n3. Service 是否被其他组件启动；\n4. Service 是否 `START_STICKY` 重启；\n5. 初始化逻辑是否缺少幂等保护。\n\n### 问题 4：解锁前访问数据库崩溃\n\n说明数据库位于 Credential Encrypted Storage，Direct Boot 阶段不可用。\n\n解决方式：\n\n- 推迟到 BOOT_COMPLETED；\n- 使用 Device Protected Storage；\n- 将必须提前访问的数据迁移到设备加密存储。\n\n---\n\n## 17. 总结\n\n`BootReceiver` 的正确定位是：\n\n```text\n开机事件入口，而不是后台业务容器。\n```\n\n可靠设计应遵循：\n\n```text\n系统广播\n  ↓\nBootReceiver 快速校验\n  ↓\nService / JobScheduler / WorkManager 接管\n  ↓\n业务逻辑幂等执行\n  ↓\n失败可重试，重复不产生副作用\n```\n\n针对当前示例，最重要的修改是：\n\n1. 不再使用普通 `Handler.postDelayed()` 后直接结束广播；\n2. 使用 `goAsync()` 并确保调用 `finish()`；\n3. 删除不可靠的静态开机标记；\n4. 使用 Application Context；\n5. 保持 Receiver 轻量；\n6. 检查现有 `AlarmInitReceiver` 是否与 `BootReceiver` 重复；\n7. 将内部 Service 的 `exported` 设置为 `false`；\n8. targetSdkVersion 升级时同步改造前台服务或任务调度方案。\n\n---\n\n## 18. 官方资料名称\n\n- Android Developers：BroadcastReceiver API Reference\n- Android Developers：Broadcasts overview\n- Android Developers：Background Execution Limits\n- Android Developers：Support Direct Boot mode\n- Android Developers：Restrictions on starting a foreground service from the background\n- Android Developers：Intent.ACTION_BOOT_COMPLETED",
+      "contentFormat": "markdown",
+      "readingMinutes": 29,
+      "attachments": []
+    },
+    {
       "title": "基于NAS当中Linux的消息推送",
       "slug": "基于nas当中linux实现微信小程序的消息推送",
       "date": "2026-07-09",
@@ -1135,6 +1152,101 @@
       "attachments": []
     },
     {
+      "title": "2026-07-14 文章发布记录",
+      "slug": "auto-deploy-20260714014313-posts",
+      "date": "2026-07-14",
+      "createdAt": "2026-07-14T01:43:13.829Z",
+      "updatedAt": "2026-07-14T01:43:13.829Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "文章"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 文章 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-14 文章发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-14T01:43:13.829Z\n2. 发布模块：文章\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“文章”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update posts content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
+    {
+      "title": "2026-07-14 文章发布记录",
+      "slug": "auto-deploy-20260714013941-posts",
+      "date": "2026-07-14",
+      "createdAt": "2026-07-14T01:39:41.390Z",
+      "updatedAt": "2026-07-14T01:39:41.390Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "文章"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 文章 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-14 文章发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-14T01:39:41.390Z\n2. 发布模块：文章\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“文章”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update posts content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
+    {
+      "title": "2026-07-10 模块发布记录",
+      "slug": "auto-deploy-20260710074559-modules",
+      "date": "2026-07-10",
+      "createdAt": "2026-07-10T07:45:59.891Z",
+      "updatedAt": "2026-07-10T07:45:59.891Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "模块"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 模块 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-10 模块发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-10T07:45:59.891Z\n2. 发布模块：模块\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“模块”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update modules content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
+    {
+      "title": "2026-07-10 模块发布记录",
+      "slug": "auto-deploy-20260710074322-modules",
+      "date": "2026-07-10",
+      "createdAt": "2026-07-10T07:43:22.679Z",
+      "updatedAt": "2026-07-10T07:43:22.679Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "模块"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 模块 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-10 模块发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-10T07:43:22.679Z\n2. 发布模块：模块\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“模块”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update modules content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
+    {
+      "title": "2026-07-10 模块发布记录",
+      "slug": "auto-deploy-20260710034321-modules",
+      "date": "2026-07-10",
+      "createdAt": "2026-07-10T03:43:21.578Z",
+      "updatedAt": "2026-07-10T03:43:21.578Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "模块"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 模块 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-10 模块发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-10T03:43:21.578Z\n2. 发布模块：模块\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“模块”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update modules content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
+    {
       "title": "修复 Android 超长文章渲染导致的 ANR",
       "slug": "devlog-android-anr-long-content-fix-20260710",
       "date": "2026-07-10",
@@ -1338,11 +1450,19 @@
     },
     "modules": [
       {
+        "id": "profile",
+        "label": "个人",
+        "href": "#profile",
+        "enabled": true,
+        "order": 10,
+        "surface": "top"
+      },
+      {
         "id": "posts",
         "label": "文章",
         "href": "#posts",
         "enabled": true,
-        "order": 10,
+        "order": 20,
         "surface": "top"
       },
       {
@@ -1350,7 +1470,7 @@
         "label": "代码库",
         "href": "#code",
         "enabled": true,
-        "order": 20,
+        "order": 30,
         "surface": "top"
       },
       {
@@ -1358,21 +1478,13 @@
         "label": "工具库",
         "href": "#tools",
         "enabled": true,
-        "order": 30,
+        "order": 40,
         "surface": "top"
       },
       {
         "id": "devlogs",
         "label": "开发日志",
         "href": "#devlogs",
-        "enabled": false,
-        "order": 40,
-        "surface": "top"
-      },
-      {
-        "id": "profile",
-        "label": "个人",
-        "href": "#profile",
         "enabled": true,
         "order": 50,
         "surface": "top"
@@ -1390,7 +1502,7 @@
         "label": "管理",
         "href": "./admin.html",
         "enabled": true,
-        "order": 100,
+        "order": 70,
         "surface": "top",
         "external": true
       }
