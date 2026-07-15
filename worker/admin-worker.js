@@ -72,7 +72,7 @@ export default {
       }
       if (url.pathname === "/api/assets" && request.method === "POST") {
         await requireSession(request, env);
-        const body = await readRequestJson(request, "附件数据");
+        const body = await readAssetRequest(request);
         const asset = await writeGitHubAsset(env, body);
         return json({ ok: true, ...asset }, request, env);
       }
@@ -87,6 +87,27 @@ export default {
 async function getVisits(request, env) {
   const data = await readVisitStats(env);
   return json({ ok: true, data }, request, env);
+}
+
+async function readAssetRequest(request) {
+  const type = request.headers.get("content-type") || "";
+  if (type.includes("multipart/form-data")) {
+    const form = await request.formData();
+    const file = form.get("file");
+    if (!file || typeof file.arrayBuffer !== "function") {
+      throw httpError(400, "没有选择附件文件。");
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (!bytes.length) throw httpError(400, "附件为空。");
+    return {
+      bucket: form.get("bucket") || "tools",
+      fileName: file.name || "attachment",
+      mimeType: file.type || "application/octet-stream",
+      contentBase64: base64EncodeBytes(bytes),
+      size: bytes.length,
+    };
+  }
+  return readRequestJson(request, "附件数据");
 }
 
 async function recordVisit(request, env) {
@@ -475,10 +496,8 @@ async function writeGitHubAsset(env, body = {}) {
   const info = githubInfo(env);
   const fileName = safeFileName(body.fileName || "attachment");
   const bucket = safePathSegment(body.bucket || "tools");
-  const dataUrl = String(body.dataUrl || "");
-  const match = dataUrl.match(/^data:([^;,]+)?(?:;[^,]*)?;base64,(.+)$/);
-  if (!match) throw httpError(400, "附件数据格式无效。");
-  const content = match[2].replace(/\s/g, "");
+  const parsed = parseAssetBody(body);
+  const content = parsed.content;
   if (!content) throw httpError(400, "附件为空。");
   const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
   const path = `public-assets/${bucket}/${stamp}-${fileName}`;
@@ -496,11 +515,31 @@ async function writeGitHubAsset(env, body = {}) {
   return {
     path,
     fileName,
-    mimeType: body.mimeType || match[1] || "application/octet-stream",
-    size: Math.floor((content.length * 3) / 4),
+    mimeType: parsed.mimeType,
+    size: parsed.size,
     url: publicAssetUrl(env, path),
     rawUrl: result.content?.download_url || rawGitHubAssetUrl(info, path),
     commitSha: result.commit?.sha || "",
+  };
+}
+
+function parseAssetBody(body = {}) {
+  if (body.contentBase64) {
+    const content = String(body.contentBase64 || "").replace(/\s/g, "");
+    return {
+      content,
+      mimeType: body.mimeType || "application/octet-stream",
+      size: Number(body.size || Math.floor((content.length * 3) / 4)),
+    };
+  }
+  const dataUrl = String(body.dataUrl || "");
+  const match = dataUrl.match(/^data:([^;,]+)?(?:;[^,]*)?;base64,(.+)$/);
+  if (!match) throw httpError(400, "附件数据格式无效。");
+  const content = match[2].replace(/\s/g, "");
+  return {
+    content,
+    mimeType: body.mimeType || match[1] || "application/octet-stream",
+    size: Math.floor((content.length * 3) / 4),
   };
 }
 
@@ -798,6 +837,15 @@ function fromBase64(value) {
 
 function toBase64(value) {
   return btoa(unescape(encodeURIComponent(value)));
+}
+
+function base64EncodeBytes(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.slice(index, index + chunkSize));
+  }
+  return btoa(binary);
 }
 
 function base64UrlEncode(value) {

@@ -1115,6 +1115,26 @@
   ],
   "devLogs": [
     {
+      "title": "修复工具附件上传导致 Chrome Out of Memory",
+      "slug": "devlog-tool-upload-oom-multipart-fix-20260715",
+      "date": "2026-07-15",
+      "createdAt": "2026-07-15T11:35:00.000+08:00",
+      "updatedAt": "2026-07-15T11:35:00.000+08:00",
+      "tags": [
+        "开发日志",
+        "工具库",
+        "附件上传",
+        "OOM"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "工具附件上传从 FileReader dataUrl/base64 改为 multipart/form-data，避免大文件在浏览器内存中膨胀导致标签页崩溃。",
+      "content": "## 背景\n\n后台工具库上传附件时，Chrome 标签页直接崩溃，页面提示：\n\n    Out of Memory\n\n崩溃发生在：\n\n    https://galphrui.github.io/ralphrong/admin.html#tools\n\n## 根因\n\n原来的工具附件上传流程是：\n\n1. 浏览器用 FileReader.readAsDataURL(file) 读取整个文件。\n2. 文件被转换成 dataUrl/base64 字符串。\n3. base64 会比原文件大约多 33%。\n4. 再把这个巨大字符串放进 JSON 请求体。\n5. Chrome 标签页需要同时持有原 File、base64 字符串、JSON 字符串和 fetch 请求体。\n\n工具库设计目标是存放附件，不应该用文章 2MB 内嵌附件那套 dataUrl 方式。大文件一旦转 base64，很容易把浏览器内存撑爆。\n\n## 修复内容\n\n1. admin.js 中工具附件上传改为 FormData。\n2. 前端不再调用 fileToDataUrl(file) 上传工具附件。\n3. raApi 支持 FormData 请求，不再强制设置 Content-Type: application/json。\n4. 浏览器会自动使用 multipart/form-data，并带上 boundary。\n5. worker/admin-worker.js 的 /api/assets 支持 multipart/form-data。\n6. Worker 从 formData 中读取 File，在服务端转 base64 后写入 GitHub Contents API。\n7. local-admin-server.mjs 也支持 multipart/form-data，保证本地后台和线上后台一致。\n8. admin.html 更新 admin.js 版本号，避免浏览器继续加载旧上传逻辑。\n\n## 修改文件\n\n    admin.html\n    admin.js\n    worker/admin-worker.js\n    local-admin-server.mjs\n    data/posts.json\n    RaAndroidNotesApp/app/src/main/assets/offline-posts.json\n\n## 验证命令\n\n    node --check admin.js\n    node --check worker/admin-worker.js\n    node --check local-admin-server.mjs\n    ./node_modules/.bin/vite build\n\n验证结果：全部通过。\n\n## 上线注意\n\n这次不仅改了前台后台静态文件，也改了 Cloudflare Worker。\n\n所以必须完成两步：\n\n1. git push origin main，等待 GitHub Pages 部署成功。\n2. 执行 npx wrangler deploy，把 worker/admin-worker.js 部署到 Cloudflare。\n\n如果只完成第 1 步，后台页面会发 multipart 请求，但线上 Worker 仍按旧 JSON dataUrl 读取，会导致上传失败。\n\n## 后续使用方式\n\n1. 打开后台。\n2. 进入工具库。\n3. 点击选择文件并上传到 GitHub。\n4. 选择工具附件。\n5. 页面不再先把附件转成 dataUrl，因此不会因为浏览器 base64 内存膨胀直接崩溃。\n6. 上传成功后保存工具，再保存并发布。",
+      "contentFormat": "markdown",
+      "readingMinutes": 4,
+      "attachments": []
+    },
+    {
       "title": "修复 Android 超长文章渲染导致的 ANR",
       "slug": "devlog-android-anr-long-content-fix-20260710",
       "date": "2026-07-10",

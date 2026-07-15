@@ -181,7 +181,7 @@ async function handleApi(request, response) {
 
   if (url.pathname === "/api/assets" && request.method === "POST") {
     requireSession(request);
-    const body = await readJson(request);
+    const body = await readAssetRequest(request);
     const asset = await writeAssetFile(body);
     const deploy = await deployDataFiles([asset.path], `chore: upload asset ${asset.fileName}`);
     sendJson(response, 200, { ok: true, ...asset, deploy });
@@ -520,10 +520,8 @@ async function deployDataFiles(files, message) {
 async function writeAssetFile(body = {}) {
   const fileName = safeFileName(body.fileName || "attachment");
   const bucket = safePathSegment(body.bucket || "tools");
-  const dataUrl = String(body.dataUrl || "");
-  const match = dataUrl.match(/^data:([^;,]+)?(?:;[^,]*)?;base64,(.+)$/);
-  if (!match) throw httpError(400, "附件数据格式无效。");
-  const bytes = Buffer.from(match[2], "base64");
+  const parsed = parseAssetBody(body);
+  const bytes = parsed.bytes;
   if (!bytes.length) throw httpError(400, "附件为空。");
   const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
   const relativePath = `public-assets/${bucket}/${stamp}-${fileName}`;
@@ -533,10 +531,26 @@ async function writeAssetFile(body = {}) {
   return {
     path: relativePath,
     fileName,
-    mimeType: body.mimeType || match[1] || "application/octet-stream",
+    mimeType: parsed.mimeType,
     size: bytes.length,
     url: publicAssetUrl(relativePath),
     rawUrl: publicAssetUrl(relativePath),
+  };
+}
+
+function parseAssetBody(body = {}) {
+  if (body.contentBase64) {
+    return {
+      bytes: Buffer.from(String(body.contentBase64 || "").replace(/\s/g, ""), "base64"),
+      mimeType: body.mimeType || "application/octet-stream",
+    };
+  }
+  const dataUrl = String(body.dataUrl || "");
+  const match = dataUrl.match(/^data:([^;,]+)?(?:;[^,]*)?;base64,(.+)$/);
+  if (!match) throw httpError(400, "附件数据格式无效。");
+  return {
+    bytes: Buffer.from(match[2], "base64"),
+    mimeType: body.mimeType || match[1] || "application/octet-stream",
   };
 }
 
@@ -609,6 +623,57 @@ async function readJson(request) {
   const chunks = [];
   for await (const chunk of request) chunks.push(chunk);
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+}
+
+async function readAssetRequest(request) {
+  const type = request.headers["content-type"] || "";
+  if (!type.includes("multipart/form-data")) return readJson(request);
+  const boundaryMatch = type.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!boundaryMatch) throw httpError(400, "附件表单缺少 boundary。");
+  const chunks = [];
+  for await (const chunk of request) chunks.push(chunk);
+  const parts = parseMultipart(Buffer.concat(chunks), boundaryMatch[1] || boundaryMatch[2]);
+  const file = parts.find((part) => part.name === "file" && part.fileName);
+  if (!file) throw httpError(400, "没有选择附件文件。");
+  if (!file.data.length) throw httpError(400, "附件为空。");
+  const bucket = parts.find((part) => part.name === "bucket")?.data.toString("utf8") || "tools";
+  return {
+    bucket,
+    fileName: file.fileName,
+    mimeType: file.contentType || "application/octet-stream",
+    contentBase64: file.data.toString("base64"),
+    size: file.data.length,
+  };
+}
+
+function parseMultipart(buffer, boundary) {
+  const marker = Buffer.from(`--${boundary}`);
+  const parts = [];
+  let cursor = buffer.indexOf(marker);
+  while (cursor >= 0) {
+    cursor += marker.length;
+    if (buffer[cursor] === 45 && buffer[cursor + 1] === 45) break;
+    if (buffer[cursor] === 13 && buffer[cursor + 1] === 10) cursor += 2;
+    const headerEnd = buffer.indexOf(Buffer.from("\r\n\r\n"), cursor);
+    if (headerEnd < 0) break;
+    const headers = buffer.slice(cursor, headerEnd).toString("utf8");
+    const next = buffer.indexOf(marker, headerEnd + 4);
+    if (next < 0) break;
+    let dataEnd = next;
+    if (buffer[dataEnd - 2] === 13 && buffer[dataEnd - 1] === 10) dataEnd -= 2;
+    const disposition = headers.match(/content-disposition:[^\n]*name="([^"]+)"(?:;[^\n]*filename="([^"]*)")?/i);
+    if (disposition) {
+      const contentType = headers.match(/content-type:\s*([^\r\n]+)/i);
+      parts.push({
+        name: disposition[1],
+        fileName: disposition[2] || "",
+        contentType: contentType ? contentType[1].trim() : "",
+        data: buffer.slice(headerEnd + 4, dataEnd),
+      });
+    }
+    cursor = next;
+  }
+  return parts;
 }
 
 function sendJson(response, status, body) {

@@ -1961,15 +1961,12 @@ async function uploadAssetAttachment(file, bucket = "tools") {
   if (!RA_API_BASE) {
     throw new Error("后台 API 未配置，无法上传到 GitHub。请检查 admin-config.js 的 BLOG_ADMIN_API_BASE。");
   }
-  const dataUrl = await fileToDataUrl(file);
+  const form = new FormData();
+  form.append("bucket", bucket);
+  form.append("file", file, file.name);
   const result = await raApi("/api/assets", {
     method: "POST",
-    body: JSON.stringify({
-      bucket,
-      fileName: file.name,
-      mimeType: file.type || "application/octet-stream",
-      dataUrl,
-    }),
+    body: form,
   });
   const url = result.url || result.asset?.url || "";
   if (!url) throw new Error("后台上传成功但没有返回附件下载地址。");
@@ -3065,15 +3062,17 @@ async function raApi(path, options = {}) {
   if (!RA_API_BASE) throw new Error("后台 API 未配置。");
   const endpoint = `${RA_API_BASE}${path}`;
   let response;
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const headers = {
+    ...authHeaders(),
+    ...(options.headers || {}),
+  };
+  if (!isFormData) headers["Content-Type"] = "application/json";
   try {
     response = await fetch(endpoint, {
       method: options.method || "GET",
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders(),
-        ...(options.headers || {}),
-      },
+      headers,
       body: options.body,
     });
   } catch (error) {
