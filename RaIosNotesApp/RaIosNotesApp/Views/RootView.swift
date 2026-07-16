@@ -290,7 +290,9 @@ struct CodeRepositoryDetailView: View {
 private func codeTempFileURL(for repo: CodeRepository) -> URL? {
     let snippet = formatCodeSnippet(repo.snippet ?? "", language: repo.language)
     guard !snippet.isEmpty, let data = snippet.data(using: .utf8) else { return nil }
-    let fileName = safeFileName(repo.name.isEmpty ? repo.id : repo.name) + "." + codeExtension(repo.language)
+    let preferredName = repo.fileName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let baseName = safeFileName(preferredName.isEmpty ? (repo.name.isEmpty ? repo.id : repo.name) : preferredName)
+    let fileName = baseName.contains(".") ? baseName : baseName + "." + codeExtension(repo.language)
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
     try? data.write(to: url, options: .atomic)
     return url

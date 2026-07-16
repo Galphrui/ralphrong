@@ -158,6 +158,7 @@ const RaEls = {
   docPublish: document.querySelector("#RaDocPublishButton"),
   codeList: document.querySelector("#RaCodeList"),
   codeName: document.querySelector("#RaCodeNameInput"),
+  codeFileName: document.querySelector("#RaCodeFileNameInput"),
   codeLanguagePreset: document.querySelector("#RaCodeLanguagePresetInput"),
   codeLanguage: document.querySelector("#RaCodeLanguageInput"),
   codeTags: document.querySelector("#RaCodeTagsInput"),
@@ -2161,13 +2162,30 @@ function codeLanguageExtension(language) {
 }
 
 function codeFileName(item = {}) {
-  return `${slugify(item.name || item.id || "code-snippet")}.${codeLanguageExtension(item.language)}`;
+  const extension = codeLanguageExtension(item.language);
+  const rawName = String(item.fileName || "").trim();
+  if (rawName) {
+    const cleanName = safeDownloadFileName(rawName);
+    if (cleanName.includes(".")) return cleanName;
+    return `${cleanName}.${extension}`;
+  }
+  return `${slugify(item.name || item.id || "code-snippet")}.${extension}`;
+}
+
+function safeDownloadFileName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/^\.+|\.+$/g, "")
+    .slice(0, 120) || "code-snippet";
 }
 
 function normalizeCodeRepositories(value) {
   return (Array.isArray(value) ? value : []).map((repo) => ({
     id: repo.id || slugify(repo.name || `code-${Date.now()}`),
     name: repo.name || "未命名代码",
+    fileName: repo.fileName || "",
     description: repo.description || "",
     language: normalizeCodeLanguage(repo.language || "Plain Text"),
     tags: normalizeTags(Array.isArray(repo.tags) ? repo.tags : parseTags(repo.tags)),
@@ -2282,6 +2300,7 @@ function selectCodeItem(id) {
   const item = repositories.find((repo) => repo.id === id) || createEmptyCodeItem();
   RaSelectedCodeId = item.id || "";
   RaEls.codeName.value = item.name || "";
+  if (RaEls.codeFileName) RaEls.codeFileName.value = item.fileName || "";
   selectCodeLanguage(item.language || "");
   setCodeEditorTags(item.tags || []);
   RaEls.codePath.value = item.sourcePath || "";
@@ -2298,6 +2317,7 @@ function createEmptyCodeItem() {
   return {
     id: "",
     name: "",
+    fileName: "",
     description: "",
     language: "Code",
     tags: [],
@@ -2320,6 +2340,7 @@ function saveCodeItem() {
   const item = {
     id: RaSelectedCodeId || slugify(RaEls.codeName.value || `code-${Date.now()}`),
     name: RaEls.codeName.value.trim(),
+    fileName: RaEls.codeFileName?.value.trim() || "",
     description: RaEls.codeDescription.value.trim(),
     language: currentCodeLanguage(),
     tags: getCodeEditorTags(),
@@ -2671,6 +2692,7 @@ function downloadCurrentCodeSnippet() {
   const item = {
     id: RaSelectedCodeId || "",
     name: RaEls.codeName.value.trim() || "code-snippet",
+    fileName: RaEls.codeFileName?.value.trim() || "",
     language,
     snippet: RaEls.codeSnippet.value,
   };

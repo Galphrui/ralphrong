@@ -167,6 +167,7 @@ const normalizeAttachments = (attachments) =>
 const normalizeRepository = (repo) => ({
   id: repo.id || repo.slug || repo.name || `repo-${Math.random().toString(36).slice(2)}`,
   name: repo.name || '未命名代码库',
+  fileName: repo.fileName || '',
   description: repo.description || '',
   language: repo.language || 'Code',
   tags: Array.isArray(repo.tags) ? repo.tags : [],

@@ -42,6 +42,7 @@ struct Site: Codable {
 struct CodeRepository: Codable, Identifiable, Hashable {
     var id: String
     var name: String
+    var fileName: String?
     var description: String
     var language: String
     var tags: [String]

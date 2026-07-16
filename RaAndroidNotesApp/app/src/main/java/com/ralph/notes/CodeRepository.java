@@ -6,6 +6,7 @@ import java.util.List;
 public class CodeRepository {
     public String id = "";
     public String name = "";
+    public String fileName = "";
     public String description = "";
     public String language = "";
     public String url = "";

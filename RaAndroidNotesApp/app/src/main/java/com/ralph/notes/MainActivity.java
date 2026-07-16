@@ -1249,7 +1249,9 @@ public class MainActivity extends Activity {
     }
 
     private String codeFileName(CodeRepository repo) {
-        String base = sanitizeFileName(repo.name == null || repo.name.isEmpty() ? repo.id : repo.name);
+        String preferred = repo.fileName == null || repo.fileName.trim().isEmpty() ? repo.name : repo.fileName;
+        String base = sanitizeFileName(preferred == null || preferred.trim().isEmpty() ? repo.id : preferred.trim());
+        if (base.contains(".")) return base;
         return base + "." + codeExtension(repo.language);
     }
 

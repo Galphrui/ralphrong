@@ -55,8 +55,13 @@ export function codeLanguageExtension(language) {
 }
 
 export function codeFileName(repo) {
+  const extension = codeLanguageExtension(repo?.language)
+  const fileName = safeDownloadFileName(repo?.fileName || '')
+  if (fileName) {
+    return fileName.includes('.') ? fileName : `${fileName}.${extension}`
+  }
   const name = slugify(repo?.name || repo?.id || 'code-snippet')
-  return `${name}.${codeLanguageExtension(repo?.language)}`
+  return `${name}.${extension}`
 }
 
 export function codeDownloadHref(repo) {
@@ -138,4 +143,13 @@ function slugify(value) {
     .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80) || 'code-snippet'
+}
+
+function safeDownloadFileName(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, ' ')
+    .replace(/^\.+|\.+$/g, '')
+    .slice(0, 120)
 }
