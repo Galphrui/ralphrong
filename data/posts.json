@@ -1036,8 +1036,60 @@
   ],
   "repositories": [
     {
+      "id": "代码梳理工具",
+      "name": "代码梳理工具",
+      "fileName": "export_android_project.py",
+      "description": "python export_android_project.py E:\\Sgtc_Git_App\\NewApp_Sleep\\SgtcPrivacyManager",
+      "language": "Python",
+      "tags": [
+        "工具",
+        "Python"
+      ],
+      "url": "",
+      "sourcePath": "",
+      "updatedAt": "2026-07-16",
+      "snippet": "#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n\n\"\"\"\nAndroid 项目代码导出工具\n\n功能：\n1. 导出 Android 项目的目录层级结构。\n2. 将源码、XML、Gradle、配置文件等内容汇总到一个 Markdown 文档。\n3. 自动忽略 .git、build、out、.gradle、IDE 缓存、二进制文件等。\n4. 支持指定输出文件、额外排除目录、单文件大小限制、总输出大小限制。\n5. 支持 Windows、Linux、macOS。\n\n使用示例：\n\n    python export_android_project.py /path/to/android_project\n\n    python export_android_project.py /path/to/android_project -o project_export.md\n\n    python export_android_project.py /path/to/android_project \\\n        --exclude vendor/prebuilts \\\n        --exclude app/src/main/res/drawable \\\n        --max-file-size 2048 \\\n        --max-total-size 100\n\n参数说明：\n    project_dir             Android 项目根目录\n    -o, --output            输出 Markdown 文件路径\n    --exclude               额外排除的相对路径，可重复使用\n    --include-hidden        是否包含隐藏文件和隐藏目录\n    --follow-symlinks       是否跟随符号链接\n    --max-file-size         单个文件最大导出大小，单位 KB，默认 1024 KB\n    --max-total-size        输出文件最大大小，单位 MB，默认 200 MB\n    --tree-only             只导出目录树，不导出文件内容\n    --no-tree               不导出目录树，只导出文件内容\n    --extensions            仅导出指定扩展名，例如：\n                            --extensions .java .kt .xml .gradle\n    --include-no-extension  包含没有扩展名的文本文件\n\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport os\nimport sys\nfrom dataclasses import dataclass\nfrom datetime import datetime\nfrom pathlib import Path\nfrom typing import Iterable, Iterator, Optional, Sequence\n\n\nDEFAULT_EXCLUDED_DIR_NAMES = {\n    \".git\",\n    \".svn\",\n    \".hg\",\n    \".idea\",\n    \".gradle\",\n    \".cxx\",\n    \".externalNativeBuild\",\n    \".kotlin\",\n    \".settings\",\n    \".vscode\",\n    \"__pycache__\",\n    \"build\",\n    \"out\",\n    \"target\",\n    \"bin\",\n    \"obj\",\n    \"dist\",\n    \"node_modules\",\n    \"captures\",\n    \"generated\",\n    \"intermediates\",\n    \"outputs\",\n    \"tmp\",\n    \"temp\",\n}\n\nDEFAULT_EXCLUDED_FILE_NAMES = {\n    \".DS_Store\",\n    \"Thumbs.db\",\n    \"desktop.ini\",\n    \"local.properties\",\n}\n\nDEFAULT_TEXT_EXTENSIONS = {\n    # Android / Java / Kotlin\n    \".java\",\n    \".kt\",\n    \".kts\",\n    \".aidl\",\n    \".rs\",\n\n    # XML / UI / resources\n    \".xml\",\n    \".xsd\",\n    \".xsl\",\n    \".xslt\",\n    \".html\",\n    \".htm\",\n    \".css\",\n    \".scss\",\n    \".less\",\n\n    # Gradle / build\n    \".gradle\",\n    \".groovy\",\n    \".properties\",\n    \".toml\",\n    \".mk\",\n    \".bp\",\n    \".bazel\",\n    \".bzl\",\n    \".cmake\",\n    \".ninja\",\n\n    # C / C++\n    \".c\",\n    \".cc\",\n    \".cpp\",\n    \".cxx\",\n    \".h\",\n    \".hh\",\n    \".hpp\",\n    \".hxx\",\n    \".m\",\n    \".mm\",\n\n    # Script\n    \".py\",\n    \".sh\",\n    \".bash\",\n    \".zsh\",\n    \".fish\",\n    \".bat\",\n    \".cmd\",\n    \".ps1\",\n    \".pl\",\n    \".rb\",\n    \".php\",\n    \".lua\",\n\n    # Data / config\n    \".json\",\n    \".json5\",\n    \".yaml\",\n    \".yml\",\n    \".ini\",\n    \".conf\",\n    \".cfg\",\n    \".config\",\n    \".env\",\n    \".csv\",\n    \".tsv\",\n    \".sql\",\n    \".proto\",\n    \".graphql\",\n\n    # Documentation / text\n    \".md\",\n    \".markdown\",\n    \".txt\",\n    \".rst\",\n    \".adoc\",\n    \".log\",\n\n    # Web / frontend\n    \".js\",\n    \".jsx\",\n    \".ts\",\n    \".tsx\",\n    \".vue\",\n    \".svelte\",\n\n    # Misc project files\n    \".pro\",\n    \".pri\",\n    \".manifest\",\n    \".rc\",\n    \".te\",\n    \".cil\",\n    \".map\",\n    \".patch\",\n    \".diff\",\n}\n\nKNOWN_TEXT_FILE_NAMES = {\n    \"AndroidManifest.xml\",\n    \"Android.bp\",\n    \"Android.mk\",\n    \"Application.mk\",\n    \"CMakeLists.txt\",\n    \"Makefile\",\n    \"makefile\",\n    \"Dockerfile\",\n    \"Jenkinsfile\",\n    \"gradlew\",\n    \"gradle.properties\",\n    \"settings.gradle\",\n    \"settings.gradle.kts\",\n    \"build.gradle\",\n    \"build.gradle.kts\",\n    \"proguard-rules.pro\",\n    \"consumer-rules.pro\",\n    \"README\",\n    \"LICENSE\",\n    \"NOTICE\",\n    \".gitignore\",\n    \".gitattributes\",\n    \".editorconfig\",\n}\n\nBINARY_EXTENSIONS = {\n    \".apk\",\n    \".aab\",\n    \".aar\",\n    \".jar\",\n    \".dex\",\n    \".class\",\n    \".so\",\n    \".a\",\n    \".o\",\n    \".obj\",\n    \".lib\",\n    \".dll\",\n    \".exe\",\n    \".bin\",\n    \".img\",\n    \".iso\",\n    \".zip\",\n    \".rar\",\n    \".7z\",\n    \".tar\",\n    \".gz\",\n    \".bz2\",\n    \".xz\",\n    \".pdf\",\n    \".doc\",\n    \".docx\",\n    \".xls\",\n    \".xlsx\",\n    \".ppt\",\n    \".pptx\",\n    \".png\",\n    \".jpg\",\n    \".jpeg\",\n    \".gif\",\n    \".bmp\",\n    \".webp\",\n    \".ico\",\n    \".svgz\",\n    \".mp3\",\n    \".wav\",\n    \".ogg\",\n    \".mp4\",\n    \".mkv\",\n    \".avi\",\n    \".mov\",\n    \".ttf\",\n    \".otf\",\n    \".woff\",\n    \".woff2\",\n    \".keystore\",\n    \".jks\",\n    \".pk8\",\n    \".pem\",\n    \".der\",\n    \".crt\",\n    \".cer\",\n    \".db\",\n    \".sqlite\",\n    \".sqlite3\",\n}\n\nLANGUAGE_BY_EXTENSION = {\n    \".java\": \"java\",\n    \".kt\": \"kotlin\",\n    \".kts\": \"kotlin\",\n    \".xml\": \"xml\",\n    \".gradle\": \"groovy\",\n    \".groovy\": \"groovy\",\n    \".properties\": \"properties\",\n    \".toml\": \"toml\",\n    \".json\": \"json\",\n    \".json5\": \"json\",\n    \".yaml\": \"yaml\",\n    \".yml\": \"yaml\",\n    \".c\": \"c\",\n    \".h\": \"c\",\n    \".cc\": \"cpp\",\n    \".cpp\": \"cpp\",\n    \".cxx\": \"cpp\",\n    \".hpp\": \"cpp\",\n    \".hh\": \"cpp\",\n    \".hxx\": \"cpp\",\n    \".m\": \"objective-c\",\n    \".mm\": \"objective-cpp\",\n    \".py\": \"python\",\n    \".sh\": \"bash\",\n    \".bash\": \"bash\",\n    \".zsh\": \"bash\",\n    \".bat\": \"bat\",\n    \".cmd\": \"bat\",\n    \".ps1\": \"powershell\",\n    \".js\": \"javascript\",\n    \".jsx\": \"jsx\",\n    \".ts\": \"typescript\",\n    \".tsx\": \"tsx\",\n    \".html\": \"html\",\n    \".htm\": \"html\",\n    \".css\": \"css\",\n    \".scss\": \"scss\",\n    \".less\": \"less\",\n    \".md\": \"markdown\",\n    \".markdown\": \"markdown\",\n    \".sql\": \"sql\",\n    \".proto\": \"protobuf\",\n    \".diff\": \"diff\",\n    \".patch\": \"diff\",\n    \".mk\": \"makefile\",\n    \".bp\": \"text\",\n    \".cmake\": \"cmake\",\n}\n\n\n@dataclass\nclass ExportConfig:\n    root: Path\n    output: Path\n    extra_excludes: tuple[Path, ...]\n    include_hidden: bool\n    follow_symlinks: bool\n    max_file_size_bytes: int\n    max_total_size_bytes: int\n    tree_only: bool\n    no_tree: bool\n    allowed_extensions: Optional[set[str]]\n    include_no_extension: bool\n\n\n@dataclass\nclass ExportStats:\n    scanned_files: int = 0\n    exported_files: int = 0\n    skipped_files: int = 0\n    binary_files: int = 0\n    oversized_files: int = 0\n    unreadable_files: int = 0\n    total_source_bytes: int = 0\n\n\nclass SizeLimitReached(Exception):\n    \"\"\"输出总大小达到限制。\"\"\"\n\n\ndef parse_arguments() -> argparse.Namespace:\n    parser = argparse.ArgumentParser(\n        description=\"导出 Android 项目的目录结构和全部文本代码到 Markdown 文档。\"\n    )\n    parser.add_argument(\n        \"project_dir\",\n        type=Path,\n        help=\"Android 项目根目录\",\n    )\n    parser.add_argument(\n        \"-o\",\n        \"--output\",\n        type=Path,\n        default=None,\n        help=\"输出 Markdown 文件路径，默认生成在当前目录\",\n    )\n    parser.add_argument(\n        \"--exclude\",\n        action=\"append\",\n        default=[],\n        help=\"额外排除的项目相对路径，可重复使用\",\n    )\n    parser.add_argument(\n        \"--include-hidden\",\n        action=\"store_true\",\n        help=\"包含隐藏文件和隐藏目录\",\n    )\n    parser.add_argument(\n        \"--follow-symlinks\",\n        action=\"store_true\",\n        help=\"跟随符号链接\",\n    )\n    parser.add_argument(\n        \"--max-file-size\",\n        type=int,\n        default=1024,\n        metavar=\"KB\",\n        help=\"单个文件最大导出大小，单位 KB，默认 1024\",\n    )\n    parser.add_argument(\n        \"--max-total-size\",\n        type=int,\n        default=200,\n        metavar=\"MB\",\n        help=\"输出文件最大大小，单位 MB，默认 200\",\n    )\n    parser.add_argument(\n        \"--tree-only\",\n        action=\"store_true\",\n        help=\"只导出目录树，不导出文件内容\",\n    )\n    parser.add_argument(\n        \"--no-tree\",\n        action=\"store_true\",\n        help=\"不导出目录树，只导出文件内容\",\n    )\n    parser.add_argument(\n        \"--extensions\",\n        nargs=\"+\",\n        default=None,\n        help=\"仅导出指定扩展名，例如 .java .kt .xml .gradle\",\n    )\n    parser.add_argument(\n        \"--include-no-extension\",\n        action=\"store_true\",\n        help=\"包含没有扩展名的文本文件\",\n    )\n    return parser.parse_args()\n\n\ndef normalize_extension(extension: str) -> str:\n    extension = extension.strip().lower()\n    if not extension:\n        return extension\n    return extension if extension.startswith(\".\") else f\".{extension}\"\n\n\ndef normalize_path(path: Path) -> Path:\n    try:\n        return path.resolve()\n    except OSError:\n        return path.absolute()\n\n\ndef build_config(args: argparse.Namespace) -> ExportConfig:\n    root = normalize_path(args.project_dir)\n\n    if not root.exists():\n        raise FileNotFoundError(f\"项目目录不存在：{root}\")\n\n    if not root.is_dir():\n        raise NotADirectoryError(f\"指定路径不是目录：{root}\")\n\n    if args.max_file_size <= 0:\n        raise ValueError(\"--max-file-size 必须大于 0\")\n\n    if args.max_total_size <= 0:\n        raise ValueError(\"--max-total-size 必须大于 0\")\n\n    if args.tree_only and args.no_tree:\n        raise ValueError(\"--tree-only 和 --no-tree 不能同时使用\")\n\n    timestamp = datetime.now().strftime(\"%Y%m%d_%H%M%S\")\n    default_output = Path.cwd() / f\"{root.name}_source_export_{timestamp}.md\"\n    output = normalize_path(args.output or default_output)\n\n    allowed_extensions: Optional[set[str]]\n    if args.extensions:\n        allowed_extensions = {\n            normalize_extension(extension)\n            for extension in args.extensions\n            if normalize_extension(extension)\n        }\n    else:\n        allowed_extensions = None\n\n    extra_excludes: list[Path] = []\n    for item in args.exclude:\n        item_path = Path(item)\n        if item_path.is_absolute():\n            extra_excludes.append(normalize_path(item_path))\n        else:\n            extra_excludes.append(normalize_path(root / item_path))\n\n    # 防止输出文件位于项目内部时把自身再次导出\n    extra_excludes.append(output)\n\n    return ExportConfig(\n        root=root,\n        output=output,\n        extra_excludes=tuple(extra_excludes),\n        include_hidden=args.include_hidden,\n        follow_symlinks=args.follow_symlinks,\n        max_file_size_bytes=args.max_file_size * 1024,\n        max_total_size_bytes=args.max_total_size * 1024 * 1024,\n        tree_only=args.tree_only,\n        no_tree=args.no_tree,\n        allowed_extensions=allowed_extensions,\n        include_no_extension=args.include_no_extension,\n    )\n\n\ndef safe_relative_path(path: Path, root: Path) -> Path:\n    try:\n        return path.relative_to(root)\n    except ValueError:\n        return path\n\n\ndef is_hidden(path: Path, root: Path) -> bool:\n    relative = safe_relative_path(path, root)\n    return any(part.startswith(\".\") and part not in {\".\", \"..\"} for part in relative.parts)\n\n\ndef path_is_within(path: Path, parent: Path) -> bool:\n    try:\n        path.relative_to(parent)\n        return True\n    except ValueError:\n        return False\n\n\ndef is_extra_excluded(path: Path, config: ExportConfig) -> bool:\n    resolved = normalize_path(path)\n\n    for excluded in config.extra_excludes:\n        if resolved == excluded:\n            return True\n\n        if excluded.is_dir() and path_is_within(resolved, excluded):\n            return True\n\n    return False\n\n\ndef should_skip_directory(path: Path, config: ExportConfig) -> bool:\n    if path.name in DEFAULT_EXCLUDED_DIR_NAMES:\n        return True\n\n    if not config.include_hidden and is_hidden(path, config.root):\n        return True\n\n    if path.is_symlink() and not config.follow_symlinks:\n        return True\n\n    if is_extra_excluded(path, config):\n        return True\n\n    return False\n\n\ndef should_skip_file(path: Path, config: ExportConfig) -> bool:\n    if path.name in DEFAULT_EXCLUDED_FILE_NAMES:\n        return True\n\n    if not config.include_hidden and is_hidden(path, config.root):\n        return True\n\n    if path.is_symlink() and not config.follow_symlinks:\n        return True\n\n    if is_extra_excluded(path, config):\n        return True\n\n    return False\n\n\ndef is_probably_binary(path: Path, sample_size: int = 8192) -> bool:\n    if path.suffix.lower() in BINARY_EXTENSIONS:\n        return True\n\n    try:\n        with path.open(\"rb\") as file:\n            sample = file.read(sample_size)\n    except OSError:\n        return False\n\n    if not sample:\n        return False\n\n    if b\"\\x00\" in sample:\n        return True\n\n    # 统计非文本控制字符比例\n    text_bytes = bytearray({7, 8, 9, 10, 12, 13, 27})\n    text_bytes.extend(range(0x20, 0x100))\n    non_text = sample.translate(None, bytes(text_bytes))\n\n    return len(non_text) / len(sample) > 0.30\n\n\ndef is_supported_text_file(path: Path, config: ExportConfig) -> bool:\n    extension = path.suffix.lower()\n\n    if config.allowed_extensions is not None:\n        if extension in config.allowed_extensions:\n            return True\n\n        if not extension and config.include_no_extension:\n            return True\n\n        return False\n\n    if path.name in KNOWN_TEXT_FILE_NAMES:\n        return True\n\n    if extension in DEFAULT_TEXT_EXTENSIONS:\n        return True\n\n    if not extension and config.include_no_extension:\n        return not is_probably_binary(path)\n\n    return False\n\n\ndef sorted_directory_entries(directory: Path) -> list[Path]:\n    try:\n        entries = list(directory.iterdir())\n    except (PermissionError, OSError):\n        return []\n\n    return sorted(\n        entries,\n        key=lambda path: (\n            not path.is_dir(),\n            path.name.lower(),\n            path.name,\n        ),\n    )\n\n\ndef iter_project_files(config: ExportConfig) -> Iterator[Path]:\n    \"\"\"\n    使用 os.walk 遍历项目，并在遍历阶段裁剪排除目录。\n    \"\"\"\n    visited_real_paths: set[Path] = set()\n\n    for current_root, dir_names, file_names in os.walk(\n        config.root,\n        topdown=True,\n        followlinks=config.follow_symlinks,\n    ):\n        current_path = Path(current_root)\n\n        if config.follow_symlinks:\n            real_current = normalize_path(current_path)\n            if real_current in visited_real_paths:\n                dir_names[:] = []\n                continue\n            visited_real_paths.add(real_current)\n\n        kept_dirs: list[str] = []\n        for directory_name in sorted(dir_names, key=str.lower):\n            directory_path = current_path / directory_name\n            if not should_skip_directory(directory_path, config):\n                kept_dirs.append(directory_name)\n\n        dir_names[:] = kept_dirs\n\n        for file_name in sorted(file_names, key=str.lower):\n            path = current_path / file_name\n\n            if should_skip_file(path, config):\n                continue\n\n            yield path\n\n\ndef generate_tree_lines(config: ExportConfig) -> Iterator[str]:\n    \"\"\"\n    生成项目树。\n    \"\"\"\n\n    def walk(directory: Path, prefix: str = \"\") -> Iterator[str]:\n        entries = [\n            entry\n            for entry in sorted_directory_entries(directory)\n            if not (\n                entry.is_dir()\n                and should_skip_directory(entry, config)\n            )\n            and not (\n                entry.is_file()\n                and should_skip_file(entry, config)\n            )\n        ]\n\n        for index, entry in enumerate(entries):\n            is_last = index == len(entries) - 1\n            connector = \"└── \" if is_last else \"├── \"\n            suffix = \"/\" if entry.is_dir() else \"\"\n\n            yield f\"{prefix}{connector}{entry.name}{suffix}\"\n\n            if entry.is_dir():\n                child_prefix = prefix + (\"    \" if is_last else \"│   \")\n                yield from walk(entry, child_prefix)\n\n    yield f\"{config.root.name}/\"\n    yield from walk(config.root)\n\n\ndef decode_text(data: bytes) -> tuple[str, str]:\n    \"\"\"\n    尝试使用常见编码读取文本。\n    返回：(文本内容, 编码名称)\n    \"\"\"\n    encodings = (\n        \"utf-8-sig\",\n        \"utf-8\",\n        \"gb18030\",\n        \"gbk\",\n        \"big5\",\n        \"utf-16\",\n        \"utf-16-le\",\n        \"utf-16-be\",\n        \"latin-1\",\n    )\n\n    for encoding in encodings:\n        try:\n            return data.decode(encoding), encoding\n        except UnicodeDecodeError:\n            continue\n\n    return data.decode(\"utf-8\", errors=\"replace\"), \"utf-8-replace\"\n\n\ndef choose_code_fence(content: str) -> str:\n    \"\"\"\n    避免源码内部包含 ``` 导致 Markdown 代码块提前结束。\n    \"\"\"\n    max_run = 0\n    current_run = 0\n\n    for character in content:\n        if character == \"`\":\n            current_run += 1\n            max_run = max(max_run, current_run)\n        else:\n            current_run = 0\n\n    return \"`\" * max(3, max_run + 1)\n\n\ndef language_for_file(path: Path) -> str:\n    if path.name in {\"CMakeLists.txt\"}:\n        return \"cmake\"\n\n    if path.name in {\"Makefile\", \"makefile\", \"Android.mk\", \"Application.mk\"}:\n        return \"makefile\"\n\n    if path.name in {\"Android.bp\"}:\n        return \"text\"\n\n    if path.name in {\"gradlew\"}:\n        return \"bash\"\n\n    if path.name in {\"Dockerfile\"}:\n        return \"dockerfile\"\n\n    return LANGUAGE_BY_EXTENSION.get(path.suffix.lower(), \"text\")\n\n\nclass LimitedMarkdownWriter:\n    def __init__(self, output: Path, max_bytes: int) -> None:\n        self.output = output\n        self.max_bytes = max_bytes\n        self.bytes_written = 0\n        self._file = None\n\n    def __enter__(self) -> \"LimitedMarkdownWriter\":\n        self.output.parent.mkdir(parents=True, exist_ok=True)\n        self._file = self.output.open(\"w\", encoding=\"utf-8\", newline=\"\\n\")\n        return self\n\n    def __exit__(self, exc_type, exc_value, traceback) -> None:\n        if self._file is not None:\n            self._file.close()\n\n    def write(self, text: str, enforce_limit: bool = True) -> None:\n        encoded_size = len(text.encode(\"utf-8\"))\n\n        if enforce_limit and self.bytes_written + encoded_size > self.max_bytes:\n            raise SizeLimitReached\n\n        assert self._file is not None\n        self._file.write(text)\n        self.bytes_written += encoded_size\n\n    def writeln(self, text: str = \"\", enforce_limit: bool = True) -> None:\n        self.write(text + \"\\n\", enforce_limit=enforce_limit)\n\n\ndef write_document_header(\n    writer: LimitedMarkdownWriter,\n    config: ExportConfig,\n) -> None:\n    now = datetime.now().astimezone()\n    writer.writeln(f\"# Android 项目代码导出：{config.root.name}\")\n    writer.writeln()\n    writer.writeln(\"## 导出信息\")\n    writer.writeln()\n    writer.writeln(f\"- 项目根目录：`{config.root}`\")\n    writer.writeln(f\"- 导出时间：`{now.isoformat(timespec='seconds')}`\")\n    writer.writeln(\n        f\"- 单文件大小限制：`{config.max_file_size_bytes / 1024:.0f} KB`\"\n    )\n    writer.writeln(\n        f\"- 总输出大小限制：`{config.max_total_size_bytes / 1024 / 1024:.0f} MB`\"\n    )\n\n    if config.allowed_extensions:\n        extensions = \"、\".join(sorted(config.allowed_extensions))\n        writer.writeln(f\"- 指定扩展名：`{extensions}`\")\n\n    writer.writeln()\n\n\ndef write_project_tree(\n    writer: LimitedMarkdownWriter,\n    config: ExportConfig,\n) -> None:\n    writer.writeln(\"## 项目目录结构\")\n    writer.writeln()\n    writer.writeln(\"```text\")\n\n    for line in generate_tree_lines(config):\n        writer.writeln(line)\n\n    writer.writeln(\"```\")\n    writer.writeln()\n\n\ndef write_file_section(\n    writer: LimitedMarkdownWriter,\n    path: Path,\n    content: str,\n    encoding: str,\n    size_bytes: int,\n    config: ExportConfig,\n) -> None:\n    relative_path = safe_relative_path(path, config.root).as_posix()\n    language = language_for_file(path)\n    fence = choose_code_fence(content)\n\n    writer.writeln(f\"## `{relative_path}`\")\n    writer.writeln()\n    writer.writeln(\n        f\"- 文件大小：`{size_bytes} bytes`\"\n    )\n    writer.writeln(\n        f\"- 读取编码：`{encoding}`\"\n    )\n    writer.writeln()\n    writer.writeln(f\"{fence}{language}\")\n\n    if content:\n        writer.write(content)\n\n        if not content.endswith(\"\\n\"):\n            writer.writeln()\n    else:\n        writer.writeln()\n\n    writer.writeln(fence)\n    writer.writeln()\n\n\ndef export_project(config: ExportConfig) -> ExportStats:\n    stats = ExportStats()\n    limit_reached = False\n\n    with LimitedMarkdownWriter(\n        config.output,\n        config.max_total_size_bytes,\n    ) as writer:\n        write_document_header(writer, config)\n\n        if not config.no_tree:\n            write_project_tree(writer, config)\n\n        if not config.tree_only:\n            writer.writeln(\"## 文件内容\")\n            writer.writeln()\n\n            for path in iter_project_files(config):\n                stats.scanned_files += 1\n\n                if not path.is_file():\n                    stats.skipped_files += 1\n                    continue\n\n                if not is_supported_text_file(path, config):\n                    stats.skipped_files += 1\n                    continue\n\n                try:\n                    file_size = path.stat().st_size\n                except OSError:\n                    stats.unreadable_files += 1\n                    continue\n\n                if file_size > config.max_file_size_bytes:\n                    stats.oversized_files += 1\n                    continue\n\n                if is_probably_binary(path):\n                    stats.binary_files += 1\n                    continue\n\n                try:\n                    raw_data = path.read_bytes()\n                except (PermissionError, OSError):\n                    stats.unreadable_files += 1\n                    continue\n\n                content, encoding = decode_text(raw_data)\n\n                try:\n                    write_file_section(\n                        writer=writer,\n                        path=path,\n                        content=content,\n                        encoding=encoding,\n                        size_bytes=file_size,\n                        config=config,\n                    )\n                except SizeLimitReached:\n                    limit_reached = True\n                    break\n\n                stats.exported_files += 1\n                stats.total_source_bytes += file_size\n\n        try:\n            writer.writeln(\"## 导出统计\")\n            writer.writeln()\n            writer.writeln(f\"- 扫描文件数：`{stats.scanned_files}`\")\n            writer.writeln(f\"- 导出文件数：`{stats.exported_files}`\")\n            writer.writeln(f\"- 跳过文件数：`{stats.skipped_files}`\")\n            writer.writeln(f\"- 二进制文件数：`{stats.binary_files}`\")\n            writer.writeln(f\"- 超过单文件限制：`{stats.oversized_files}`\")\n            writer.writeln(f\"- 无法读取文件数：`{stats.unreadable_files}`\")\n            writer.writeln(\n                f\"- 已导出源码原始大小：\"\n                f\"`{stats.total_source_bytes / 1024 / 1024:.2f} MB`\"\n            )\n\n            if limit_reached:\n                writer.writeln()\n                writer.writeln(\n                    \"> 注意：输出文件已达到总大小限制，后续文件未继续导出。\"\n                )\n        except SizeLimitReached:\n            # 为保证文档有明确的结束标记，最终提示不再受大小限制约束\n            writer.writeln(\n                \"\\n\\n> 注意：输出文件已达到总大小限制，导出提前结束。\",\n                enforce_limit=False,\n            )\n\n    return stats\n\n\ndef print_summary(config: ExportConfig, stats: ExportStats) -> None:\n    print(\"=\" * 72)\n    print(\"Android 项目代码导出完成\")\n    print(\"=\" * 72)\n    print(f\"项目目录       : {config.root}\")\n    print(f\"输出文件       : {config.output}\")\n    print(f\"扫描文件数     : {stats.scanned_files}\")\n    print(f\"导出文件数     : {stats.exported_files}\")\n    print(f\"跳过文件数     : {stats.skipped_files}\")\n    print(f\"二进制文件数   : {stats.binary_files}\")\n    print(f\"超大文件数     : {stats.oversized_files}\")\n    print(f\"无法读取文件数 : {stats.unreadable_files}\")\n    print(\n        f\"源码原始大小   : \"\n        f\"{stats.total_source_bytes / 1024 / 1024:.2f} MB\"\n    )\n    print(\"=\" * 72)\n\n\ndef main() -> int:\n    try:\n        args = parse_arguments()\n        config = build_config(args)\n        stats = export_project(config)\n        print_summary(config, stats)\n        return 0\n\n    except KeyboardInterrupt:\n        print(\"\\n用户中断导出。\", file=sys.stderr)\n        return 130\n\n    except Exception as exception:\n        print(f\"导出失败：{exception}\", file=sys.stderr)\n        return 1\n\n\nif __name__ == \"__main__\":\n    sys.exit(main())\n",
+      "notes": "",
+      "attachments": []
+    },
+    {
+      "id": "根据clockconfig提取表盘",
+      "name": "根据ClockConfig提取表盘",
+      "fileName": "move_clock.py",
+      "description": "根据ClockConfig提取表盘",
+      "language": "Code",
+      "tags": [
+        "工具",
+        "Python"
+      ],
+      "url": "",
+      "sourcePath": "",
+      "updatedAt": "2026-07-16",
+      "snippet": "import json\nimport shutil\nfrom pathlib import Path\n\n\ndef find_config_file(current_dir: Path) -> Path:\n    \"\"\"\n    自动查找 ClockConfig 配置文件\n    \"\"\"\n    possible_names = [\n        \"ClockConfig\",\n        \"ClockConfig.json\",\n        \"ClockConfig.txt\",\n    ]\n\n    for name in possible_names:\n        file_path = current_dir / name\n        if file_path.exists() and file_path.is_file():\n            return file_path\n\n    raise FileNotFoundError(\n        \"找不到配置文件，请确认当前目录下存在 ClockConfig、ClockConfig.json 或 ClockConfig.txt\"\n    )\n\n\ndef load_new_style_names(config_file: Path) -> set[str]:\n    \"\"\"\n    从 ClockConfig 文件中读取 newStyle 数组\n    \"\"\"\n    with config_file.open(\"r\", encoding=\"utf-8\") as f:\n        data = json.load(f)\n\n    if \"newStyle\" not in data:\n        raise KeyError(\"配置文件中没有找到 newStyle 字段\")\n\n    if not isinstance(data[\"newStyle\"], list):\n        raise TypeError(\"newStyle 字段不是数组\")\n\n    return set(data[\"newStyle\"])\n\n\ndef move_matching_items():\n    current_dir = Path.cwd()\n    clock_dir = current_dir / \"Clock\"\n\n    config_file = find_config_file(current_dir)\n\n    print(f\"使用配置文件：{config_file.name}\")\n\n    clock_dir.mkdir(exist_ok=True)\n\n    new_style_names = load_new_style_names(config_file)\n\n    moved_count = 0\n    skipped_count = 0\n    not_found_names = set(new_style_names)\n\n    for item in current_dir.iterdir():\n        # 跳过 Clock 文件夹\n        if item.name == \"Clock\":\n            continue\n\n        # 跳过脚本自身\n        if item.name == Path(__file__).name:\n            continue\n\n        # 跳过配置文件\n        if item.resolve() == config_file.resolve():\n            continue\n\n        # 匹配规则：\n        # 1. 文件/文件夹完整名称一致\n        # 2. 文件名去掉扩展名后一致\n        matched_name = None\n\n        if item.name in new_style_names:\n            matched_name = item.name\n        elif item.stem in new_style_names:\n            matched_name = item.stem\n\n        if matched_name:\n            target = clock_dir / item.name\n\n            if target.exists():\n                print(f\"跳过，目标已存在：{target.name}\")\n                skipped_count += 1\n                continue\n\n            shutil.move(str(item), str(target))\n            print(f\"已移动：{item.name} -> Clock/\")\n            moved_count += 1\n\n            not_found_names.discard(matched_name)\n\n    print(\"\\n处理完成\")\n    print(f\"成功移动：{moved_count} 个\")\n    print(f\"跳过：{skipped_count} 个\")\n\n    if not_found_names:\n        print(\"\\n以下 newStyle 名称在当前目录中没有找到对应文件：\")\n        for name in sorted(not_found_names):\n            print(name)\n\n\nif __name__ == \"__main__\":\n    move_matching_items()",
+      "notes": "",
+      "attachments": []
+    },
+    {
+      "id": "表盘文件提取为clockconfig",
+      "name": "表盘文件提取为ClockConfig",
+      "fileName": "clock.py",
+      "description": "表盘文件提取为ClockConfig，固定表盘直接添加",
+      "language": "Python",
+      "tags": [
+        "工具",
+        "Python"
+      ],
+      "url": "",
+      "sourcePath": "",
+      "updatedAt": "2026-07-16",
+      "snippet": "import json\nfrom pathlib import Path\n\n# 输出文件名\nOUTPUT_FILE = \"newStyle.json\"\n\n# 固定的倒数后四个\nFIXED_ITEMS = {\n    \"SJTC-A-SANJI-3D-EARTH_C2025040702\": \"天文地球\",\n    \"SJTC-A-SANJI-3D-TOMATO_C2025032001\": \"番茄乐园\",\n    \"SJTC-A-CUSTOM-CLOCK_2024070601\": \"自定义表盘\",\n    \"SJTC-A-CREATE-CLOCK_20250711\": \"创作表盘\",\n}\n\ndef main():\n    current_dir = Path.cwd()\n\n    # 读取当前文件夹内的 apk 文件名，去掉 .apk 后缀\n    apk_names = sorted(\n        apk.stem\n        for apk in current_dir.iterdir()\n        if apk.is_file() and apk.suffix.lower() == \".apk\"\n    )\n\n    # 避免固定项和读取到的 apk 名称重复\n    normal_items = [\n        name for name in apk_names\n        if name not in FIXED_ITEMS\n    ]\n\n    result = {}\n\n    # newStyle：先放读取到的 apk 文件名，再放固定的四个\n    result[\"newStyle\"] = normal_items + list(FIXED_ITEMS.keys())\n\n    # 普通 apk 文件名统一写成“系统表盘”\n    for name in normal_items:\n        result[name] = \"系统表盘\"\n\n    # 固定项写固定中文名\n    result.update(FIXED_ITEMS)\n\n    # 写入 json 文件\n    with open(OUTPUT_FILE, \"w\", encoding=\"utf-8\") as f:\n        json.dump(result, f, ensure_ascii=False, indent=4)\n\n    print(f\"生成完成：{OUTPUT_FILE}\")\n    print(f\"共读取 APK：{len(normal_items)} 个\")\n    print(f\"固定表盘：{len(FIXED_ITEMS)} 个\")\n\nif __name__ == \"__main__\":\n    main()",
+      "notes": "",
+      "attachments": []
+    },
+    {
       "id": "ro值检查脚本",
       "name": "ro值检查脚本",
+      "fileName": "",
       "description": "检查是否有错误放置的ro值，重复值的保存最后一个作为唯一",
       "language": "Python",
       "tags": [
@@ -1054,6 +1106,7 @@
     {
       "id": "apk整理并输出mk数据android81",
       "name": "APK整理并输出mk数据（Android8.1）",
+      "fileName": "",
       "description": "批量整理APK，生成对应的文件和Android.mk数据（Android8.1）",
       "language": "Python",
       "tags": [
@@ -1070,6 +1123,7 @@
     {
       "id": "md转pdf工具",
       "name": "MD转PDF工具",
+      "fileName": "",
       "description": "MD转PDF\n缺少依赖，请执行\npython -m pip install markdown-it-py mdit-py-plugins pygments playwright linkify-it-py\npython -m playwright install chromium\n\n\n使用方法：python md_to_pdf.py 隐私政策JSON服务器对接开发文档.md 隐私政策JSON服务器对接开发文转换完成：E:\\Sgtc_Git_App\\NewApp_Sleep\\SgtcPrivacyManager\\docs\\隐私政策JSON服务器对接开发文档.pdf",
       "language": "Python",
       "tags": [
@@ -1085,6 +1139,7 @@
     {
       "id": "基于nas当中linux的消息推送",
       "name": "基于NAS当中Linux的消息推送",
+      "fileName": "",
       "description": "NAS 微信定时推送脚本",
       "language": "Python",
       "tags": [
@@ -1100,6 +1155,7 @@
     {
       "id": "文本转markdown工具",
       "name": "文本转Markdown工具",
+      "fileName": "",
       "description": "运行依赖：\npip install python-docx pymupdf\n如果是 Ubuntu，Tkinter 不存在时再装：\nsudo apt install python3-tk",
       "language": "Python",
       "tags": [
@@ -1116,6 +1172,7 @@
     {
       "id": "android-alarm-debug-kit",
       "name": "Android 闹钟状态排查工具集",
+      "fileName": "",
       "description": "沉淀关机闹钟、FIRED_STATE、Activity 前台拉起和通知链路排查时常用的日志命令与状态判断片段。",
       "language": "Java / ADB",
       "tags": [
@@ -1133,6 +1190,7 @@
     {
       "id": "blog-module-registry",
       "name": "Ra 站点模块注册表",
+      "fileName": "",
       "description": "用于管理文章、代码库、留言、简历、管理后台等入口的显隐、排序和最大显示数量。",
       "language": "JavaScript",
       "tags": [
@@ -1217,6 +1275,82 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-07-16 代码库发布记录",
+      "slug": "auto-deploy-20260716032420-code",
+      "date": "2026-07-16",
+      "createdAt": "2026-07-16T03:24:20.962Z",
+      "updatedAt": "2026-07-16T03:24:20.962Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "代码库"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 代码库 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-16 代码库发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-16T03:24:20.962Z\n2. 发布模块：代码库\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“代码库”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update code content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
+    {
+      "title": "2026-07-16 代码库发布记录",
+      "slug": "auto-deploy-20260716024800-code",
+      "date": "2026-07-16",
+      "createdAt": "2026-07-16T02:48:00.874Z",
+      "updatedAt": "2026-07-16T02:48:00.874Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "代码库"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 代码库 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-16 代码库发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-16T02:48:00.874Z\n2. 发布模块：代码库\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“代码库”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update code content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
+    {
+      "title": "2026-07-16 代码库发布记录",
+      "slug": "auto-deploy-20260716024531-code",
+      "date": "2026-07-16",
+      "createdAt": "2026-07-16T02:45:31.455Z",
+      "updatedAt": "2026-07-16T02:45:31.455Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "代码库"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 代码库 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-16 代码库发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-16T02:45:31.455Z\n2. 发布模块：代码库\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“代码库”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update code content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
+    {
+      "title": "2026-07-16 代码库发布记录",
+      "slug": "auto-deploy-20260716024217-code",
+      "date": "2026-07-16",
+      "createdAt": "2026-07-16T02:42:17.868Z",
+      "updatedAt": "2026-07-16T02:42:17.868Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "代码库"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 代码库 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-16 代码库发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-16T02:42:17.868Z\n2. 发布模块：代码库\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“代码库”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update code content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-07-16 代码库发布记录",
       "slug": "auto-deploy-20260716023141-code",
@@ -1726,14 +1860,6 @@
         "order": 70,
         "surface": "top",
         "external": true
-      },
-      {
-        "id": "modules",
-        "label": "设置",
-        "href": "#modules",
-        "enabled": true,
-        "order": 90,
-        "surface": "top"
       }
     ]
   },
