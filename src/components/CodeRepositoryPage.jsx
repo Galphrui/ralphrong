@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useBlogStore } from '../store/useStore'
+import { FeatureHero, LoadingPanel, PageScaffold } from './PageChrome'
 import {
   CODE_DISPLAY_STYLES,
   CODE_LANGUAGE_PRESETS,
@@ -10,24 +11,50 @@ import {
 } from '../utils/codeLibrary'
 import { displayStyleForModule, normalizeDisplayStyle } from '../utils/moduleConfig'
 import { attachmentDirectUrl, attachmentName, downloadAttachment, formatAttachmentBytes, isChunkedAttachment } from '../utils/attachments'
+import { PAGE_SIZE_OPTIONS, formatDateDot, getPageRange, itemUpdatedAt, sortContentItems, uniqueTags } from '../utils/listing'
+import { sortLabel } from '../utils/postSort'
 import ScrollPositionControls from './ScrollPositionControls'
 
 export default function CodeRepositoryPage({ selectedId = '' }) {
-  const { repositories, moduleSettings } = useBlogStore()
+  const { repositories, moduleSettings, isLoading } = useBlogStore()
+  const [sortMode, setSortMode] = useState('updated-desc')
   const selectedRepo = useMemo(
     () => repositories.find((repo) => repo.id === selectedId),
     [repositories, selectedId],
   )
+  const tags = useMemo(() => uniqueTags(repositories), [repositories])
+  const latestRepo = useMemo(() => sortContentItems(repositories, 'updated-desc')[0], [repositories])
+  const stats = [
+    { label: '代码总数', value: repositories.length },
+    { label: '标签数量', value: tags.length },
+    { label: '最近更新', value: formatDateDot(itemUpdatedAt(latestRepo)) },
+  ]
 
-  if (selectedId) return <CodeRepositoryDetail repo={selectedRepo} />
-  return <CodeRepositoryList repositories={repositories} moduleSettings={moduleSettings} />
+  if (selectedId) {
+    if (isLoading && !selectedRepo) return <LoadingPanel>正在加载代码库...</LoadingPanel>
+    return <CodeRepositoryDetail repo={selectedRepo} />
+  }
+
+  return (
+    <PageScaffold
+      stats={stats}
+      focusText="可复用脚本、排查命令、工程模板、仓库说明和代码附件。"
+      sortMode={sortMode}
+      onSortModeChange={setSortMode}
+    >
+      <CodeRepositoryList repositories={repositories} moduleSettings={moduleSettings} sortMode={sortMode} />
+    </PageScaffold>
+  )
 }
 
-function CodeRepositoryList({ repositories, moduleSettings }) {
+function CodeRepositoryList({ repositories, moduleSettings, sortMode }) {
   const [query, setQuery] = useState('')
   const [tag, setTag] = useState('全部')
   const [language, setLanguage] = useState('全部')
   const [styleOverride, setStyleOverride] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const deferredQuery = useDeferredValue(query)
   const configuredStyle = displayStyleForModule(moduleSettings, 'code')
   const displayStyle = normalizeDisplayStyle(styleOverride || configuredStyle)
 
@@ -43,32 +70,67 @@ function CodeRepositoryList({ repositories, moduleSettings }) {
   }, [repositories])
 
   const filtered = useMemo(() => {
-    const keyword = query.trim().toLowerCase()
-    return repositories
+    const keyword = deferredQuery.trim().toLowerCase()
+    return sortContentItems(repositories, sortMode)
       .filter((repo) => tag === '全部' || repo.tags?.includes(tag))
       .filter((repo) => language === '全部' || repo.language === language)
       .filter((repo) => {
         if (!keyword) return true
-        return [repo.name, repo.description, repo.language, repo.sourcePath, repo.notes, ...(repo.tags || [])]
+        return [repo.name, repo.fileName, repo.description, repo.language, repo.sourcePath, repo.notes, ...(repo.tags || [])]
           .join(' ')
           .toLowerCase()
           .includes(keyword)
       })
-      .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
-  }, [language, query, repositories, tag])
+  }, [deferredQuery, language, repositories, sortMode, tag])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [tag, language, deferredQuery, sortMode, itemsPerPage])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage))
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages))
+  }, [totalPages])
+
+  const pageStartIndex = (currentPage - 1) * itemsPerPage
+  const pageEndIndex = Math.min(pageStartIndex + itemsPerPage, filtered.length)
+  const currentItems = filtered.slice(pageStartIndex, pageEndIndex)
+  const pageRange = useMemo(() => getPageRange(currentPage, totalPages), [currentPage, totalPages])
+  const pageSummary = filtered.length > 0 ? `${pageStartIndex + 1}-${pageEndIndex} / ${filtered.length}` : `0 / ${filtered.length}`
+
+  const goToPage = (page) => {
+    const nextPage = Math.min(Math.max(page, 1), totalPages)
+    setCurrentPage(nextPage)
+    window.requestAnimationFrame(() => {
+      document.querySelector('#code')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 
   return (
-    <section className="mx-auto max-w-6xl py-4">
-      <div className="mb-6 border border-slate-200 bg-hero-panel p-5 shadow-soft sm:p-7">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="mb-2 text-xs font-black uppercase text-primary-700">Ra Code Library</p>
-            <h1 className="text-3xl font-black leading-tight text-slate-950">代码库</h1>
-            <p className="mt-3 max-w-3xl text-sm font-medium leading-6 text-slate-600">
-              存放可复用代码片段、排查脚本、工程模板和项目仓库说明，和文章同级展示，后续可以继续扩展成更多模块。
-            </p>
-          </div>
-          <div className="grid gap-2 lg:min-w-[520px]">
+    <section id="code" className="py-4">
+      <FeatureHero
+        eyebrow="Ra Code Library"
+        title="代码库"
+        description="存放可复用代码片段、排查脚本、工程模板和项目仓库说明，和文章同级展示，后续可以继续扩展成更多模块。"
+        items={repositories}
+        baseHash="code"
+        getId={(item) => item.id}
+        getTitle={(item) => item.name}
+        getSummary={(item) => item.description || item.notes || item.sourcePath}
+        getMeta={(item) => [
+          item.language,
+          item.updatedAt ? formatDateDot(item.updatedAt) : '',
+          item.attachments?.length ? `${item.attachments.length} 个附件` : '',
+        ].filter(Boolean)}
+        tabs={[
+          { key: 'updated', label: '最近更新', sortMode: 'updated-desc' },
+          { key: 'attachments', label: '附件最多', sort: (value) => [...value].sort((a, b) => (b.attachments?.length || 0) - (a.attachments?.length || 0)) },
+          { key: 'tags', label: '标签最多', sort: (value) => [...value].sort((a, b) => (b.tags?.length || 0) - (a.tags?.length || 0)) },
+        ]}
+      />
+
+      <div className="mt-6 mb-6 grid gap-2">
             <input
               type="search"
               value={query}
@@ -116,22 +178,104 @@ function CodeRepositoryList({ repositories, moduleSettings }) {
                 </button>
               ))}
             </div>
-          </div>
+      </div>
+
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-black text-slate-950">代码库列表</h2>
+          <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-500">
+            {filtered.length} 条 · {sortLabel(sortMode)}
+          </p>
         </div>
+
+        <label className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-slate-500">
+          每页
+          <select
+            value={itemsPerPage}
+            onChange={(event) => setItemsPerPage(Number(event.target.value))}
+            className="h-10 border border-slate-200 bg-white px-3 text-sm font-black text-slate-800 shadow-sm outline-none transition-all hover:border-primary-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {filtered.length ? (
-        <div className={layoutClass(displayStyle)}>
-          {filtered.map((repo, index) => (
+        <>
+          <div className={layoutClass(displayStyle)}>
+            {currentItems.map((repo, index) => (
             <CodeRepositoryCard key={repo.id} repo={repo} index={index} displayStyle={displayStyle} />
-          ))}
-        </div>
+            ))}
+          </div>
+          <PaginationBar
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageRange={pageRange}
+            pageSummary={pageSummary}
+            onPageChange={goToPage}
+          />
+        </>
       ) : (
         <div className="border border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-500 shadow-sm">
           暂无匹配的代码库
         </div>
       )}
     </section>
+  )
+}
+
+function PaginationBar({ currentPage, totalPages, pageRange, pageSummary, onPageChange }) {
+  return (
+    <nav className="mt-6 border border-slate-200 bg-white p-3 shadow-sm" aria-label="代码库分页">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-bold text-slate-500">
+          第 {currentPage} / {totalPages} 页 · {pageSummary}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="h-10 border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 shadow-sm transition-all hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300"
+          >
+            上一页
+          </button>
+          {pageRange.map((page, index) =>
+            page === 'ellipsis' ? (
+              <span key={`ellipsis-${index}`} className="flex h-10 w-10 items-center justify-center text-sm font-black text-slate-400">
+                ...
+              </span>
+            ) : (
+              <button
+                key={page}
+                type="button"
+                onClick={() => onPageChange(page)}
+                aria-current={currentPage === page ? 'page' : undefined}
+                className={`h-10 min-w-10 border px-3 text-sm font-black shadow-sm transition-all ${
+                  currentPage === page
+                    ? 'border-primary-700 bg-primary-700 text-white shadow-brand'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700'
+                }`}
+              >
+                {page}
+              </button>
+            ),
+          )}
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="h-10 border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 shadow-sm transition-all hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300"
+          >
+            下一页
+          </button>
+        </div>
+      </div>
+    </nav>
   )
 }
 

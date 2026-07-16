@@ -12,8 +12,20 @@ const MESSAGE_API_BASE =
     : WORKER_API_BASE
 
 const dataUrl = () => `${DATA_URL}?t=${Date.now()}`
+let siteDataRequest = null
 
-export const fetchSiteData = async () => {
+export const fetchSiteData = async ({ force = false } = {}) => {
+  if (!force && siteDataRequest) return siteDataRequest
+
+  siteDataRequest = loadSiteData().catch((error) => {
+    siteDataRequest = null
+    throw error
+  })
+
+  return siteDataRequest
+}
+
+const loadSiteData = async () => {
   const response = await fetch(dataUrl(), {
     cache: 'no-store',
     headers: {

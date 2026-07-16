@@ -33,6 +33,17 @@ export const useBlogStore = create((set) => ({
   setDevLogs: (devLogs) => set({ devLogs }),
   setModuleSettings: (moduleSettings) => set({ moduleSettings: normalizeModuleSettings(moduleSettings, moduleSettings?.modules) }),
   setPostMetrics: (postMetrics) => set({ postMetrics }),
+  hydrateSiteData: (data) =>
+    set({
+      posts: data.posts || [],
+      totalPosts: data.total || data.posts?.length || 0,
+      profile: data.profile || null,
+      repositories: data.repositories || [],
+      tools: data.tools || [],
+      devLogs: data.devLogs || [],
+      moduleSettings: normalizeModuleSettings(data.moduleSettings),
+      allTags: [...new Set((data.posts || []).flatMap((post) => post.tags || []))].sort(),
+    }),
   setCurrentPage: (page) => set({ currentPage: page }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSelectedTag: (tag) => set({ selectedTag: tag }),

@@ -1,31 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import PostCard from './PostCard'
 import TagFilter from './TagFilter'
 import { useBlogStore } from '../store/useStore'
 import { sortLabel, sortPosts } from '../utils/postSort'
 import { displayStyleForModule } from '../utils/moduleConfig'
-
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
-
-function getPageRange(currentPage, totalPages) {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1)
-  }
-
-  const pages = new Set([1, totalPages, currentPage])
-  if (currentPage > 2) pages.add(currentPage - 1)
-  if (currentPage < totalPages - 1) pages.add(currentPage + 1)
-  if (currentPage <= 3) pages.add(2).add(3)
-  if (currentPage >= totalPages - 2) pages.add(totalPages - 1).add(totalPages - 2)
-
-  const ordered = [...pages].filter((page) => page >= 1 && page <= totalPages).sort((a, b) => a - b)
-  return ordered.reduce((range, page, index) => {
-    if (index > 0 && page - ordered[index - 1] > 1) range.push('ellipsis')
-    range.push(page)
-    return range
-  }, [])
-}
+import { PAGE_SIZE_OPTIONS, getPageRange } from '../utils/listing'
 
 export default function PostList() {
   const {
@@ -40,6 +20,7 @@ export default function PostList() {
   const [filteredPosts, setFilteredPosts] = useState([])
   const [currentPage, setCurrentPage] = useState(1)
   const [postsPerPage, setPostsPerPage] = useState(10)
+  const deferredSearchQuery = useDeferredValue(searchQuery)
 
   // Filter posts
   useEffect(() => {
@@ -49,8 +30,8 @@ export default function PostList() {
       result = result.filter((post) => post.tags?.includes(selectedTag))
     }
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
+    if (deferredSearchQuery) {
+      const query = deferredSearchQuery.toLowerCase()
       result = result.filter(
         (post) =>
           post.title.toLowerCase().includes(query) ||
@@ -60,7 +41,7 @@ export default function PostList() {
     }
 
     setFilteredPosts(sortPosts(result, sortMode))
-  }, [posts, selectedTag, searchQuery, sortMode])
+  }, [posts, selectedTag, deferredSearchQuery, sortMode])
 
   useEffect(() => {
     setCurrentPage(1)

@@ -1,9 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import MarkdownContent from './MarkdownContent'
+import { FeatureHero, LoadingPanel, PageScaffold } from './PageChrome'
 import ScrollPositionControls from './ScrollPositionControls'
-import { sortPosts } from '../utils/postSort'
+import { useBlogStore } from '../store/useStore'
 import { attachmentDirectUrl, attachmentName, downloadAttachment, formatAttachmentBytes, isChunkedAttachment } from '../utils/attachments'
+import { PAGE_SIZE_OPTIONS, formatDateDot, getPageRange, itemDate, itemUpdatedAt, sortContentItems, uniqueTags } from '../utils/listing'
+import { sortLabel } from '../utils/postSort'
 
 function AttachmentList({ attachments = [], title = '附件' }) {
   if (!attachments.length) return null
@@ -56,8 +59,19 @@ function AttachmentDownloadItem({ item }) {
 }
 
 export default function CollectionPage({ items = [], selectedSlug = '', baseHash, title, eyebrow, description, emptyText, detailBackLabel, attachmentTitle }) {
+  const { isLoading } = useBlogStore()
+  const [sortMode, setSortMode] = useState('date-desc')
   const selected = useMemo(() => items.find((item) => item.slug === selectedSlug), [items, selectedSlug])
+  const tags = useMemo(() => uniqueTags(items), [items])
+  const latestItem = useMemo(() => sortContentItems(items, 'updated-desc')[0] || sortContentItems(items, 'date-desc')[0], [items])
+  const stats = [
+    { label: `${title}总数`, value: items.length },
+    { label: '标签数量', value: tags.length },
+    { label: '最近更新', value: formatDateDot(itemUpdatedAt(latestItem) || itemDate(latestItem)) },
+  ]
+
   if (selectedSlug) {
+    if (isLoading && !selected) return <LoadingPanel>正在加载 {title}...</LoadingPanel>
     if (!selected) {
       return (
         <section className="border border-slate-200 bg-white p-8 shadow-soft">
@@ -70,35 +84,104 @@ export default function CollectionPage({ items = [], selectedSlug = '', baseHash
     return <CollectionDetail item={selected} baseHash={baseHash} backLabel={detailBackLabel} attachmentTitle={attachmentTitle} />
   }
 
-  return <CollectionList items={items} baseHash={baseHash} title={title} eyebrow={eyebrow} description={description} emptyText={emptyText} />
+  return (
+    <PageScaffold
+      stats={stats}
+      focusText={baseHash === 'tools' ? '脚本包、安装包、说明文档、附件下载和常用工具沉淀。' : '开发记录、部署过程、问题复盘和版本演进。'}
+      sortMode={sortMode}
+      onSortModeChange={setSortMode}
+    >
+      <CollectionList
+        items={items}
+        baseHash={baseHash}
+        title={title}
+        eyebrow={eyebrow}
+        description={description}
+        emptyText={emptyText}
+        sortMode={sortMode}
+      />
+    </PageScaffold>
+  )
 }
 
-function CollectionList({ items, baseHash, title, eyebrow, description, emptyText }) {
+function CollectionList({ items, baseHash, title, eyebrow, description, emptyText, sortMode }) {
   const [query, setQuery] = useState('')
   const [tag, setTag] = useState('全部')
-  const tags = useMemo(() => ['全部', ...Array.from(new Set(items.flatMap((item) => item.tags || []))).sort()], [items])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const deferredQuery = useDeferredValue(query)
+  const tags = useMemo(() => ['全部', ...uniqueTags(items)], [items])
+
   const filtered = useMemo(() => {
-    const keyword = query.trim().toLowerCase()
-    return sortPosts(items)
+    const keyword = deferredQuery.trim().toLowerCase()
+    return sortContentItems(items, sortMode)
       .filter((item) => tag === '全部' || item.tags?.includes(tag))
       .filter((item) => {
         if (!keyword) return true
-        return [item.title, item.summary, item.content, ...(item.tags || [])].join(' ').toLowerCase().includes(keyword)
+        const metadata = [
+          item.title,
+          item.summary,
+          item.date,
+          item.updatedAt,
+          ...(item.tags || []),
+          ...(item.attachments || []).map((attachment) => attachment.name || attachment.fileName),
+        ]
+          .join(' ')
+          .toLowerCase()
+        return metadata.includes(keyword) || (keyword.length >= 3 && String(item.content || '').toLowerCase().includes(keyword))
       })
-  }, [items, query, tag])
+  }, [deferredQuery, items, sortMode, tag])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [tag, deferredQuery, sortMode, itemsPerPage])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage))
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages))
+  }, [totalPages])
+
+  const pageStartIndex = (currentPage - 1) * itemsPerPage
+  const pageEndIndex = Math.min(pageStartIndex + itemsPerPage, filtered.length)
+  const currentItems = filtered.slice(pageStartIndex, pageEndIndex)
+  const pageRange = useMemo(() => getPageRange(currentPage, totalPages), [currentPage, totalPages])
+  const pageSummary = filtered.length > 0 ? `${pageStartIndex + 1}-${pageEndIndex} / ${filtered.length}` : `0 / ${filtered.length}`
+
+  const goToPage = (page) => {
+    const nextPage = Math.min(Math.max(page, 1), totalPages)
+    setCurrentPage(nextPage)
+    window.requestAnimationFrame(() => {
+      document.querySelector(`#${baseHash}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 
   return (
-    <section className="mx-auto max-w-6xl py-4">
-      <div className="mb-6 border border-slate-200 bg-hero-panel p-5 shadow-soft sm:p-7">
-        <p className="mb-2 text-xs font-black uppercase text-primary-700">{eyebrow}</p>
-        <h1 className="text-3xl font-black leading-tight text-slate-950">{title}</h1>
-        <p className="mt-3 max-w-3xl text-sm font-medium leading-6 text-slate-600">{description}</p>
+    <section id={baseHash} className="py-4">
+      <FeatureHero
+        eyebrow={eyebrow}
+        title={title}
+        description={description}
+        items={items}
+        baseHash={baseHash}
+        getMeta={(item) => [
+          itemDate(item) ? formatDateDot(itemDate(item)) : '',
+          item.attachments?.length ? `${item.attachments.length} 个附件` : '',
+        ].filter(Boolean)}
+        tabs={[
+          { key: 'latest', label: '最近发布', sortMode: 'date-desc' },
+          { key: 'attachments', label: '附件最多', sort: (value) => [...value].sort((a, b) => (b.attachments?.length || 0) - (a.attachments?.length || 0)) },
+          { key: 'tags', label: '标签最多', sort: (value) => [...value].sort((a, b) => (b.tags?.length || 0) - (a.tags?.length || 0)) },
+        ]}
+      />
+
+      <div className="mt-6 mb-6">
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={`搜索${title}、标签、内容...`}
-          className="mt-5 w-full border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+          className="w-full border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
         />
         <div className="mt-4 flex flex-wrap gap-2">
           {tags.map((item) => (
@@ -118,9 +201,34 @@ function CollectionList({ items, baseHash, title, eyebrow, description, emptyTex
         </div>
       </div>
 
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-black text-slate-950">{title}列表</h2>
+          <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-500">
+            {filtered.length} 条 · {sortLabel(sortMode)}
+          </p>
+        </div>
+
+        <label className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-slate-500">
+          每页
+          <select
+            value={itemsPerPage}
+            onChange={(event) => setItemsPerPage(Number(event.target.value))}
+            className="h-10 border border-slate-200 bg-white px-3 text-sm font-black text-slate-800 shadow-sm outline-none transition-all hover:border-primary-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       {filtered.length ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {filtered.map((item, index) => (
+        <>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {currentItems.map((item, index) => (
             <motion.a
               key={item.slug}
               href={`#${baseHash}/${encodeURIComponent(item.slug)}`}
@@ -141,14 +249,74 @@ function CollectionList({ items, baseHash, title, eyebrow, description, emptyTex
                 ))}
               </div>
             </motion.a>
-          ))}
-        </div>
+            ))}
+          </div>
+          <PaginationBar
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageRange={pageRange}
+            pageSummary={pageSummary}
+            onPageChange={goToPage}
+            label={title}
+          />
+        </>
       ) : (
         <div className="border border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-500 shadow-sm">
           {emptyText}
         </div>
       )}
     </section>
+  )
+}
+
+function PaginationBar({ currentPage, totalPages, pageRange, pageSummary, onPageChange, label }) {
+  return (
+    <nav className="mt-6 border border-slate-200 bg-white p-3 shadow-sm" aria-label={`${label}分页`}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-bold text-slate-500">
+          第 {currentPage} / {totalPages} 页 · {pageSummary}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="h-10 border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 shadow-sm transition-all hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300"
+          >
+            上一页
+          </button>
+          {pageRange.map((page, index) =>
+            page === 'ellipsis' ? (
+              <span key={`ellipsis-${index}`} className="flex h-10 w-10 items-center justify-center text-sm font-black text-slate-400">
+                ...
+              </span>
+            ) : (
+              <button
+                key={page}
+                type="button"
+                onClick={() => onPageChange(page)}
+                aria-current={currentPage === page ? 'page' : undefined}
+                className={`h-10 min-w-10 border px-3 text-sm font-black shadow-sm transition-all ${
+                  currentPage === page
+                    ? 'border-primary-700 bg-primary-700 text-white shadow-brand'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700'
+                }`}
+              >
+                {page}
+              </button>
+            ),
+          )}
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="h-10 border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 shadow-sm transition-all hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300"
+          >
+            下一页
+          </button>
+        </div>
+      </div>
+    </nav>
   )
 }
 

@@ -46,15 +46,8 @@ export default function App() {
     posts,
     tools,
     devLogs,
-    setPosts,
-    setTotalPosts,
-    setProfile,
-    setRepositories,
-    setTools,
-    setDevLogs,
-    setModuleSettings,
+    hydrateSiteData,
     setPostMetrics,
-    setAllTags,
     setIsLoading,
     setError,
   } = useBlogStore()
@@ -68,31 +61,34 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    let active = true
+
     const loadPosts = async () => {
       setIsLoading(true)
       setError(null)
       try {
         const data = await fetchSiteData()
-        setPosts(data.posts)
-        setTotalPosts(data.total)
-        setProfile(data.profile)
-        setRepositories(data.repositories)
-        setTools(data.tools)
-        setDevLogs(data.devLogs)
-        setModuleSettings(data.moduleSettings)
-        const allTags = [...new Set(data.posts.flatMap((p) => p.tags || []))].sort()
-        setAllTags(allTags)
-        fetchPostMetrics().then(setPostMetrics).catch(() => {})
+        if (!active) return
+        hydrateSiteData(data)
+        fetchPostMetrics()
+          .then((metrics) => {
+            if (active) setPostMetrics(metrics)
+          })
+          .catch(() => {})
       } catch (error) {
+        if (!active) return
         console.error('Failed to load posts:', error)
         setError(error)
       } finally {
-        setIsLoading(false)
+        if (active) setIsLoading(false)
       }
     }
 
     loadPosts()
-  }, [])
+    return () => {
+      active = false
+    }
+  }, [hydrateSiteData, setError, setIsLoading, setPostMetrics])
 
   const selectedPost = useMemo(
     () => posts.find((post) => post.slug === route.slug),
