@@ -164,6 +164,14 @@ export function parseMarkdownBlocks(content) {
       return
     }
 
+    const markdownImageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
+    if (markdownImageMatch) {
+      flushParagraph()
+      flushList()
+      blocks.push({ type: 'image', alt: markdownImageMatch[1], src: markdownImageMatch[2] })
+      return
+    }
+
     const attachmentMatch = trimmed.match(/^\[\[ra-attachment:([^\]]+)\]\]$/)
     if (attachmentMatch) {
       flushParagraph()

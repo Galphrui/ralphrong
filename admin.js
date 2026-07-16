@@ -166,6 +166,7 @@ const RaEls = {
   codePath: document.querySelector("#RaCodePathInput"),
   codeUrl: document.querySelector("#RaCodeUrlInput"),
   codeDescription: document.querySelector("#RaCodeDescriptionInput"),
+  codeDescriptionImage: document.querySelector("#RaCodeDescriptionImageInput"),
   codeSnippet: document.querySelector("#RaCodeSnippetInput"),
   codeAttachmentFile: document.querySelector("#RaCodeAttachmentFileInput"),
   codeAttachmentList: document.querySelector("#RaCodeAttachmentList"),
@@ -194,7 +195,9 @@ const RaEls = {
   toolDate: document.querySelector("#RaToolDateInput"),
   toolTags: document.querySelector("#RaToolTagsInput"),
   toolSummary: document.querySelector("#RaToolSummaryInput"),
+  toolSummaryImage: document.querySelector("#RaToolSummaryImageInput"),
   toolContent: document.querySelector("#RaToolContentInput"),
+  toolContentImage: document.querySelector("#RaToolContentImageInput"),
   toolAttachmentFile: document.querySelector("#RaToolAttachmentFileInput"),
   toolAttachmentList: document.querySelector("#RaToolAttachmentList"),
   clearToolAttachments: document.querySelector("#RaClearToolAttachmentsButton"),
@@ -1704,6 +1707,13 @@ function parseMarkdownBlocks(content) {
       blocks.push({ type: "image", ...parseTokenAttributes(imageMatch[1]) });
       return;
     }
+    const markdownImageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (markdownImageMatch) {
+      flushParagraph();
+      flushList();
+      blocks.push({ type: "image", alt: markdownImageMatch[1], src: markdownImageMatch[2] });
+      return;
+    }
     const attachmentMatch = trimmed.match(/^\[\[ra-attachment:([^\]]+)\]\]$/);
     if (attachmentMatch) {
       flushParagraph();
@@ -2412,6 +2422,43 @@ async function addCodeAttachments(event) {
   } catch (error) {
     setCodeStatus(`代码附件添加失败：${error.message}`);
   }
+}
+
+async function insertMarkdownImage(event, input, bucket, setStatus, label = "图片") {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file || !input) return;
+  try {
+    if (!file.type.startsWith("image/")) throw new Error("请选择图片文件。");
+    setStatus(`正在插入${label}：${file.name}`);
+    const src = await markdownImageSource(file, bucket);
+    const alt = file.name.replace(/\.[^.]+$/, "").replace(/[\[\]\n\r]/g, " ").trim() || label;
+    insertIntoTextarea(input, `![${alt}](${src})`);
+    setStatus(`已插入${label}：${file.name}。保存并发布后前台会按 Markdown 渲染。`);
+  } catch (error) {
+    setStatus(`${label}插入失败：${error.message}`);
+  }
+}
+
+async function markdownImageSource(file, bucket) {
+  if (RA_API_BASE) {
+    const asset = await uploadAssetAttachment(file, bucket);
+    return asset.rawUrl || asset.url || asset.dataUrl;
+  }
+  return resizeProfilePhoto(file);
+}
+
+function insertIntoTextarea(input, text) {
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? start;
+  const before = input.value.slice(0, start);
+  const after = input.value.slice(end);
+  const leading = before && !before.endsWith("\n") ? "\n\n" : "";
+  const trailing = after && !after.startsWith("\n") ? "\n\n" : "";
+  const next = `${leading}${text}${trailing}`;
+  input.value = `${before}${next}${after}`;
+  input.focus();
+  input.selectionStart = input.selectionEnd = start + next.length;
 }
 
 function deleteCodeAttachment(index) {
@@ -3801,6 +3848,8 @@ RaEls.newTool.addEventListener("click", newToolItem);
 RaEls.saveTool.addEventListener("click", saveToolItem);
 RaEls.deleteTool.addEventListener("click", deleteToolItem);
 RaEls.toolAttachmentFile.addEventListener("change", addToolAttachments);
+RaEls.toolSummaryImage.addEventListener("change", (event) => insertMarkdownImage(event, RaEls.toolSummary, "tools", setToolsStatus, "工具摘要图片"));
+RaEls.toolContentImage.addEventListener("change", (event) => insertMarkdownImage(event, RaEls.toolContent, "tools", setToolsStatus, "工具说明图片"));
 RaEls.clearToolAttachments.addEventListener("click", clearToolAttachments);
 RaEls.toolAttachmentList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-ra-delete-tool-attachment]");
@@ -3841,6 +3890,7 @@ RaEls.downloadCode.addEventListener("click", downloadCurrentCodeSnippet);
 RaEls.saveCodeItem.addEventListener("click", saveCodeItem);
 RaEls.deleteCodeItem.addEventListener("click", deleteCodeItem);
 RaEls.codeAttachmentFile.addEventListener("change", addCodeAttachments);
+RaEls.codeDescriptionImage.addEventListener("change", (event) => insertMarkdownImage(event, RaEls.codeDescription, "code", setCodeStatus, "代码描述图片"));
 RaEls.clearCodeAttachments.addEventListener("click", clearCodeAttachments);
 RaEls.codeAttachmentList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-ra-delete-code-attachment]");

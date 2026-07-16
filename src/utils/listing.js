@@ -66,3 +66,16 @@ export function uniqueTags(items) {
 export function formatDateDot(value) {
   return String(value || '').slice(0, 10).replaceAll('-', '.') || '-'
 }
+
+export function plainTextFromMarkdown(value) {
+  return String(value || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*]\([^)]+\)/g, ' ')
+    .replace(/\[\[ra-image\s+[^\]]+\]\]/g, ' ')
+    .replace(/\[\[ra-(?:attachment|pdf):[^\]]+\]\]/g, ' ')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/[`*_>~[\]()]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}

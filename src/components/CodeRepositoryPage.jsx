@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useBlogStore } from '../store/useStore'
 import { FeatureHero, LoadingPanel, PageScaffold } from './PageChrome'
+import MarkdownContent from './MarkdownContent'
 import {
   CODE_DISPLAY_STYLES,
   CODE_LANGUAGE_PRESETS,
@@ -11,7 +12,7 @@ import {
 } from '../utils/codeLibrary'
 import { displayStyleForModule, normalizeDisplayStyle } from '../utils/moduleConfig'
 import { attachmentDirectUrl, attachmentName, downloadAttachment, formatAttachmentBytes, isChunkedAttachment } from '../utils/attachments'
-import { PAGE_SIZE_OPTIONS, formatDateDot, getPageRange, itemUpdatedAt, sortContentItems, uniqueTags } from '../utils/listing'
+import { PAGE_SIZE_OPTIONS, formatDateDot, getPageRange, itemUpdatedAt, plainTextFromMarkdown, sortContentItems, uniqueTags } from '../utils/listing'
 import { sortLabel } from '../utils/postSort'
 import ScrollPositionControls from './ScrollPositionControls'
 
@@ -117,7 +118,7 @@ function CodeRepositoryList({ repositories, moduleSettings, sortMode }) {
         baseHash="code"
         getId={(item) => item.id}
         getTitle={(item) => item.name}
-        getSummary={(item) => item.description || item.notes || item.sourcePath}
+        getSummary={(item) => plainTextFromMarkdown(item.description || item.notes || item.sourcePath)}
         getMeta={(item) => [
           item.language,
           item.updatedAt ? formatDateDot(item.updatedAt) : '',
@@ -281,6 +282,7 @@ function PaginationBar({ currentPage, totalPages, pageRange, pageSummary, onPage
 
 function CodeRepositoryCard({ repo, index, displayStyle }) {
   const formatted = formatCodeByLanguage(repo.snippet, repo.language)
+  const description = plainTextFromMarkdown(repo.description)
   const isCompact = displayStyle === 'compact'
   const isTimeline = displayStyle === 'timeline'
   const isMagazine = displayStyle === 'magazine'
@@ -307,7 +309,7 @@ function CodeRepositoryCard({ repo, index, displayStyle }) {
             </span>
           )}
         </div>
-        {!isCompact && <p className="mt-4 text-sm font-medium leading-6 text-slate-600">{repo.description}</p>}
+        {!isCompact && description && <p className="mt-4 text-sm font-medium leading-6 text-slate-600">{description}</p>}
         <div className="mt-4 flex flex-wrap gap-2">
           {(repo.tags || []).map((item) => (
             <span key={item} className="border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-600">
@@ -371,7 +373,11 @@ function CodeRepositoryDetail({ repo }) {
             {repo.sourcePath && <span>{repo.sourcePath}</span>}
             <span>{codeFileName(repo)}</span>
           </div>
-          {repo.description && <p className="mt-5 text-base leading-8 text-slate-700">{repo.description}</p>}
+          {repo.description && (
+            <div className="mt-5">
+              <MarkdownContent content={repo.description} mode="markdown" />
+            </div>
+          )}
           <div className="mt-5 flex flex-wrap gap-2">
             {(repo.tags || []).map((item) => (
               <span key={item} className="border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-600">

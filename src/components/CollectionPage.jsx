@@ -5,7 +5,7 @@ import { FeatureHero, LoadingPanel, PageScaffold } from './PageChrome'
 import ScrollPositionControls from './ScrollPositionControls'
 import { useBlogStore } from '../store/useStore'
 import { attachmentDirectUrl, attachmentName, downloadAttachment, formatAttachmentBytes, isChunkedAttachment } from '../utils/attachments'
-import { PAGE_SIZE_OPTIONS, formatDateDot, getPageRange, itemDate, itemUpdatedAt, sortContentItems, uniqueTags } from '../utils/listing'
+import { PAGE_SIZE_OPTIONS, formatDateDot, getPageRange, itemDate, itemUpdatedAt, plainTextFromMarkdown, sortContentItems, uniqueTags } from '../utils/listing'
 import { sortLabel } from '../utils/postSort'
 
 function AttachmentList({ attachments = [], title = '附件' }) {
@@ -168,6 +168,7 @@ function CollectionList({ items, baseHash, title, eyebrow, description, emptyTex
           itemDate(item) ? formatDateDot(itemDate(item)) : '',
           item.attachments?.length ? `${item.attachments.length} 个附件` : '',
         ].filter(Boolean)}
+        getSummary={(item) => plainTextFromMarkdown(item.summary || item.content)}
         tabs={[
           { key: 'latest', label: '最近发布', sortMode: 'date-desc' },
           { key: 'attachments', label: '附件最多', sort: (value) => [...value].sort((a, b) => (b.attachments?.length || 0) - (a.attachments?.length || 0)) },
@@ -242,7 +243,7 @@ function CollectionList({ items, baseHash, title, eyebrow, description, emptyTex
                 {item.attachments?.length > 0 && <span>{item.attachments.length} 个附件</span>}
               </div>
               <h2 className="mt-2 text-xl font-black leading-tight text-slate-950">{item.title}</h2>
-              {item.summary && <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{item.summary}</p>}
+              {item.summary && <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{plainTextFromMarkdown(item.summary)}</p>}
               <div className="mt-4 flex flex-wrap gap-2">
                 {(item.tags || []).slice(0, 4).map((tagItem) => (
                   <span key={tagItem} className="bg-primary-50 px-3 py-1 text-xs font-bold text-primary-700">{tagItem}</span>
@@ -336,7 +337,11 @@ function CollectionDetail({ item, baseHash, backLabel, attachmentTitle }) {
             {item.updatedAt && <span>更新 {item.updatedAt.slice(0, 10)}</span>}
             {item.attachments?.length > 0 && <span>{item.attachments.length} 个附件</span>}
           </div>
-          {item.summary && <p className="mt-5 text-base leading-8 text-slate-700">{item.summary}</p>}
+          {item.summary && (
+            <div className="mt-5">
+              <MarkdownContent content={item.summary} mode="markdown" />
+            </div>
+          )}
         </header>
         {item.content && (
           <div className="mt-8">

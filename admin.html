@@ -362,8 +362,15 @@
                   <input id="RaCodeUrlInput" placeholder="https://github.com/..." />
                 </label>
                 <label class="RaField RaWide">
-                  描述
-                  <textarea id="RaCodeDescriptionInput" rows="3"></textarea>
+                  描述 Markdown
+                  <div class="RaInlineFieldTools">
+                    <span>支持换行、标题、列表、代码块和图片</span>
+                    <label class="RaFileButton RaUploadFileButton">
+                      插入图片
+                      <input id="RaCodeDescriptionImageInput" type="file" accept="image/*" />
+                    </label>
+                  </div>
+                  <textarea id="RaCodeDescriptionInput" rows="5" spellcheck="false"></textarea>
                 </label>
                 <label class="RaField RaWide">
                   代码内容
@@ -475,11 +482,25 @@
                   <input id="RaToolTagsInput" placeholder="Android, 工具" />
                 </label>
                 <label class="RaField RaWide">
-                  摘要
-                  <textarea id="RaToolSummaryInput" rows="3"></textarea>
+                  摘要 Markdown
+                  <div class="RaInlineFieldTools">
+                    <span>支持换行和图片，列表页会自动提取纯文本摘要</span>
+                    <label class="RaFileButton RaUploadFileButton">
+                      插入图片
+                      <input id="RaToolSummaryImageInput" type="file" accept="image/*" />
+                    </label>
+                  </div>
+                  <textarea id="RaToolSummaryInput" rows="4" spellcheck="false"></textarea>
                 </label>
                 <label class="RaField RaWide">
                   说明 Markdown
+                  <div class="RaInlineFieldTools">
+                    <span>支持 Markdown、换行、自定义样式标记和图片</span>
+                    <label class="RaFileButton RaUploadFileButton">
+                      插入图片
+                      <input id="RaToolContentImageInput" type="file" accept="image/*" />
+                    </label>
+                  </div>
                   <textarea id="RaToolContentInput" rows="10" spellcheck="false"></textarea>
                 </label>
                 <div class="RaField RaWide">
