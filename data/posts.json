@@ -1036,6 +1036,23 @@
   ],
   "repositories": [
     {
+      "id": "根据clockconfig提取表盘",
+      "name": "根据ClockConfig提取表盘",
+      "fileName": "move_clock.py",
+      "description": "根据ClockConfig提取表盘",
+      "language": "Code",
+      "tags": [
+        "工具",
+        "Python"
+      ],
+      "url": "",
+      "sourcePath": "",
+      "updatedAt": "2026-07-16",
+      "snippet": "import json\nimport shutil\nfrom pathlib import Path\n\n\ndef find_config_file(current_dir: Path) -> Path:\n    \"\"\"\n    自动查找 ClockConfig 配置文件\n    \"\"\"\n    possible_names = [\n        \"ClockConfig\",\n        \"ClockConfig.json\",\n        \"ClockConfig.txt\",\n    ]\n\n    for name in possible_names:\n        file_path = current_dir / name\n        if file_path.exists() and file_path.is_file():\n            return file_path\n\n    raise FileNotFoundError(\n        \"找不到配置文件，请确认当前目录下存在 ClockConfig、ClockConfig.json 或 ClockConfig.txt\"\n    )\n\n\ndef load_new_style_names(config_file: Path) -> set[str]:\n    \"\"\"\n    从 ClockConfig 文件中读取 newStyle 数组\n    \"\"\"\n    with config_file.open(\"r\", encoding=\"utf-8\") as f:\n        data = json.load(f)\n\n    if \"newStyle\" not in data:\n        raise KeyError(\"配置文件中没有找到 newStyle 字段\")\n\n    if not isinstance(data[\"newStyle\"], list):\n        raise TypeError(\"newStyle 字段不是数组\")\n\n    return set(data[\"newStyle\"])\n\n\ndef move_matching_items():\n    current_dir = Path.cwd()\n    clock_dir = current_dir / \"Clock\"\n\n    config_file = find_config_file(current_dir)\n\n    print(f\"使用配置文件：{config_file.name}\")\n\n    clock_dir.mkdir(exist_ok=True)\n\n    new_style_names = load_new_style_names(config_file)\n\n    moved_count = 0\n    skipped_count = 0\n    not_found_names = set(new_style_names)\n\n    for item in current_dir.iterdir():\n        # 跳过 Clock 文件夹\n        if item.name == \"Clock\":\n            continue\n\n        # 跳过脚本自身\n        if item.name == Path(__file__).name:\n            continue\n\n        # 跳过配置文件\n        if item.resolve() == config_file.resolve():\n            continue\n\n        # 匹配规则：\n        # 1. 文件/文件夹完整名称一致\n        # 2. 文件名去掉扩展名后一致\n        matched_name = None\n\n        if item.name in new_style_names:\n            matched_name = item.name\n        elif item.stem in new_style_names:\n            matched_name = item.stem\n\n        if matched_name:\n            target = clock_dir / item.name\n\n            if target.exists():\n                print(f\"跳过，目标已存在：{target.name}\")\n                skipped_count += 1\n                continue\n\n            shutil.move(str(item), str(target))\n            print(f\"已移动：{item.name} -> Clock/\")\n            moved_count += 1\n\n            not_found_names.discard(matched_name)\n\n    print(\"\\n处理完成\")\n    print(f\"成功移动：{moved_count} 个\")\n    print(f\"跳过：{skipped_count} 个\")\n\n    if not_found_names:\n        print(\"\\n以下 newStyle 名称在当前目录中没有找到对应文件：\")\n        for name in sorted(not_found_names):\n            print(name)\n\n\nif __name__ == \"__main__\":\n    move_matching_items()",
+      "notes": "",
+      "attachments": []
+    },
+    {
       "id": "表盘文件提取为clockconfig",
       "name": "表盘文件提取为ClockConfig",
       "fileName": "clock.py",
@@ -1241,6 +1258,25 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-07-16 代码库发布记录",
+      "slug": "auto-deploy-20260716024800-code",
+      "date": "2026-07-16",
+      "createdAt": "2026-07-16T02:48:00.874Z",
+      "updatedAt": "2026-07-16T02:48:00.874Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "代码库"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 代码库 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-16 代码库发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-16T02:48:00.874Z\n2. 发布模块：代码库\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“代码库”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update code content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-07-16 代码库发布记录",
       "slug": "auto-deploy-20260716024531-code",
