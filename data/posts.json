@@ -1038,6 +1038,7 @@
     {
       "id": "ro值检查脚本",
       "name": "ro值检查脚本",
+      "fileName": "",
       "description": "检查是否有错误放置的ro值，重复值的保存最后一个作为唯一",
       "language": "Python",
       "tags": [
@@ -1054,6 +1055,7 @@
     {
       "id": "apk整理并输出mk数据android81",
       "name": "APK整理并输出mk数据（Android8.1）",
+      "fileName": "",
       "description": "批量整理APK，生成对应的文件和Android.mk数据（Android8.1）",
       "language": "Python",
       "tags": [
@@ -1070,6 +1072,7 @@
     {
       "id": "md转pdf工具",
       "name": "MD转PDF工具",
+      "fileName": "",
       "description": "MD转PDF\n缺少依赖，请执行\npython -m pip install markdown-it-py mdit-py-plugins pygments playwright linkify-it-py\npython -m playwright install chromium\n\n\n使用方法：python md_to_pdf.py 隐私政策JSON服务器对接开发文档.md 隐私政策JSON服务器对接开发文转换完成：E:\\Sgtc_Git_App\\NewApp_Sleep\\SgtcPrivacyManager\\docs\\隐私政策JSON服务器对接开发文档.pdf",
       "language": "Python",
       "tags": [
@@ -1085,6 +1088,7 @@
     {
       "id": "基于nas当中linux的消息推送",
       "name": "基于NAS当中Linux的消息推送",
+      "fileName": "",
       "description": "NAS 微信定时推送脚本",
       "language": "Python",
       "tags": [
@@ -1100,6 +1104,7 @@
     {
       "id": "文本转markdown工具",
       "name": "文本转Markdown工具",
+      "fileName": "",
       "description": "运行依赖：\npip install python-docx pymupdf\n如果是 Ubuntu，Tkinter 不存在时再装：\nsudo apt install python3-tk",
       "language": "Python",
       "tags": [
@@ -1116,6 +1121,7 @@
     {
       "id": "android-alarm-debug-kit",
       "name": "Android 闹钟状态排查工具集",
+      "fileName": "",
       "description": "沉淀关机闹钟、FIRED_STATE、Activity 前台拉起和通知链路排查时常用的日志命令与状态判断片段。",
       "language": "Java / ADB",
       "tags": [
@@ -1133,6 +1139,7 @@
     {
       "id": "blog-module-registry",
       "name": "Ra 站点模块注册表",
+      "fileName": "",
       "description": "用于管理文章、代码库、留言、简历、管理后台等入口的显隐、排序和最大显示数量。",
       "language": "JavaScript",
       "tags": [
@@ -1217,6 +1224,25 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-07-16 代码库发布记录",
+      "slug": "auto-deploy-20260716024217-code",
+      "date": "2026-07-16",
+      "createdAt": "2026-07-16T02:42:17.868Z",
+      "updatedAt": "2026-07-16T02:42:17.868Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "代码库"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 代码库 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-16 代码库发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-16T02:42:17.868Z\n2. 发布模块：代码库\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“代码库”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update code content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-07-16 代码库发布记录",
       "slug": "auto-deploy-20260716023141-code",
@@ -1726,14 +1752,6 @@
         "order": 70,
         "surface": "top",
         "external": true
-      },
-      {
-        "id": "modules",
-        "label": "设置",
-        "href": "#modules",
-        "enabled": true,
-        "order": 90,
-        "surface": "top"
       }
     ]
   },
