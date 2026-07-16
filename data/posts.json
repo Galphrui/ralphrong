@@ -1036,6 +1036,23 @@
   ],
   "repositories": [
     {
+      "id": "表盘文件提取为clockconfig",
+      "name": "表盘文件提取为ClockConfig",
+      "fileName": "clock.py",
+      "description": "表盘文件提取为ClockConfig，固定表盘直接添加",
+      "language": "Python",
+      "tags": [
+        "工具",
+        "Python"
+      ],
+      "url": "",
+      "sourcePath": "",
+      "updatedAt": "2026-07-16",
+      "snippet": "import json\nfrom pathlib import Path\n\n# 输出文件名\nOUTPUT_FILE = \"newStyle.json\"\n\n# 固定的倒数后四个\nFIXED_ITEMS = {\n    \"SJTC-A-SANJI-3D-EARTH_C2025040702\": \"天文地球\",\n    \"SJTC-A-SANJI-3D-TOMATO_C2025032001\": \"番茄乐园\",\n    \"SJTC-A-CUSTOM-CLOCK_2024070601\": \"自定义表盘\",\n    \"SJTC-A-CREATE-CLOCK_20250711\": \"创作表盘\",\n}\n\ndef main():\n    current_dir = Path.cwd()\n\n    # 读取当前文件夹内的 apk 文件名，去掉 .apk 后缀\n    apk_names = sorted(\n        apk.stem\n        for apk in current_dir.iterdir()\n        if apk.is_file() and apk.suffix.lower() == \".apk\"\n    )\n\n    # 避免固定项和读取到的 apk 名称重复\n    normal_items = [\n        name for name in apk_names\n        if name not in FIXED_ITEMS\n    ]\n\n    result = {}\n\n    # newStyle：先放读取到的 apk 文件名，再放固定的四个\n    result[\"newStyle\"] = normal_items + list(FIXED_ITEMS.keys())\n\n    # 普通 apk 文件名统一写成“系统表盘”\n    for name in normal_items:\n        result[name] = \"系统表盘\"\n\n    # 固定项写固定中文名\n    result.update(FIXED_ITEMS)\n\n    # 写入 json 文件\n    with open(OUTPUT_FILE, \"w\", encoding=\"utf-8\") as f:\n        json.dump(result, f, ensure_ascii=False, indent=4)\n\n    print(f\"生成完成：{OUTPUT_FILE}\")\n    print(f\"共读取 APK：{len(normal_items)} 个\")\n    print(f\"固定表盘：{len(FIXED_ITEMS)} 个\")\n\nif __name__ == \"__main__\":\n    main()",
+      "notes": "",
+      "attachments": []
+    },
+    {
       "id": "ro值检查脚本",
       "name": "ro值检查脚本",
       "fileName": "",
@@ -1224,6 +1241,25 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-07-16 代码库发布记录",
+      "slug": "auto-deploy-20260716024531-code",
+      "date": "2026-07-16",
+      "createdAt": "2026-07-16T02:45:31.455Z",
+      "updatedAt": "2026-07-16T02:45:31.455Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "代码库"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 代码库 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-16 代码库发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-16T02:45:31.455Z\n2. 发布模块：代码库\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“代码库”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update code content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-07-16 代码库发布记录",
       "slug": "auto-deploy-20260716024217-code",
