@@ -11,7 +11,7 @@ export function AuthorPanel() {
 
   return (
     <aside className="grid content-start gap-5">
-      <section className="border border-slate-200 bg-white p-4 shadow-sm">
+      <section data-animate-section className="border border-slate-200 bg-white p-4 shadow-sm">
         <p className="mb-3 text-xs font-black uppercase text-primary-700">Ra Profile</p>
         <div className="mb-4 flex h-11 w-11 items-center justify-center bg-gradient-brand text-base font-black text-white">
           RA
@@ -37,7 +37,7 @@ export function SortPanel({ sortMode = 'date-desc', onSortModeChange, options = 
   if (!onSortModeChange) return null
 
   return (
-    <section className="border border-slate-200 bg-white p-4 shadow-sm">
+    <section data-animate-section className="border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase text-primary-700">Ra Sort</p>
@@ -68,7 +68,7 @@ export function SortPanel({ sortMode = 'date-desc', onSortModeChange, options = 
 export function IndexPanel({ stats = [], focusText }) {
   return (
     <aside className="grid content-start gap-5">
-      <section className="border border-slate-200 bg-white p-4 shadow-sm">
+      <section data-animate-section className="border border-slate-200 bg-white p-4 shadow-sm">
         <p className="mb-3 text-xs font-black uppercase text-primary-700">Ra Index</p>
         <div className="grid gap-4">
           {stats.map((stat) => (
@@ -80,7 +80,7 @@ export function IndexPanel({ stats = [], focusText }) {
         </div>
       </section>
       {focusText && (
-        <section className="border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600 shadow-sm">
+        <section data-animate-section className="border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600 shadow-sm">
           <p className="mb-2 text-xs font-black uppercase text-primary-700">Ra Focus</p>
           <p>{focusText}</p>
         </section>
@@ -145,13 +145,13 @@ export function FeatureHero({
   const currentTabLabel = tabs.find((tab) => tab.key === promoMode)?.label || ''
 
   return (
-    <section className="relative overflow-hidden border border-slate-200 bg-hero-panel px-5 py-8 shadow-soft sm:px-8 lg:px-10">
+    <section data-hero-motion data-animate-section className="ra-hero-motion relative overflow-hidden border border-slate-200 bg-hero-panel px-5 py-8 shadow-soft sm:px-8 lg:px-10">
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-brand" />
       <div className="absolute inset-0 bg-grid-pattern opacity-45" />
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative z-10 grid gap-6">
         <div>
           <p className="mb-3 text-xs font-black uppercase text-primary-600">{eyebrow}</p>
-          <h1 className="mb-4 max-w-4xl text-3xl font-black leading-tight text-slate-950 sm:text-4xl">{title}</h1>
+          <h1 data-animate-text className="mb-4 max-w-4xl text-3xl font-black leading-tight text-slate-950 sm:text-4xl">{title}</h1>
           <p className="max-w-3xl text-base leading-7 text-slate-600">{description}</p>
         </div>
         {promotedItem && (
@@ -173,6 +173,7 @@ export function FeatureHero({
               ))}
             </div>
             <a
+              data-animate-card
               key={`${promoMode}-${getId(promotedItem)}`}
               href={`#${baseHash}/${encodeURIComponent(getId(promotedItem))}`}
               className="block w-full overflow-hidden border border-primary-100 bg-white/80 p-4 text-left transition hover:border-primary-300 hover:bg-white"

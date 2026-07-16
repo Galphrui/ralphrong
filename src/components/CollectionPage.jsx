@@ -157,7 +157,7 @@ function CollectionList({ items, baseHash, title, eyebrow, description, emptyTex
   }
 
   return (
-    <section id={baseHash} className="py-4">
+    <section id={baseHash} data-animate-section className="py-4">
       <FeatureHero
         eyebrow={eyebrow}
         title={title}
@@ -231,6 +231,7 @@ function CollectionList({ items, baseHash, title, eyebrow, description, emptyTex
           <div className="grid gap-4 lg:grid-cols-2">
             {currentItems.map((item, index) => (
             <motion.a
+              data-animate-card
               key={item.slug}
               href={`#${baseHash}/${encodeURIComponent(item.slug)}`}
               className="block border border-slate-200 bg-white p-5 shadow-sm transition hover:border-primary-300 hover:shadow-soft"
@@ -325,7 +326,7 @@ function CollectionDetail({ item, baseHash, backLabel, attachmentTitle }) {
   return (
     <>
       <ScrollPositionControls ariaLabelPrefix={backLabel} />
-      <article className="mx-auto max-w-5xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
+      <article data-animate-section className="mx-auto max-w-5xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
         <a href={`#${baseHash}`} className="text-sm font-bold text-primary-700">{backLabel}</a>
         <header className="mt-6 border-b border-slate-200 pb-6">
           <div className="flex flex-wrap gap-2">

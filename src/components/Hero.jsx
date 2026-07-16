@@ -65,7 +65,7 @@ export default function Hero() {
   }
 
   return (
-    <section className="relative overflow-hidden border border-slate-200 bg-hero-panel px-5 py-8 shadow-soft sm:px-8 lg:px-10">
+    <section data-hero-motion data-animate-section className="ra-hero-motion relative overflow-hidden border border-slate-200 bg-hero-panel px-5 py-8 shadow-soft sm:px-8 lg:px-10">
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-brand" />
       <div className="absolute inset-0 bg-grid-pattern opacity-45" />
       <motion.div
@@ -79,7 +79,7 @@ export default function Hero() {
           <p className="mb-3 text-xs font-black uppercase text-primary-600">
             Android Engineering Notes
           </p>
-          <h1 className="mb-4 max-w-4xl text-3xl font-black leading-tight text-slate-950 sm:text-4xl">
+          <h1 data-animate-text className="mb-4 max-w-4xl text-3xl font-black leading-tight text-slate-950 sm:text-4xl">
             拆解 Android 工程现场，沉淀可复现答案
           </h1>
           <p className="max-w-3xl text-base leading-7 text-slate-600">
@@ -105,6 +105,7 @@ export default function Hero() {
               ))}
             </div>
             <button
+              data-animate-card
               key={`${promoMode}-${promotedPost.slug}`}
               type="button"
               onClick={() => {

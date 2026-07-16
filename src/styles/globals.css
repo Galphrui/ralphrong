@@ -23,6 +23,96 @@
   }
 }
 
+.ra-hero-motion {
+  --ra-hero-x: 0;
+  --ra-hero-y: 0;
+}
+
+.ra-hero-motion::before,
+.ra-hero-motion::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
+.ra-hero-motion::before {
+  background:
+    radial-gradient(circle at 35% 35%, rgba(15, 159, 127, 0.2), transparent 42%),
+    radial-gradient(circle at 70% 45%, rgba(245, 158, 11, 0.16), transparent 46%);
+  filter: blur(4px);
+  inset: -22%;
+  transform: translate3d(calc(var(--ra-hero-x) * 18px), calc(var(--ra-hero-y) * 18px), 0);
+  transition: transform 0.25s ease-out;
+}
+
+.ra-hero-motion::after {
+  background-image:
+    linear-gradient(90deg, rgba(15, 159, 127, 0.09) 1px, transparent 1px),
+    linear-gradient(rgba(15, 159, 127, 0.09) 1px, transparent 1px);
+  background-size: 28px 28px;
+  inset: 0;
+  mask-image: linear-gradient(120deg, rgba(0, 0, 0, 0.5), transparent 70%);
+  transform: translate3d(calc(var(--ra-hero-x) * -10px), calc(var(--ra-hero-y) * -10px), 0);
+  transition: transform 0.25s ease-out;
+}
+
+.ra-split-text {
+  display: inline-block;
+}
+
+.ra-split-char {
+  display: inline-block;
+  white-space: pre;
+  will-change: transform, opacity, filter;
+}
+
+[data-animate-card] {
+  transform-origin: center;
+  will-change: transform;
+}
+
+img[data-animate-image],
+.ra-image-pending {
+  opacity: 0;
+  filter: blur(10px);
+  transform: translateY(12px);
+  transition: opacity 0.45s ease, filter 0.45s ease, transform 0.45s ease;
+}
+
+img.ra-image-loaded {
+  opacity: 1;
+  filter: blur(0);
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .ra-split-char,
+  [data-animate-card],
+  img[data-animate-image],
+  .ra-image-pending {
+    opacity: 1 !important;
+    filter: none !important;
+    transform: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .ra-hero-motion::before,
+  .ra-hero-motion::after {
+    transform: none;
+  }
+}
+
 .article-scroll-controls {
   display: grid;
   gap: 10px;

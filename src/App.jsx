@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Navigation from './components/Navigation'
 import PostDetail from './components/PostDetail'
 import HomePage from './components/HomePage'
@@ -6,6 +6,7 @@ import ProfilePage from './components/ProfilePage'
 import Guestbook from './components/Guestbook'
 import CodeRepositoryPage from './components/CodeRepositoryPage'
 import CollectionPage from './components/CollectionPage'
+import { initAnimations } from './animations'
 import { useBlogStore } from './store/useStore'
 import { fetchPostMetrics, fetchSiteData, recordPostView } from './utils/api'
 
@@ -53,6 +54,7 @@ export default function App() {
   } = useBlogStore()
 
   const [route, setRoute] = useState(getRoute)
+  const routeShellRef = useRef(null)
 
   useEffect(() => {
     const onHashChange = () => setRoute(getRoute())
@@ -100,10 +102,18 @@ export default function App() {
     recordPostView(route.slug).then(setPostMetrics).catch(() => {})
   }, [route.name, route.slug, setPostMetrics])
 
+  useEffect(() => {
+    const cleanup = initAnimations({
+      routeKey: `${route.name}-${route.slug || route.id || ''}`,
+      root: routeShellRef.current || document,
+    })
+    return cleanup
+  }, [route.name, route.slug, route.id, posts.length, tools.length, devLogs.length])
+
   return (
     <div className="min-h-screen bg-gradient-hero text-slate-900">
       <Navigation />
-      <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
+      <main ref={routeShellRef} data-route-shell className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
         {route.name === 'profile' ? (
           <ProfilePage />
         ) : route.name === 'guestbook' ? (

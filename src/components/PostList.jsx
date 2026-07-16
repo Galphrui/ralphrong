@@ -73,7 +73,7 @@ export default function PostList() {
       : `0 / ${filteredPosts.length}`
 
   return (
-    <section id="posts" className="py-8">
+    <section id="posts" data-animate-section className="py-8">
       {/* Search and filter */}
       <motion.div
         className="mb-6"

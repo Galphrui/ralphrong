@@ -109,7 +109,7 @@ function CodeRepositoryList({ repositories, moduleSettings, sortMode }) {
   }
 
   return (
-    <section id="code" className="py-4">
+    <section id="code" data-animate-section className="py-4">
       <FeatureHero
         eyebrow="Ra Code Library"
         title="代码库"
@@ -290,6 +290,7 @@ function CodeRepositoryCard({ repo, index, displayStyle }) {
 
   return (
     <motion.article
+      data-animate-card
       className={`border border-slate-200 bg-white shadow-sm transition hover:border-primary-300 hover:shadow-soft ${
         isTimeline ? 'relative border-l-4 border-l-primary-600' : ''
       } ${isMagazine ? 'lg:grid lg:grid-cols-[0.9fr_1.1fr]' : ''}`}
@@ -361,7 +362,7 @@ function CodeRepositoryDetail({ repo }) {
   return (
     <>
       <ScrollPositionControls ariaLabelPrefix="代码库详情" />
-      <article className="mx-auto max-w-5xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
+      <article data-animate-section className="mx-auto max-w-5xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
         <a href="#code" className="text-sm font-bold text-primary-700">
           返回代码库
         </a>

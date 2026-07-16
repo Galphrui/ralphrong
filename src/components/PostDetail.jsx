@@ -239,6 +239,7 @@ export default function PostDetail({ post }) {
     <>
       <ScrollPositionControls ariaLabelPrefix="文章" />
       <motion.article
+        data-animate-section
         className="border border-slate-200 bg-white px-6 py-8 shadow-soft sm:px-10 lg:px-12"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}

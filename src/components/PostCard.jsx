@@ -31,6 +31,7 @@ export default function PostCard({ post, onClick, displayStyle = 'list' }) {
 
   return (
     <motion.article
+      data-animate-card
       className={`cursor-pointer border shadow-sm ${cardTone} ${
         isCompact ? 'p-4' : 'p-5'
       } ${isTimeline ? 'border-l-4 border-l-primary-600' : ''} ${
