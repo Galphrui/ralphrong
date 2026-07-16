@@ -1951,6 +1951,14 @@
         "order": 70,
         "surface": "top",
         "external": true
+      },
+      {
+        "id": "modules",
+        "label": "设置",
+        "href": "#modules",
+        "enabled": true,
+        "order": 90,
+        "surface": "top"
       }
     ]
   },
