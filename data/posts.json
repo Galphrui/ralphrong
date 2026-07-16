@@ -1036,6 +1036,22 @@
   ],
   "repositories": [
     {
+      "id": "apk整理并输出mk数据android81",
+      "name": "APK整理并输出mk数据（Android8.1）",
+      "description": "批量整理APK，生成对应的文件和Android.mk数据（Android8.1）",
+      "language": "Python",
+      "tags": [
+        "工具",
+        "Python"
+      ],
+      "url": "",
+      "sourcePath": "",
+      "updatedAt": "2026-07-16",
+      "snippet": "#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n\n\"\"\"\nAndroid Prebuilt APK Module Generator\n\n功能:\n1. 扫描当前目录APK\n2. 创建同名目录\n3. 移动APK进入目录\n4. 生成Android.mk\n5. 生成PRODUCT_PACKAGES列表\n\"\"\"\n\n\nimport os\nimport shutil\nimport sys\nimport traceback\n\n\nAPK_SUFFIX = \".apk\"\n\nANDROID_MK_NAME = \"Android.mk\"\n\nPRODUCT_FILE = \"product_packages.mk\"\n\n\nANDROID_MK_TEMPLATE = \"\"\"LOCAL_PATH := $(call my-dir)\n\ninclude $(CLEAR_VARS)\n\nLOCAL_MODULE := {module_name}\nLOCAL_MODULE_TAGS := optional\nLOCAL_SRC_FILES := $(LOCAL_MODULE).apk\nLOCAL_MODULE_CLASS := APPS\nLOCAL_MODULE_SUFFIX := $(COMMON_ANDROID_PACKAGE_SUFFIX)\nLOCAL_CERTIFICATE := PRESIGNED\nLOCAL_DEX_PREOPT := false\nLOCAL_MODULE_PATH := $(TARGET_OUT)/preloadapp\n\ninclude $(BUILD_PREBUILT)\n\"\"\"\n\n\ndef log(msg):\n    print(\"[INFO]\", msg)\n\n\ndef error(msg):\n    print(\"[ERROR]\", msg)\n\n\n\ndef get_module_name(filename):\n\n    if not filename.lower().endswith(APK_SUFFIX):\n        return None\n\n\n    name = filename[:-4]\n\n\n    if not name:\n        return None\n\n\n    # Android module安全处理\n    name = name.replace(\"-\", \"_\")\n    name = name.replace(\" \", \"_\")\n\n\n    return name\n\n\n\ndef create_dir(path):\n\n    try:\n\n        if not os.path.exists(path):\n            os.makedirs(path)\n\n        return True\n\n\n    except Exception as e:\n\n        error(\n            f\"创建目录失败 {path}: {e}\"\n        )\n\n        return False\n\n\n\ndef move_apk(src, dst):\n\n    \"\"\"\n    移动APK\n    \"\"\"\n\n    try:\n\n        # 防止目标已经存在\n        if os.path.exists(dst):\n\n            error(\n                f\"目标APK已存在，跳过移动: {dst}\"\n            )\n\n            return False\n\n\n        shutil.move(\n            src,\n            dst\n        )\n\n\n        return True\n\n\n    except Exception as e:\n\n\n        error(\n            f\"移动APK失败 {src}->{dst}: {e}\"\n        )\n\n        return False\n\n\n\ndef create_android_mk(\n        module_dir,\n        module_name\n):\n\n    try:\n\n        mk_file = os.path.join(\n            module_dir,\n            ANDROID_MK_NAME\n        )\n\n\n        content = ANDROID_MK_TEMPLATE.format(\n            module_name=module_name\n        )\n\n\n        with open(\n                mk_file,\n                \"w\",\n                encoding=\"utf-8\"\n        ) as f:\n\n            f.write(content)\n\n\n        return True\n\n\n    except Exception as e:\n\n\n        error(\n            f\"生成Android.mk失败 {module_name}: {e}\"\n        )\n\n        return False\n\n\n\ndef generate_product_packages(\n        modules,\n        filepath\n):\n\n    try:\n\n\n        with open(\n                filepath,\n                \"w\",\n                encoding=\"utf-8\"\n        ) as f:\n\n\n            for module in modules:\n\n                f.write(\n                    f\"PRODUCT_PACKAGES += {module}\\n\"\n                )\n\n\n        return True\n\n\n    except Exception as e:\n\n\n        error(\n            f\"生成product文件失败: {e}\"\n        )\n\n        return False\n\n\n\ndef scan_and_generate(\n        current_dir\n):\n\n    modules = []\n\n\n    try:\n\n        files = os.listdir(\n            current_dir\n        )\n\n\n    except Exception as e:\n\n        error(\n            f\"读取目录失败: {e}\"\n        )\n\n        return modules\n\n\n\n    for file in files:\n\n\n        if not file.lower().endswith(APK_SUFFIX):\n\n            continue\n\n\n\n        apk_path = os.path.join(\n            current_dir,\n            file\n        )\n\n\n        module_name = get_module_name(\n            file\n        )\n\n\n        if not module_name:\n\n            error(\n                f\"非法APK名称:{file}\"\n            )\n\n            continue\n\n\n\n        log(\n            f\"开始处理:{file}\"\n        )\n\n\n\n        module_dir = os.path.join(\n            current_dir,\n            module_name\n        )\n\n\n        # 创建目录\n        if not create_dir(\n                module_dir\n        ):\n            continue\n\n\n\n        target_apk = os.path.join(\n            module_dir,\n            module_name + APK_SUFFIX\n        )\n\n\n\n        # 移动APK\n        if not move_apk(\n                apk_path,\n                target_apk\n        ):\n\n            continue\n\n\n\n        # 生成Android.mk\n        if not create_android_mk(\n                module_dir,\n                module_name\n        ):\n\n            continue\n\n\n\n        modules.append(\n            module_name\n        )\n\n\n        log(\n            f\"完成:{module_name}\"\n        )\n\n\n\n    return modules\n\n\n\ndef main():\n\n\n    try:\n\n\n        current_dir = os.getcwd()\n\n\n        log(\n            f\"当前目录:{current_dir}\"\n        )\n\n\n        modules = scan_and_generate(\n            current_dir\n        )\n\n\n\n        if not modules:\n\n            error(\n                \"没有成功处理任何APK\"\n            )\n\n            return 1\n\n\n\n        product_file = os.path.join(\n            current_dir,\n            PRODUCT_FILE\n        )\n\n\n        if generate_product_packages(\n                modules,\n                product_file\n        ):\n\n\n            log(\n                \"============================\"\n            )\n\n            log(\n                \"处理完成\"\n            )\n\n            log(\n                f\"APK数量:{len(modules)}\"\n            )\n\n            log(\n                f\"生成:{product_file}\"\n            )\n\n        else:\n\n            return 1\n\n\n\n    except Exception:\n\n\n        error(\n            \"未知异常\"\n        )\n\n        traceback.print_exc()\n\n        return 1\n\n\n\n    return 0\n\n\n\nif __name__ == \"__main__\":\n\n    sys.exit(\n        main()\n    )",
+      "notes": "",
+      "attachments": []
+    },
+    {
       "id": "md转pdf工具",
       "name": "MD转PDF工具",
       "description": "MD转PDF\n缺少依赖，请执行\npython -m pip install markdown-it-py mdit-py-plugins pygments playwright linkify-it-py\npython -m playwright install chromium",
@@ -1185,6 +1201,25 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-07-16 代码库发布记录",
+      "slug": "auto-deploy-20260716022147-code",
+      "date": "2026-07-16",
+      "createdAt": "2026-07-16T02:21:47.732Z",
+      "updatedAt": "2026-07-16T02:21:47.732Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "代码库"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 代码库 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-16 代码库发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-16T02:21:47.732Z\n2. 发布模块：代码库\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“代码库”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update code content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-07-15 文章发布记录",
       "slug": "auto-deploy-20260715124525-posts",
