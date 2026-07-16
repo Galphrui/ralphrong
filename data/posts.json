@@ -1036,6 +1036,22 @@
   ],
   "repositories": [
     {
+      "id": "ro值检查脚本",
+      "name": "ro值检查脚本",
+      "description": "检查是否有错误放置的ro值，重复值的保存最后一个作为唯一",
+      "language": "Python",
+      "tags": [
+        "工具",
+        "Python"
+      ],
+      "url": "",
+      "sourcePath": "",
+      "updatedAt": "2026-07-16",
+      "snippet": "#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n\nimport os\nimport shutil\nimport tempfile\n\n\nSCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))\nBASE_DIR = os.path.join(SCRIPT_DIR, \"custom_logofs\")\n\nRO_FILE = os.path.join(BASE_DIR, \"custom_ro_config.prop\")\nPERSIST_FILE = os.path.join(BASE_DIR, \"custom_persist_config.prop\")\n\nRO_PREFIX = \"ro.\"\nPERSIST_PREFIX = \"persist.\"\n\n\ndef read_lines(path):\n    \"\"\"\n    读取文件内容。\n    如果文件不存在，返回空列表。\n    \"\"\"\n    if not os.path.exists(path):\n        return []\n\n    with open(path, \"r\", encoding=\"utf-8\", errors=\"surrogateescape\") as f:\n        return f.readlines()\n\n\ndef copy_file_stat_if_exists(src_path, dst_path):\n    \"\"\"\n    尽量保留原文件权限、属主、时间戳等信息。\n    \"\"\"\n    if not os.path.exists(src_path):\n        return\n\n    shutil.copystat(src_path, dst_path)\n\n    try:\n        st = os.stat(src_path)\n        os.chown(dst_path, st.st_uid, st.st_gid)\n    except PermissionError:\n        pass\n    except AttributeError:\n        pass\n\n\ndef write_lines_atomic(path, lines):\n    \"\"\"\n    原子写入文件，避免写入过程中断导致文件损坏。\n    \"\"\"\n    directory = os.path.dirname(path)\n\n    fd, tmp_path = tempfile.mkstemp(prefix=\".tmp_\", dir=directory)\n\n    try:\n        with os.fdopen(fd, \"w\", encoding=\"utf-8\", errors=\"surrogateescape\") as f:\n            f.writelines(lines)\n            f.flush()\n            os.fsync(f.fileno())\n\n        copy_file_stat_if_exists(path, tmp_path)\n\n        os.replace(tmp_path, path)\n\n    except Exception:\n        if os.path.exists(tmp_path):\n            os.remove(tmp_path)\n        raise\n\n\ndef backup_file(path):\n    \"\"\"\n    创建备份文件。\n    只有文件存在时才备份。\n    如果 .bak 已存在，会覆盖旧的 .bak。\n    \"\"\"\n    if os.path.exists(path):\n        backup_path = path + \".bak\"\n        shutil.copy2(path, backup_path)\n\n\ndef is_comment_or_blank(line):\n    stripped = line.strip()\n    return stripped == \"\" or stripped.startswith(\"#\")\n\n\ndef get_prop_key(line):\n    \"\"\"\n    获取属性 key。\n\n    例如：\n    persist.sys.memory_visible=1\n    返回：\n    persist.sys.memory_visible\n\n    如果不是 key=value 格式，返回 None。\n    \"\"\"\n    stripped = line.lstrip()\n\n    if stripped.startswith(\"#\"):\n        return None\n\n    if \"=\" not in stripped:\n        return None\n\n    key = stripped.split(\"=\", 1)[0].strip()\n\n    if key == \"\":\n        return None\n\n    return key\n\n\ndef is_prop_with_prefix(line, prefix):\n    \"\"\"\n    判断一行是否是指定前缀的属性配置。\n    只处理 key=value 格式。\n    \"\"\"\n    key = get_prop_key(line)\n\n    if key is None:\n        return False\n\n    return key.startswith(prefix)\n\n\ndef ensure_newline(line):\n    \"\"\"\n    确保追加到文件末尾的行带换行符。\n    \"\"\"\n    if line.endswith(\"\\n\"):\n        return line\n\n    return line + \"\\n\"\n\n\ndef append_lines(target_lines, lines_to_append):\n    \"\"\"\n    将配置追加到目标文件末尾。\n    这里不做去重，后面统一按 key 保留最后一个值。\n    \"\"\"\n    result = list(target_lines)\n\n    if lines_to_append and result and not result[-1].endswith(\"\\n\"):\n        result[-1] = result[-1] + \"\\n\"\n\n    for line in lines_to_append:\n        result.append(ensure_newline(line))\n\n    return result\n\n\ndef dedupe_keep_last_by_prefix(lines, prefix):\n    \"\"\"\n    对指定前缀的属性按 key 去重，只保留最后一次出现的配置。\n\n    例如：\n    persist.sys.memory_visible=1\n    persist.sys.memory_visible=0\n\n    只保留：\n    persist.sys.memory_visible=0\n\n    注释、空行、非该前缀配置不会因为这个函数被删除。\n    \"\"\"\n    last_index_by_key = {}\n\n    for index, line in enumerate(lines):\n        key = get_prop_key(line)\n\n        if key is not None and key.startswith(prefix):\n            last_index_by_key[key] = index\n\n    result = []\n    removed_count = 0\n\n    for index, line in enumerate(lines):\n        key = get_prop_key(line)\n\n        if key is not None and key.startswith(prefix):\n            if last_index_by_key.get(key) != index:\n                removed_count += 1\n                continue\n\n        result.append(line)\n\n    return result, removed_count\n\n\ndef split_wrong_lines(ro_lines, persist_lines):\n    \"\"\"\n    从两个文件中分离放错位置的配置。\n    \"\"\"\n    new_ro_lines = []\n    new_persist_lines = []\n\n    persist_lines_to_move = []\n    ro_lines_to_move = []\n\n    for line in ro_lines:\n        if is_prop_with_prefix(line, PERSIST_PREFIX):\n            persist_lines_to_move.append(line)\n        else:\n            new_ro_lines.append(line)\n\n    for line in persist_lines:\n        if is_prop_with_prefix(line, RO_PREFIX):\n            ro_lines_to_move.append(line)\n        else:\n            new_persist_lines.append(line)\n\n    return (\n        new_ro_lines,\n        new_persist_lines,\n        persist_lines_to_move,\n        ro_lines_to_move,\n    )\n\n\ndef fix_prop_files():\n    if not os.path.isdir(BASE_DIR):\n        raise FileNotFoundError(f\"目录不存在: {BASE_DIR}\")\n\n    ro_lines = read_lines(RO_FILE)\n    persist_lines = read_lines(PERSIST_FILE)\n\n    (\n        new_ro_lines,\n        new_persist_lines,\n        persist_lines_to_move,\n        ro_lines_to_move,\n    ) = split_wrong_lines(ro_lines, persist_lines)\n\n    # 移动放错位置的配置到对应文件末尾\n    new_ro_lines = append_lines(new_ro_lines, ro_lines_to_move)\n    new_persist_lines = append_lines(new_persist_lines, persist_lines_to_move)\n\n    # 对目标文件内部做去重，只保留同一个 key 最下面的值\n    new_ro_lines, ro_duplicate_removed = dedupe_keep_last_by_prefix(\n        new_ro_lines,\n        RO_PREFIX\n    )\n\n    new_persist_lines, persist_duplicate_removed = dedupe_keep_last_by_prefix(\n        new_persist_lines,\n        PERSIST_PREFIX\n    )\n\n    ro_changed = new_ro_lines != ro_lines\n    persist_changed = new_persist_lines != persist_lines\n\n    if not ro_changed and not persist_changed:\n        print(\"检查完成，没有发现需要修复的配置。\")\n        print(\"未修改任何文件。\")\n        print(\"未创建 .bak 备份文件。\")\n        return\n\n    if ro_changed:\n        backup_file(RO_FILE)\n        write_lines_atomic(RO_FILE, new_ro_lines)\n\n    if persist_changed:\n        backup_file(PERSIST_FILE)\n        write_lines_atomic(PERSIST_FILE, new_persist_lines)\n\n    print(\"检查并修复完成。\")\n    print(f\"ro 配置文件: {RO_FILE}\")\n    print(f\"persist 配置文件: {PERSIST_FILE}\")\n\n    print(\n        f\"从 {RO_FILE} 移动到 {PERSIST_FILE} 的 persist 配置数量: \"\n        f\"{len(persist_lines_to_move)}\"\n    )\n\n    print(\n        f\"从 {PERSIST_FILE} 移动到 {RO_FILE} 的 ro 配置数量: \"\n        f\"{len(ro_lines_to_move)}\"\n    )\n\n    print(\n        f\"{RO_FILE} 中删除的旧 ro 重复配置数量: \"\n        f\"{ro_duplicate_removed}\"\n    )\n\n    print(\n        f\"{PERSIST_FILE} 中删除的旧 persist 重复配置数量: \"\n        f\"{persist_duplicate_removed}\"\n    )\n\n    if ro_changed:\n        print(f\"已备份: {RO_FILE}.bak\")\n\n    if persist_changed:\n        print(f\"已备份: {PERSIST_FILE}.bak\")\n\n\ndef main():\n    try:\n        fix_prop_files()\n    except Exception as e:\n        print(f\"执行失败: {e}\")\n        raise\n\n\nif __name__ == \"__main__\":\n    main()",
+      "notes": "",
+      "attachments": []
+    },
+    {
       "id": "apk整理并输出mk数据android81",
       "name": "APK整理并输出mk数据（Android8.1）",
       "description": "批量整理APK，生成对应的文件和Android.mk数据（Android8.1）",
@@ -1201,6 +1217,25 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-07-16 代码库发布记录",
+      "slug": "auto-deploy-20260716023141-code",
+      "date": "2026-07-16",
+      "createdAt": "2026-07-16T02:31:41.768Z",
+      "updatedAt": "2026-07-16T02:31:41.768Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "代码库"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 代码库 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-16 代码库发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-16T02:31:41.768Z\n2. 发布模块：代码库\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“代码库”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update code content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-07-16 代码库发布记录",
       "slug": "auto-deploy-20260716022544-code",
