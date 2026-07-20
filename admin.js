@@ -3378,7 +3378,9 @@ async function waitForPagesUpdate(target = "posts", deploy = {}) {
 }
 
 function getPublicDataUrl() {
-  if (location.hostname.toLowerCase().endsWith(".github.io")) {
+  const hostname = location.hostname.toLowerCase();
+  const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
+  if (!isLocalHost && location.protocol.startsWith("http")) {
     return new URL("./data/posts.json", location.href).href;
   }
 
