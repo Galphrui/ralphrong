@@ -73,6 +73,23 @@
       "attachments": []
     },
     {
+      "title": "定制 PhoneWindowManager 下电源键未关闭闹钟",
+      "slug": "定制-phonewindowmanager-下电源键未关闭闹钟",
+      "date": "2026-07-20",
+      "createdAt": "2026-07-20T06:25:58.738Z",
+      "updatedAt": "2026-07-20T06:26:00.071Z",
+      "tags": [
+        "闹钟"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "> 当前设备的电源键在非 Launcher 页面执行逐级返回，不产生 `SCREEN_OFF`；最小正确方案是监听 `PhoneWindowManager` 已有的 `sgtc.action.finish.activity` 广播，并复用关闭按钮逻辑。",
+      "content": "# 定制 PhoneWindowManager 下电源键未关闭闹钟\n\n## 1. 问题类型\n\n这是一个由**Framework 按键策略定制与应用层事件认知不一致**造成的问题。\n\n应用层无法直接可靠收到电源键，而设备中的 `PhoneWindowManager` 又把短按电源键定制成逐级返回，因此监听熄屏的通用方案在该产品上不成立。\n\n---\n\n## 2. 问题现象\n\n需求：\n\n```text\n闹钟响铃时短按电源键\n        ↓\n执行与点击“关闭”相同的逻辑\n        ↓\n停止闹钟\n```\n\n实际情况：\n\n- 返回键已经可以关闭闹钟；\n- 短按电源键不会直接让屏幕关闭；\n- 电源键在非 Launcher 页面执行逐级返回；\n- 只有到 Launcher 后再次按电源键才真正息屏；\n- 监听 `ACTION_SCREEN_OFF` 时，闹钟页面阶段收不到广播；\n- 因此声音不会通过该方案停止。\n\n---\n\n## 3. 系统定制逻辑\n\n设备的 `PhoneWindowManager.powerPress()` 在短按电源键时进入：\n\n```java\ncase SHORT_PRESS_POWER_CLOSE_IME_OR_GO_HOME:\n```\n\n该分支不是简单执行：\n\n```java\ngoToSleep(...)\n```\n\n而是根据当前页面执行：\n\n- 关闭输入法；\n- 处理锁屏；\n- 收起浮窗；\n- Launcher 上息屏；\n- 特殊页面逐级返回；\n- 电子表模式处理；\n- 其他定制行为。\n\n因此在普通应用页按电源键时，屏幕仍然亮着。\n\n---\n\n## 4. 为什么应用层不能直接拦截 `KEYCODE_POWER`\n\nAndroid 的电源键是系统级按键，通常在输入策略层由：\n\n```text\nPhoneWindowManager\n```\n\n处理，不会像音量键、相机键一样稳定分发给普通 Activity。\n\n以下方法不能作为可靠方案：\n\n```java\ndispatchKeyEvent()\nonKeyDown()\nonKeyUp()\n```\n\n即使个别设备或特殊窗口偶尔收到，也不能作为产品级稳定实现。\n\n---\n\n## 5. 为什么 `ACTION_SCREEN_OFF` 方案失败\n\n最初通用思路是：\n\n```text\n短按电源键\n    ↓\n系统息屏\n    ↓\nACTION_SCREEN_OFF\n    ↓\nActivity 执行关闭\n```\n\n但当前设备实际流程是：\n\n```text\n短按电源键\n    ↓\nPhoneWindowManager 执行逐级返回\n    ↓\n屏幕没有关闭\n    ↓\n没有 ACTION_SCREEN_OFF\n    ↓\n响铃 Activity 收不到关闭触发\n```\n\n所以该方案失败不是 Activity 注册错误，而是前置假设不成立。\n\n此外，即使某设备能够收到 `ACTION_SCREEN_OFF`，它也不能精确代表“用户按下电源键”，因为以下行为也可能造成熄屏：\n\n- 系统策略强制休眠；\n- 霍尔盖合；\n- 设备管理策略；\n- 其他系统组件调用睡眠；\n- 屏幕超时。\n\n因此 `ACTION_SCREEN_OFF` 不是电源键的精确语义事件。\n\n---\n\n## 6. 关键发现\n\n在定制 `PhoneWindowManager.powerPress()` 中，短按电源键进入正常单击分支后，已经固定发送：\n\n```java\nmContext.sendBroadcast(\n        new Intent(\"sgtc.action.finish.activity\"));\n```\n\n发送位置位于具体短按行为分支之前：\n\n```java\n} else if (interactive && !mBeganFromNonInteractive) {\n    mContext.sendBroadcast(\n            new Intent(\"sgtc.action.finish.activity\"));\n\n    switch (mShortPressOnPowerBehavior) {\n        // 逐级返回、回 Launcher 或息屏\n    }\n}\n```\n\n这意味着：\n\n```text\n只要是屏幕点亮状态下被识别为有效单次短按电源键\n        ↓\n系统就先发送 sgtc.action.finish.activity\n        ↓\n之后才执行当前产品的逐级返回或息屏逻辑\n```\n\n因此不需要修改 Framework，只要让闹钟 Activity 监听该已有广播即可。\n\n---\n\n## 7. 最小解决方案\n\n只修改：\n\n```text\napp/src/main/java/com/sgtc/alarmclock/SgtcAlarmActivity.java\n```\n\n不修改：\n\n```text\nPhoneWindowManager.java\nAlarmService.java\nAlarmStateManager.java\nAlarmKlaxon.java\nCE/DE\nDirect Boot\n数据库\n开机恢复\n```\n\n### 7.1 增加 action 常量\n\n```java\n/** PhoneWindowManager 在短按电源键时发送的现有广播。 */\nprivate static final String ACTION_POWER_KEY_SHORT_PRESS =\n        \"sgtc.action.finish.activity\";\n```\n\n### 7.2 在现有接收器中处理\n\n```java\nif (ACTION_POWER_KEY_SHORT_PRESS.equals(action)) {\n    if (!mAlarmHandled\n            && mDismissButton != null\n            && !isFinishing()) {\n\n        LogUtils.i(\n                LOGTAG,\n                \"Power key short press received, \"\n                        + \"perform dismiss click\");\n\n        mDismissButton.performClick();\n    } else {\n        LogUtils.v(\n                LOGTAG,\n                \"Ignore power key broadcast: \"\n                        + \"handled=%s, button=%s, finishing=%s\",\n                mAlarmHandled,\n                mDismissButton,\n                isFinishing());\n    }\n    return;\n}\n```\n\n### 7.3 在动态过滤器中注册\n\n```java\nfinal IntentFilter filter =\n        new IntentFilter(AlarmService.ALARM_DONE_ACTION);\n\nfilter.addAction(AlarmService.ALARM_SNOOZE_ACTION);\nfilter.addAction(AlarmService.ALARM_DISMISS_ACTION);\nfilter.addAction(ACTION_POWER_KEY_SHORT_PRESS);\n```\n\n---\n\n## 8. 修改后的执行链路\n\n```text\n用户短按电源键\n        ↓\nPhoneWindowManager.interceptPowerKeyDown/Up()\n        ↓\nPhoneWindowManager.powerPress()\n        ↓\n发送 sgtc.action.finish.activity\n        ↓\nSgtcAlarmActivity.mReceiver.onReceive()\n        ↓\nmDismissButton.performClick()\n        ↓\n现有关闭按钮 onClick()\n        ↓\ndismiss()\n        ↓\nAlarmService 处理当前实际响铃实例\n        ↓\n停止声音、更新状态并发送完成回执\n        ↓\nActivity 退出\n```\n\n与此同时，`PhoneWindowManager` 后续仍可继续执行原有逐级返回逻辑。\n\n---\n\n## 9. 为什么使用 `mDismissButton.performClick()`\n\n电源键只是一个新的输入入口，业务语义仍然是“关闭闹钟”。\n\n复用按钮可以保留：\n\n- `mAlarmHandled` 防重复；\n- `mPendingDismissReport`；\n- `dismiss()`；\n- `AlarmService.dismissCurrentAlarm()`；\n- 实际响铃实例处理；\n- 完成广播校验；\n- 原有上报逻辑。\n\n如果广播中直接写：\n\n```java\nfinish();\n```\n\n会重新产生页面消失但声音继续的问题。\n\n如果直接调用：\n\n```java\ndismiss();\n```\n\n可能绕过关闭按钮点击中额外设置的状态。\n\n---\n\n## 10. 为什么不修改 PhoneWindowManager\n\n### 10.1 已经存在可复用广播\n\nFramework 已经提供：\n\n```text\nsgtc.action.finish.activity\n```\n\n没有必要再新增专用广播或加入包名判断。\n\n### 10.2 降低系统级回归风险\n\n修改 `PhoneWindowManager` 可能影响：\n\n- 通话；\n- SOS；\n- 截屏组合键；\n- AI 长按唤醒；\n- 多击电源键；\n- 锁屏；\n- 浮窗；\n- Launcher；\n- 特殊模式；\n- 系统按键时序。\n\n应用层监听现有广播的风险远低于修改系统按键策略。\n\n### 10.3 保留逐级返回功能\n\n需求只是响铃时关闭闹钟，不是修改整个系统电源键行为。\n\n本方案不会破坏已有逐级返回。\n\n---\n\n## 11. 广播范围与安全边界\n\n`sgtc.action.finish.activity` 是普通隐式广播。\n\n闹钟 Activity 仅在 `onResume()` 中动态注册，并在 `onPause()` 中注销，因此通常只有响铃页面处于前台时才会响应。\n\n仍应确认：\n\n- 该广播不会被其他非电源键路径频繁发送；\n- 如果其他系统逻辑也发送该 action，响铃页会同样执行关闭；\n- 这是复用现有系统语义带来的边界，需要结合产品行为确认。\n\n如果后续发现该 action 被多处用于其他操作，应考虑在 Framework 广播中增加一个只读 extra 区分来源，而不是直接重构电源键策略。但在当前代码证据下，没有必要提前扩大修改。\n\n---\n\n## 12. 实际操作步骤\n\n### 步骤一：删除旧的无效方案\n\n删除 Receiver 中：\n\n```java\nif (Intent.ACTION_SCREEN_OFF.equals(action)) {\n    // ...\n}\n```\n\n删除 Filter 中：\n\n```java\nfilter.addAction(Intent.ACTION_SCREEN_OFF);\n```\n\n### 步骤二：增加已有电源键 action 常量\n\n```java\nprivate static final String ACTION_POWER_KEY_SHORT_PRESS =\n        \"sgtc.action.finish.activity\";\n```\n\n### 步骤三：在接收器中调用关闭按钮\n\n加入本文第 7.2 节代码。\n\n### 步骤四：动态注册 action\n\n```java\nfilter.addAction(ACTION_POWER_KEY_SHORT_PRESS);\n```\n\n### 步骤五：检查修改范围\n\n```bash\ngit diff -- \\\napp/src/main/java/com/sgtc/alarmclock/SgtcAlarmActivity.java\n```\n\n确认没有修改 `PhoneWindowManager.java`。\n\n### 步骤六：编译安装\n\n按项目原构建流程执行。\n\n---\n\n## 13. 验证方法\n\n### 测试一：响铃页短按电源键\n\n1. 设置一个闹钟。\n2. 等待响铃页面出现。\n3. 短按电源键一次。\n4. 确认闹钟声音停止。\n5. 确认页面按既有关闭流程退出。\n\n### 测试二：非响铃页面逐级返回\n\n1. 打开其他普通应用。\n2. 短按电源键。\n3. 确认原逐级返回行为没有变化。\n4. 到 Launcher 后确认后续按键仍可息屏。\n\n### 测试三：连续按键\n\n1. 闹钟响铃。\n2. 快速短按两次电源键。\n3. 确认 `mAlarmHandled` 防止重复关闭。\n4. 确认没有重复删除或重复上报。\n\n### 测试四：长按和多击\n\n确认以下行为不受影响：\n\n- 长按电源键；\n- 双击电源键；\n- 三击电源键；\n- SOS；\n- AI 唤醒；\n- 截屏组合键。\n\n### 推荐日志\n\n```bash\nadb logcat -c\n\nadb logcat -v time | grep -E \\\n\"SgtcAlarmActivity|Power key short press|AlarmService|Dismissed\"\n```\n\n预期：\n\n```text\nReceived broadcast: sgtc.action.finish.activity\nPower key short press received, perform dismiss click\nDismissed: AlarmInstance ...\nAlarm action completed, source=..., handled=...\n```\n\n---\n\n## 14. 常见误区\n\n### 误区一：电源键一定会导致 `SCREEN_OFF`\n\n在定制系统中不成立，必须先看 `PhoneWindowManager.powerPress()`。\n\n### 误区二：Activity 可以重写 `onKeyDown(KEYCODE_POWER)`\n\n普通应用通常收不到系统电源键。\n\n### 误区三：为了一个应用功能直接修改 Framework\n\n应该先搜索系统是否已经提供广播、回调或状态。\n\n### 误区四：收到广播后直接 `finish()`\n\n结束页面不是关闭闹钟。\n\n---\n\n## 15. 类似问题排查方法\n\n以后遇到物理按键行为与预期不一致时：\n\n1. 确认按键是否分发给 Activity；\n2. 检查 `PhoneWindowManager.intercept...`；\n3. 检查 `powerPress()`、`shortPress...()` 等最终入口；\n4. 确认设备是否做了产品定制；\n5. 搜索现有广播、系统属性、Settings 和回调；\n6. 优先复用已有接口；\n7. 最后才考虑修改 Framework；\n8. 修改 Framework 时必须回归长按、多击、通话、SOS 和截屏。\n\n---",
+      "contentFormat": "markdown",
+      "readingMinutes": 11,
+      "attachments": []
+    },
+    {
       "title": "git冲突解决记录",
       "slug": "git-更新rebase-与冲突处理完整复盘",
       "date": "2026-07-17",
@@ -1451,6 +1468,25 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-07-20 文章发布记录",
+      "slug": "auto-deploy-20260720062600-posts",
+      "date": "2026-07-20",
+      "createdAt": "2026-07-20T06:26:00.127Z",
+      "updatedAt": "2026-07-20T06:26:00.127Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "文章"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 文章 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-20 文章发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-20T06:26:00.127Z\n2. 发布模块：文章\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“文章”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update posts content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-07-20 文章发布记录",
       "slug": "auto-deploy-20260720054209-posts",
