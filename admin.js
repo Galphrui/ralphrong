@@ -5,7 +5,7 @@ const RA_LOCAL_API_BASE =
 const RA_IS_LOCAL_ADMIN = Boolean(RA_LOCAL_API_BASE);
 const RA_API_BASE = (window.BLOG_ADMIN_API_BASE || RA_LOCAL_API_BASE || "").replace(/\/$/, "");
 const RA_SESSION_TOKEN_KEY = "RaBlogAdminSessionToken";
-const RA_PUBLISH_POLL_ATTEMPTS = 36;
+const RA_PUBLISH_POLL_ATTEMPTS = 72;
 const RA_PUBLISH_POLL_DELAY_MS = 5000;
 const RA_DEFAULT_PANEL = "posts";
 const RA_ASSET_DIRECT_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -3327,7 +3327,11 @@ function setPublishResult(result, target = "posts") {
   }
 
   const sha = deploy?.commitSha ? `提交：${deploy.commitSha.slice(0, 7)}。` : "";
-  const workflow = deploy?.workflowTriggered ? "已触发 Pages 构建。" : deploy?.workflowError ? `Pages 构建触发未确认：${deploy.workflowError}。` : "";
+  const workflow = deploy?.workflowTriggered
+    ? "已触发 Pages 构建。"
+    : deploy?.workflowError
+      ? `Pages 构建触发未确认：${deploy.workflowError}。`
+      : "已由 main 分支 push 自动触发 Pages 构建。";
   const message = `发布成功：已写入 GitHub。${sha}${workflow}正在等待 GitHub Pages 上线...`;
   setStatus(message);
   setDeployStatus(message);
@@ -3367,7 +3371,7 @@ async function waitForPagesUpdate(target = "posts", deploy = {}) {
     }
   }
 
-  const timeout = `${commitText}已写入 GitHub，但暂未在公开博客读到更新。请稍后刷新前台，或打开 GitHub Actions 查看 Pages 构建状态。`;
+  const timeout = `${commitText}已写入 GitHub，但暂未在公开博客读到同一份数据。请打开 GitHub Actions 查看最新 Pages 任务是否仍在排队或运行；任务变绿后，回到前台切换窗口或刷新页面即可重新拉取最新数据。`;
   setStatus(timeout);
   setDeployStatus(timeout);
   setTargetStatus(target, timeout);

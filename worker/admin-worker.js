@@ -487,17 +487,13 @@ async function writeGitHubData(env, data) {
   if (!response.ok) {
     throw httpError(response.status, result.message || "写入 GitHub 数据失败。");
   }
-  const workflow = await triggerPagesWorkflow(env).catch((error) => ({
-    triggered: false,
-    error: error.message || "GitHub Actions 触发失败。",
-  }));
   return {
     pushed: true,
     branch: info.branch,
     commitSha: result.commit?.sha || "",
-    workflowTriggered: workflow.triggered,
-    workflowError: workflow.error || "",
-    message: "已写入 GitHub，等待 GitHub Pages 构建。",
+    workflowTriggered: false,
+    workflowError: "",
+    message: "已写入 GitHub，main 分支 push 会自动触发 GitHub Pages 构建。",
   };
 }
 

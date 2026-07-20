@@ -19,6 +19,26 @@
   },
   "posts": [
     {
+      "title": "博客发布后前台不更新问题根因复盘",
+      "slug": "博客发布后前台不更新问题根因复盘",
+      "date": "2026-07-20",
+      "createdAt": "2026-07-20T02:59:01.094Z",
+      "updatedAt": "2026-07-20T02:59:01.094Z",
+      "tags": [
+        "BUG总结",
+        "部署",
+        "GitHub Pages",
+        "前台缓存"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "这次问题不是 GitHub 没写入，而是 Worker 重复触发 Pages workflow 造成部署互相取消或排队，再叠加前台单页应用缓存，导致后台提示已写入但公开博客短时间读不到同一份数据。",
+      "content": "## 一、问题现象\n\n后台文章发布后提示类似：\n\n```text\n已写入 GitHub，但暂未在公开博客读到更新\n```\n\n同时 GitHub 仓库页面已经能看到最新提交，`data/posts.json` 也已经发生变化，所以表面上看起来像是“GitHub 状态是对的，但前台更新没有实现”。\n\n## 二、排查结论\n\n这次不是文章内容没有保存，也不是 GitHub 没收到提交。\n\n本地拉取远端后确认：\n\n1. 远端 `main` 已经包含后台写入的最新提交。\n2. 本地只需要快进合并 `data/posts.json`。\n3. 公开数据文件已经可以读到最新文章内容。\n4. GitHub Actions 最新 Pages 任务处于排队或运行状态，前面几条任务被取消。\n\n因此问题发生在“写入 GitHub 之后，到公开站点稳定读取最新数据之前”的发布链路。\n\n## 三、根本原因\n\n根因有两个叠加点。\n\n### 1. Worker 重复触发 Pages 部署\n\nCloudflare Worker 在写入 GitHub `data/posts.json` 后，会通过 GitHub Contents API 创建一次 main 分支提交。\n\n这个 push 本身已经会触发仓库里的 GitHub Pages workflow。\n\n但旧逻辑在写入后又额外调用了一次：\n\n```text\n/actions/workflows/deploy.yml/dispatches\n```\n\n也就是再手动触发一个 `workflow_dispatch` 部署。\n\n仓库 workflow 又配置了：\n\n```yaml\nconcurrency:\n  group: pages\n  cancel-in-progress: true\n```\n\n结果就是同一次后台发布可能产生两条部署任务：一条来自 push，一条来自手动 dispatch。它们属于同一个并发组，会互相取消或排队。连续发布时，旧任务更容易被取消，最后一条任务如果卡在队列中，后台轮询就会超时。\n\n### 2. 前台单页应用会缓存第一次读取的数据\n\n前台通过 `fetchSiteData()` 读取 `data/posts.json`，并在内存中复用这次请求结果。\n\n这对普通浏览很快，但后台发布后，如果前台页面一直开着，页面不会自动重新获取最新数据。即使 GitHub Pages 已经部署完成，旧页面也可能继续显示旧状态，直到强制刷新或重新打开页面。\n\n## 四、解决思路\n\n这次修复按“减少重复触发、延长真实等待、前台自动刷新”三个方向处理。\n\n1. 发布链路只保留一种 Pages 触发方式：main 分支 push 自动触发。\n2. 后台不再误报“触发失败”，而是明确告诉用户 main push 会自动触发 Pages。\n3. 后台上线轮询时间从约 3 分钟延长到约 6 分钟，覆盖 GitHub Pages 排队时间。\n4. 前台在窗口重新获得焦点、页面从后台切回前台时，自动强制重新拉取 `data/posts.json`。\n5. GitHub Pages workflow 使用稳定的官方 action 版本，避免排队后因为 action tag 不可用导致失败。\n\n## 五、代码修改\n\n### 1. Worker 发布逻辑\n\n修改文件：\n\n```text\nworker/admin-worker.js\n```\n\n改动：\n\n1. 删除写入 GitHub 后额外触发 `workflow_dispatch` 的行为。\n2. 返回信息改为“main 分支 push 会自动触发 GitHub Pages 构建”。\n\n这样一次后台发布只会产生一次 Pages 部署，不会再自己和自己抢并发组。\n\n### 2. 后台发布提示和轮询\n\n修改文件：\n\n```text\nadmin.js\n```\n\n改动：\n\n1. 轮询次数从 36 次增加到 72 次。\n2. 超时提示改为明确检查 GitHub Actions 是否排队或运行。\n3. 提示用户任务变绿后切换窗口或刷新前台页面。\n\n### 3. 前台数据刷新\n\n修改文件：\n\n```text\nsrc/App.jsx\n```\n\n改动：\n\n1. 新增前台强制刷新站点数据的方法。\n2. 页面重新获得焦点时，如果距离上次加载超过 15 秒，就重新读取公开 `data/posts.json`。\n3. 页面从后台切回前台时，也会执行同样检查。\n\n这样后台发布完成后，用户回到前台页面，前台会自动拉取新数据，不再完全依赖手动硬刷新。\n\n### 4. GitHub Pages workflow\n\n修改文件：\n\n```text\n.github/workflows/deploy.yml\n```\n\n改动：\n\n1. `actions/checkout` 使用 `v4`。\n2. `actions/setup-node` 使用 `v4`。\n3. `actions/upload-pages-artifact` 使用 `v3`。\n4. `actions/deploy-pages` 使用 `v4`。\n\n这些是 GitHub Pages 部署中更稳的版本组合。\n\n## 六、以后怎么判断问题在哪\n\n按这个顺序排查：\n\n1. 先看 GitHub 仓库首页最新提交是否是刚发布的提交。\n2. 再打开 `https://galphrui.github.io/ralphrong/data/posts.json` 搜索新文章标题。\n3. 如果公开 JSON 没更新，看 GitHub Actions 最新 Pages 任务是否排队、运行或失败。\n4. 如果公开 JSON 已更新但页面没变，切换一下窗口、刷新页面，或使用 Command + Shift + R。\n5. 如果 Actions 红叉，点进失败任务看 build 或 deploy 哪一步报错。\n\n## 七、本次结论\n\n本次问题的核心不是“GitHub 状态错了”，而是发布链路重复触发部署造成并发取消/排队，再加上前台页面缓存导致显示滞后。\n\n修复后，后台发布会更稳定：GitHub 写入后只让 push 自动触发 Pages，前台页面也会在用户回来看页面时自动刷新数据。",
+      "contentFormat": "markdown",
+      "readingMinutes": 5,
+      "attachments": []
+    },
+    {
       "title": "点击“稍后提醒”或“关闭”后页面消失，但铃声继续",
       "slug": "点击稍后提醒或关闭后页面消失但铃声继续",
       "date": "2026-07-20",

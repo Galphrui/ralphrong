@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Navigation from './components/Navigation'
 import PostDetail from './components/PostDetail'
 import HomePage from './components/HomePage'
@@ -55,6 +55,28 @@ export default function App() {
 
   const [route, setRoute] = useState(getRoute)
   const routeShellRef = useRef(null)
+  const lastSiteRefreshRef = useRef(0)
+
+  const refreshSiteData = useCallback(
+    async ({ force = false } = {}) => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const data = await fetchSiteData({ force })
+        hydrateSiteData(data)
+        lastSiteRefreshRef.current = Date.now()
+        fetchPostMetrics()
+          .then(setPostMetrics)
+          .catch(() => {})
+      } catch (error) {
+        console.error('Failed to load posts:', error)
+        setError(error)
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [hydrateSiteData, setError, setIsLoading, setPostMetrics],
+  )
 
   useEffect(() => {
     const onHashChange = () => setRoute(getRoute())
@@ -66,12 +88,13 @@ export default function App() {
     let active = true
 
     const loadPosts = async () => {
-      setIsLoading(true)
-      setError(null)
       try {
+        setIsLoading(true)
+        setError(null)
         const data = await fetchSiteData()
         if (!active) return
         hydrateSiteData(data)
+        lastSiteRefreshRef.current = Date.now()
         fetchPostMetrics()
           .then((metrics) => {
             if (active) setPostMetrics(metrics)
@@ -91,6 +114,21 @@ export default function App() {
       active = false
     }
   }, [hydrateSiteData, setError, setIsLoading, setPostMetrics])
+
+  useEffect(() => {
+    const refreshIfStale = () => {
+      if (document.visibilityState === 'hidden') return
+      if (Date.now() - lastSiteRefreshRef.current < 15000) return
+      refreshSiteData({ force: true }).catch(() => {})
+    }
+
+    window.addEventListener('focus', refreshIfStale)
+    document.addEventListener('visibilitychange', refreshIfStale)
+    return () => {
+      window.removeEventListener('focus', refreshIfStale)
+      document.removeEventListener('visibilitychange', refreshIfStale)
+    }
+  }, [refreshSiteData])
 
   const selectedPost = useMemo(
     () => posts.find((post) => post.slug === route.slug),
