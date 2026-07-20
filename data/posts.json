@@ -56,6 +56,23 @@
       "attachments": []
     },
     {
+      "title": "返回键未执行闹钟关闭逻辑",
+      "slug": "返回键未执行闹钟关闭逻辑",
+      "date": "2026-07-20",
+      "createdAt": "2026-07-20T05:42:05.246Z",
+      "updatedAt": "2026-07-20T05:42:09.390Z",
+      "tags": [
+        "闹钟"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "这是一个**输入入口行为不统一**的问题。\n\n关闭按钮已经有完整且经过修复的关闭链路，但返回键没有统一复用该链路。\n\n---\n> 返回键不应自己关闭页面或重新实现关闭逻辑，而应调用 `mDismissButton.performClick()`，完整复用现有关闭按钮链路。",
+      "content": "# 返回键未执行闹钟关闭逻辑\n\n## 1. 问题类型\n\n这是一个**输入入口行为不统一**的问题。\n\n关闭按钮已经有完整且经过修复的关闭链路，但返回键没有统一复用该链路。\n\n---\n\n## 2. 问题现象\n\n闹钟响铃页面中，用户只能通过：\n\n- 点击“关闭”；\n- 点击“稍后提醒”。\n\n用户按返回键时，可能出现：\n\n- 返回键无效；\n- 返回键根据配置走“稍后提醒”；\n- 页面退出但没有可靠完成关闭；\n- 不同产品配置下行为不一致。\n\n---\n\n## 3. 原始逻辑\n\n项目定制代码中，返回键可能按照 `tigValueall` 选择稍后提醒或关闭：\n\n```java\n@Override\npublic void onBackPressed() {\n    if (tigValueall == 1) {\n        mSnoozeButton.performClick();\n    } else {\n        mDismissButton.performClick();\n    }\n}\n```\n\n该逻辑的问题是：\n\n1. 返回键行为依赖 `tigValueall`；\n2. 当允许稍后提醒时，返回键变成稍后提醒；\n3. 与需求“返回键始终关闭”不一致；\n4. 如果以后在返回键中直接写新的关闭代码，会形成第二套关闭链路。\n\n---\n\n## 4. 需求\n\n无论当前闹钟是否显示“稍后提醒”，返回键都必须与点击“关闭”按钮完全一致。\n\n目标行为：\n\n```text\n返回键\n    ↓\n关闭按钮点击逻辑\n    ↓\nAlarmService 处理实际正在响铃的实例\n    ↓\n停止声音并更新状态\n    ↓\n页面退出\n```\n\n---\n\n## 5. 根因\n\n返回键是独立入口，但原代码没有把它固定映射到已有关闭按钮。\n\n真正安全的关闭链路已经位于：\n\n```java\nonClick(mDismissButton)\n```\n\n其中还可能包括：\n\n- `mPendingDismissReport`；\n- 防重复状态 `mAlarmHandled`；\n- 调用 `dismiss()`；\n- Service 当前实例处理；\n- 完成广播；\n- 闹钟数据或协议上报。\n\n如果返回键自己重新实现关闭，很容易遗漏其中某一步。\n\n---\n\n## 6. 最小解决方案\n\n只修改：\n\n```text\napp/src/main/java/com/sgtc/alarmclock/SgtcAlarmActivity.java\n```\n\n只替换一个方法：\n\n```java\nonBackPressed()\n```\n\n完整代码：\n\n```java\n@Override\npublic void onBackPressed() {\n    // 返回键与“关闭”按钮走完全相同的处理链路，不能直接 finish()。\n    if (mAlarmHandled) {\n        LogUtils.v(\n                LOGTAG,\n                \"Back pressed ignored: alarm is already handled\");\n        return;\n    }\n\n    if (mDismissButton != null) {\n        mDismissButton.performClick();\n    } else {\n        // 不调用 super.onBackPressed()，避免页面退出但铃声仍继续。\n        LogUtils.e(\n                LOGTAG,\n                \"Back pressed ignored: dismiss button is null\");\n    }\n}\n```\n\n---\n\n## 7. 为什么调用 `performClick()`\n\n### 7.1 完整复用关闭按钮逻辑\n\n调用：\n\n```java\nmDismissButton.performClick();\n```\n\n会进入原有：\n\n```java\nonClick(View view)\n```\n\n再命中：\n\n```java\nif (view == mDismissButton) {\n    mPendingDismissReport = true;\n    dismiss();\n}\n```\n\n这样返回键不需要知道关闭链路内部细节。\n\n### 7.2 保留以后对关闭按钮的修改\n\n以后如果关闭按钮新增：\n\n- 日志；\n- 上报；\n- 动画；\n- 埋点；\n- 防重复；\n- 权限处理；\n\n返回键会自动复用，不需要同步修改两处。\n\n### 7.3 避免分支行为不一致\n\n所有关闭入口最终进入同一个方法，减少实际产品上的差异。\n\n---\n\n## 8. 为什么不能直接调用其他方法\n\n### 8.1 不能直接调用 `finish()`\n\n错误代码：\n\n```java\n@Override\npublic void onBackPressed() {\n    finish();\n}\n```\n\n`finish()` 只关闭 Activity，不负责停止：\n\n- 铃声；\n- 振动；\n- 前台服务；\n- 当前实例状态；\n- 通知。\n\n这会重新引入“页面消失但铃声继续”。\n\n### 8.2 不能调用 `super.onBackPressed()`\n\n```java\nsuper.onBackPressed();\n```\n\n默认行为主要是退出 Activity，不能保证闹钟状态完成。\n\n### 8.3 不建议直接调用 `dismiss()`\n\n虽然 `dismiss()` 能提交关闭，但可能绕过关闭按钮 `onClick()` 中的附加逻辑，例如：\n\n```java\nmPendingDismissReport = true;\n```\n\n### 8.4 不应保留 `tigValueall` 分支\n\n需求已经明确返回键必须关闭，因此：\n\n```java\nif (tigValueall == 1) {\n    mSnoozeButton.performClick();\n}\n```\n\n不再符合功能定义。\n\n字段 `tigValueall` 本身不需要删除，避免影响其他定制逻辑。\n\n---\n\n## 9. 为什么这是最小修改\n\n只修改一个方法，没有：\n\n- 新增广播；\n- 修改服务；\n- 修改状态机；\n- 修改播放器；\n- 修改数据库；\n- 修改 CE/DE；\n- 修改 Direct Boot；\n- 删除产品定制字段。\n\n修改只改变“返回键映射到哪个已有按钮”。\n\n---\n\n## 10. 实际操作步骤\n\n### 步骤一：定位文件\n\n```text\napp/src/main/java/com/sgtc/alarmclock/SgtcAlarmActivity.java\n```\n\n### 步骤二：搜索方法\n\n```java\npublic void onBackPressed()\n```\n\n### 步骤三：完整替换\n\n用本文第 6 节代码替换原方法。\n\n### 步骤四：检查差异\n\n```bash\ngit diff -- \\\napp/src/main/java/com/sgtc/alarmclock/SgtcAlarmActivity.java\n```\n\n确认只有 `onBackPressed()` 发生改变。\n\n### 步骤五：编译和安装\n\n使用项目原构建方式编译并安装。\n\n---\n\n## 11. 验证方法\n\n### 基础验证\n\n1. 设置闹钟。\n2. 等待响铃。\n3. 按返回键。\n4. 确认声音停止。\n5. 确认页面正常退出。\n6. 确认闹钟状态与点击关闭按钮相同。\n\n### 有稍后提醒时\n\n1. 设置一个允许稍后提醒的闹钟。\n2. 响铃后按返回键。\n3. 确认返回键是关闭，而不是稍后提醒。\n4. 确认没有创建新的 snooze 实例。\n\n### 重复输入验证\n\n1. 快速连续按两次返回键。\n2. 确认 `mAlarmHandled` 阻止重复处理。\n3. 确认没有重复删除或重复上报。\n\n### 日志建议\n\n```bash\nadb logcat -c\n\nadb logcat -v time | grep -E \\\n\"SgtcAlarmActivity|Back pressed|Dismissed|AlarmService\"\n```\n\n---\n\n## 12. 回归风险\n\n该修改风险很低，但仍要确认：\n\n- `mDismissButton` 在所有屏幕布局中都完成初始化；\n- 圆屏、方屏和水滴屏布局都存在同一关闭按钮 ID；\n- 返回键不应再用于稍后提醒；\n- 无障碍模式下 `performClick()` 仍能进入既有点击逻辑；\n- 页面已经处理时不会重复触发。\n\n---\n\n## 13. 类似问题的通用原则\n\n当多个输入都要执行同一业务动作时：\n\n```text\n触摸按钮\n返回键\n物理按键\n广播\n手势\n```\n\n不要为每个入口复制业务代码，应统一映射到一个已经验证的业务入口。\n\n---",
+      "contentFormat": "markdown",
+      "readingMinutes": 7,
+      "attachments": []
+    },
+    {
       "title": "git冲突解决记录",
       "slug": "git-更新rebase-与冲突处理完整复盘",
       "date": "2026-07-17",
@@ -1434,6 +1451,25 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-07-20 文章发布记录",
+      "slug": "auto-deploy-20260720054209-posts",
+      "date": "2026-07-20",
+      "createdAt": "2026-07-20T05:42:09.445Z",
+      "updatedAt": "2026-07-20T05:42:09.445Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "文章"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 文章 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-20 文章发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-20T05:42:09.445Z\n2. 发布模块：文章\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“文章”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update posts content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-07-20 文章发布记录",
       "slug": "auto-deploy-20260720024551-posts",
