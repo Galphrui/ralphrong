@@ -54,6 +54,24 @@
       "attachments": []
     },
     {
+      "title": "文件实际存在，但 Android `File.exists()` 返回 `false`：目录权限与 SELinux 排查",
+      "slug": "文件实际存在但-android-fileexists-返回-false目录权限与-selinux-排查",
+      "date": "2026-07-21",
+      "createdAt": "2026-07-21T06:10:16.648Z",
+      "updatedAt": "2026-07-21T06:10:25.579Z",
+      "tags": [
+        "AOSP",
+        "Android"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "问题并不是 Java `File.exists()` 本身错误，而是应用进程没有能力完成文件状态检查。",
+      "content": "## 1. 问题概述\n\n应用已经正确访问：\n\n```text\n/data/customex/custom_logofs/PrivacyPolicy/com.sgtc.wechat2.json\n```\n\n设备管理器中也能看到该 JSON 文件，但应用日志仍显示：\n\n```text\nexists=false\nisFile=false\ncanRead=false\n```\n\n最终报错：\n\n```text\nFILE_NOT_FOUND\n政策文件不存在\n```\n\n手动修改目录权限或重新 push 文件后，应用又可以正常读取。\n\n---\n\n## 2. 典型现象\n\n应用日志：\n\n```text\nCUSTOM_APP_READ_START,\npath=/data/customex/custom_logofs/PrivacyPolicy/com.sgtc.wechat2.json,\nexists=false,\nisFile=false,\ncanRead=false,\nbytes=0\n```\n\n但通过 root 或 Android Studio Device Explorer 可以看到：\n\n```text\n/data/customex/custom_logofs/PrivacyPolicy/com.sgtc.wechat2.json\n```\n\n目录权限可能是：\n\n```text\ndrwx------\n```\n\n即：\n\n```text\n0700\n```\n\n---\n\n## 3. 根本原因\n\n`File.exists()` 并不只代表“磁盘上是否有这个文件”。\n\n应用进程在执行文件状态检查时，需要逐级进入：\n\n```text\n/data\n/data/customex\n/data/customex/custom_logofs\n/data/customex/custom_logofs/PrivacyPolicy\n```\n\nLinux 中，访问目录下的文件要求每一级目录都具备搜索权限，也就是目录执行位 `x`。\n\n如果目标目录是：\n\n```text\ndrwx------\n```\n\n只有目录所有者可以进入。应用进程不是 root，也不是该目录所有者时，无法执行 `stat()` 检查目标文件。\n\n此时 Java 层可能得到：\n\n```text\nexists=false\n```\n\n虽然文件实际上存在。\n\n除此之外，SELinux 也可能阻止：\n\n- 搜索目录；\n- 获取文件属性；\n- 打开文件；\n- 读取文件。\n\n因此，“文件存在但应用看不见”通常属于访问权限问题，而不是路径拼接问题。\n\n---\n\n## 4. 为什么 Device Explorer 能看到文件\n\n执行：\n\n```bash\nadb root\n```\n\n以后，Android Studio Device Explorer 或 adb shell 可能以 root 权限访问设备。\n\nroot 能看到文件，不等于普通应用进程也能看到。\n\n必须区分：\n\n```text\nroot 视角\n```\n\n和：\n\n```text\n应用 SELinux 域 + 应用 UID 视角\n```\n\n---\n\n## 5. 解决思路\n\n按以下顺序排查：\n\n1. 确认路径和文件名；\n2. 检查每一级目录的 Linux 权限；\n3. 检查文件权限和属主；\n4. 检查 SELinux 标签；\n5. 检查 `avc: denied`；\n6. 临时修复权限验证；\n7. 将修复固化到 AOSP init 和 sepolicy。\n\n不要一开始就修改 Java 文件存在性判断，否则只会掩盖系统权限问题。\n\n---\n\n## 6. 检查文件是否真的存在\n\n```bash\nadb root\n\nadb shell stat \\\n/data/customex/custom_logofs/PrivacyPolicy/com.sgtc.wechat2.json\n```\n\n检查目录：\n\n```bash\nadb shell ls -laZ \\\n/data/customex/custom_logofs/PrivacyPolicy\n```\n\n必须严格确认文件名：\n\n```text\ncom.sgtc.wechat2.json\n```\n\nLinux 区分大小写，以下名称均不等价：\n\n```text\ncom.sgtc.wechat2.JSON\ncom.sgtc.wechat2.json.txt\ncom.sgtc.wechat.json\n```\n\n---\n\n## 7. 检查完整目录权限\n\n```bash\nadb shell \"ls -ldZ \\\n/data/customex \\\n/data/customex/custom_logofs \\\n/data/customex/custom_logofs/PrivacyPolicy\"\n```\n\n推荐权限：\n\n```text\n/data/customex                              0755\n/data/customex/custom_logofs                0755\n/data/customex/custom_logofs/PrivacyPolicy  0755\n```\n\n文件推荐权限：\n\n```text\ncom.sgtc.wechat2.json    0644\nprivacyoperations.json   0644\n```\n\n推荐属主：\n\n```text\nsystem:system\n```\n\n---\n\n## 8. 临时修复命令\n\n```bash\nadb root\n\nadb shell chown system:system \\\n/data/customex/custom_logofs/PrivacyPolicy\n\nadb shell chmod 0755 \\\n/data/customex/custom_logofs/PrivacyPolicy\n\nadb shell chown system:system \\\n/data/customex/custom_logofs/PrivacyPolicy/com.sgtc.wechat2.json\n\nadb shell chmod 0644 \\\n/data/customex/custom_logofs/PrivacyPolicy/com.sgtc.wechat2.json\n\nadb shell chown system:system \\\n/data/customex/custom_logofs/PrivacyPolicy/privacyoperations.json\n\nadb shell chmod 0644 \\\n/data/customex/custom_logofs/PrivacyPolicy/privacyoperations.json\n```\n\n恢复 SELinux 标签：\n\n```bash\nadb shell restorecon -RF \\\n/data/customex/custom_logofs/PrivacyPolicy\n```\n\n---\n\n## 9. 为什么目录使用 `0755`\n\n`0755` 含义：\n\n```text\n所有者：读、写、进入\n同组用户：读、进入\n其他用户：读、进入\n```\n\n目录的 `x` 权限代表可以搜索和进入目录。\n\n应用只需要读取 JSON 时：\n\n- 目录需要可搜索；\n- 文件需要可读；\n- 不需要给应用目录写权限。\n\n因此通常配置为：\n\n```text\n目录 0755\n文件 0644\n```\n\n比 `0777` 更合理。\n\n---\n\n## 10. 为什么不建议 `chmod 777`\n\n`chmod 777` 会让所有进程都具备目录写权限，可能导致：\n\n- JSON 被任意修改；\n- 文件被删除；\n- 文件被替换；\n- 隐私政策内容被篡改。\n\n而且 `777` 不能绕过 SELinux。\n\n正确策略是：\n\n```text\nDAC 权限最小化 + SELinux 精确授权\n```\n\n---\n\n## 11. 检查 SELinux\n\n检查标签：\n\n```bash\nadb shell ls -ldZ \\\n/data/customex/custom_logofs/PrivacyPolicy\n\nadb shell ls -lZ \\\n/data/customex/custom_logofs/PrivacyPolicy\n```\n\n检查拒绝日志：\n\n```bash\nadb logcat -b all -d | grep -i \"avc: denied\"\n```\n\n或者：\n\n```bash\nadb shell dmesg | grep -i \"avc: denied\"\n```\n\n重点关注：\n\n```text\nscontext\ntcontext\ntclass\ndenied\n```\n\n例如：\n\n```text\nscontext=u:r:platform_app:s0\ntcontext=u:object_r:sysfs_sjtc_customex_file:s0\ntclass=dir\n```\n\n表示 `platform_app` 域访问该目录类型时被拒绝。\n\n---\n\n## 12. AOSP 中的正式修复\n\n### init rc\n\n```rc\non post-fs-data\n    mkdir /data/customex/custom_logofs/PrivacyPolicy 0755 system system\n    chown system system /data/customex/custom_logofs/PrivacyPolicy\n    chmod 0755 /data/customex/custom_logofs/PrivacyPolicy\n    restorecon_recursive /data/customex/custom_logofs/PrivacyPolicy\n```\n\n### file_contexts\n\n确认存在递归规则：\n\n```text\n/data/customex(/.*)?    u:object_r:sysfs_sjtc_customex_file:s0\n```\n\n### SELinux 权限\n\n先确认应用域：\n\n```bash\nadb shell ps -AZ | grep com.sgtc.privacymanager\n```\n\n如果是 `platform_app`：\n\n```te\nallow platform_app sysfs_sjtc_customex_file:dir {\n    getattr\n    search\n};\n\nallow platform_app sysfs_sjtc_customex_file:file {\n    getattr\n    open\n    read\n};\n```\n\n如果是 `system_app`，将域名替换为：\n\n```text\nsystem_app\n```\n\n只修改实际应用所在域。\n\n---\n\n## 13. 验证步骤\n\n强制停止应用：\n\n```bash\nadb shell am force-stop com.sgtc.privacymanager\n```\n\n清理日志：\n\n```bash\nadb logcat -c\n```\n\n重新打开页面后检查：\n\n```bash\nadb logcat | grep -E \\\n\"CUSTOM_APP_READ|CUSTOM_OPERATIONS|CUSTOM_DISPLAY\"\n```\n\n期望：\n\n```text\nexists=true\nisFile=true\ncanRead=true\n```\n\n随后：\n\n```text\nCUSTOM_DISPLAY_OK\n```\n\n---\n\n## 14. 排查判断表\n\n| 日志或命令结果 | 判断 |\n|---|---|\n| `stat: No such file or directory` | 文件或路径确实不存在 |\n| root 能看到，应用 `exists=false` | 目录权限或 SELinux 问题 |\n| `canRead=false` | 文件或目录不可读 |\n| `avc: denied` | SELinux 未授权 |\n| 修改 `chmod 0755/0644` 后正常 | Linux DAC 权限问题 |\n| `setenforce 0` 后正常 | SELinux 问题，仅用于排查，不可作为正式方案 |\n\n---\n\n## 15. 最终正确解决方式是：\n\n```text\n目录 0755\n文件 0644\n正确属主\n正确 SELinux 标签\n正确 SELinux allow 规则\n```\n\n不要通过修改 Java 逻辑、硬编码返回值或使用 `chmod 777` 掩盖文件系统权限问题。",
+      "contentFormat": "markdown",
+      "readingMinutes": 10,
+      "attachments": []
+    },
+    {
       "title": "博客发布后前台不更新问题根因复盘",
       "slug": "博客发布后前台不更新问题根因复盘",
       "date": "2026-07-20",
@@ -1503,6 +1521,25 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-07-21 文章发布记录",
+      "slug": "auto-deploy-20260721061025-posts",
+      "date": "2026-07-21",
+      "createdAt": "2026-07-21T06:10:25.633Z",
+      "updatedAt": "2026-07-21T06:10:25.633Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "文章"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 文章 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-07-21 文章发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-07-21T06:10:25.633Z\n2. 发布模块：文章\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“文章”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update posts content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-07-21 文章发布记录",
       "slug": "auto-deploy-20260721060733-posts",
