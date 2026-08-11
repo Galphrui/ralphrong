@@ -37,6 +37,24 @@
       "attachments": []
     },
     {
+      "title": "Linux grep 命令详解与实战总结",
+      "slug": "linux-grep-命令详解与实战总结",
+      "date": "2026-08-11",
+      "createdAt": "2026-08-11T07:44:47.114Z",
+      "updatedAt": "2026-08-11T07:44:49.318Z",
+      "tags": [
+        "方法论",
+        "Linux"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "",
+      "content": "# Linux grep 命令详解与实战总结\n\n> 用途：文本搜索、日志排查、代码检索的核心工具\n> 适用人群：需要经常在日志/代码/配置文件中定位内容的运维、开发人员\n\n---\n\n## 一、grep 是什么\n\n`grep`（Global Regular Expression Print）是 Linux/Unix 系统下最常用的文本搜索工具，作用是**在文件或输入流中查找匹配指定模式（字符串或正则表达式）的行，并输出这些行**。\n\n它属于\"三剑客\"之一（grep / sed / awk），grep 负责\"找\"，sed 负责\"改\"，awk 负责\"取列处理\"。\n\n**基本语法：**\n\n```bash\ngrep [选项] \"搜索模式\" 文件名\ngrep [选项] \"搜索模式\" -r 目录名\n命令 | grep [选项] \"搜索模式\"\n```\n\n---\n\n## 二、常用参数详解表\n\n### 1. 基础匹配控制\n\n| 参数 | 全称/含义 | 说明 |\n|---|---|---|\n| `-i` | ignore-case | 忽略大小写 |\n| `-v` | invert-match | **反向匹配**，输出不包含关键字的行 |\n| `-w` | word-regexp | 匹配整个单词（避免子串误匹配，如搜 `err` 不会匹配到 `error123`）|\n| `-x` | line-regexp | 匹配整行（整行内容完全等于模式才算匹配）|\n| `-c` | count | 只统计匹配的**行数**，不显示内容 |\n| `-o` | only-matching | 只输出匹配到的部分，而不是整行 |\n| `-q` | quiet | 静默模式，不输出结果，只返回状态码（常用于脚本判断）|\n| `-m N` | max-count | 匹配到 N 次后停止（例如 `-m 1` 只找第一个）|\n\n### 2. 显示格式相关\n\n| 参数 | 含义 | 说明 |\n|---|---|---|\n| `-n` | line-number | 显示匹配行的**行号**（排查日志必备）|\n| `-H` | with-filename | 显示文件名（多文件搜索时默认开启）|\n| `-h` | no-filename | 不显示文件名 |\n| `--color=auto` | 高亮 | 高亮显示匹配内容（很多系统已默认开启）|\n| `-l` | files-with-matches | 只列出**包含匹配内容的文件名**，不显示具体行 |\n| `-L` | files-without-match | 只列出**不包含**匹配内容的文件名 |\n\n### 3. 上下文显示（排查日志神器）\n\n| 参数 | 含义 | 说明 |\n|---|---|---|\n| `-A N` | after-context | 显示匹配行**之后** N 行 |\n| `-B N` | before-context | 显示匹配行**之前** N 行 |\n| `-C N` | context | 显示匹配行**前后各** N 行（等价于 `-A N -B N`）|\n\n### 4. 正则与模式相关\n\n| 参数 | 含义 | 说明 |\n|---|---|---|\n| `-E` | extended-regexp | 使用**扩展正则表达式**（等价于 `egrep`），支持 `+ ? | ()` 等无需转义 |\n| `-F` | fixed-strings | 把模式当作**普通字符串**而非正则（等价于 `fgrep`，搜索特殊字符时更快更安全）|\n| `-P` | perl-regexp | 使用 **Perl 兼容正则**，功能最强（如 `\\d`、`\\s`、零宽断言等）|\n| `-e` | pattern | 指定多个匹配模式，如 `grep -e \"err\" -e \"warn\"` |\n| `-f 文件` | file | 从文件中读取多个匹配模式，一行一个 |\n\n### 5. 文件与目录相关\n\n| 参数 | 含义 | 说明 |\n|---|---|---|\n| `-r` / `-R` | recursive | 递归搜索目录下所有文件（`-R` 会跟随符号链接）|\n| `--include=\"*.log\"` | 包含指定文件类型 | 只在符合条件的文件中搜索 |\n| `--exclude=\"*.tmp\"` | 排除指定文件类型 | 跳过某些文件 |\n| `--exclude-dir=node_modules` | 排除目录 | 大型项目中排除无关目录，提高效率 |\n\n---\n\n## 三、典型使用场景与命令示例\n\n### 场景 1：从日志中查找报错，并带上行号和上下文\n\n```bash\ngrep -n -C 5 \"ERROR\" app.log\n```\n含义：找到 `ERROR` 所在行，显示行号，并展示前后各 5 行，方便还原报错上下文。\n\n### 场景 2：递归搜索整个项目代码中某个函数名\n\n```bash\ngrep -rn \"getUserInfo\" ./src --include=\"*.js\"\n```\n含义：只在 `.js` 文件中递归查找 `getUserInfo`，显示行号。\n\n### 场景 3：统计某关键字出现的次数\n\n```bash\ngrep -c \"timeout\" access.log\n```\n\n### 场景 4：反向过滤，排除无关日志（如排除心跳检测日志）\n\n```bash\ngrep -v \"heartbeat\" app.log | less\n```\n\n### 场景 5：多条件搜索（或关系）\n\n```bash\ngrep -E \"ERROR|WARN|FATAL\" app.log\n# 等价写法\ngrep -e \"ERROR\" -e \"WARN\" -e \"FATAL\" app.log\n```\n\n### 场景 6：判断文件中是否存在某内容（用于脚本判断，不输出内容）\n\n```bash\nif grep -q \"success\" result.txt; then\n  echo \"任务成功\"\nelse\n  echo \"任务失败\"\nfi\n```\n\n### 场景 7：只提取匹配到的内容（如提取所有 IP 地址）\n\n```bash\ngrep -oE \"([0-9]{1,3}\\.){3}[0-9]{1,3}\" access.log\n```\n\n### 场景 8：忽略大小写 + 整词匹配，避免误命中\n\n```bash\ngrep -iw \"error\" app.log\n# 避免匹配到 \"errorCode\" 这种子串\n```\n\n---\n\n## 四、优缺点分析\n\n### 优点\n- **速度快**：底层是 C 实现，处理大文件效率高，远快于脚本语言逐行读取。\n- **管道友好**：可与 `cat`、`tail -f`、`ps`、`awk`、`sed` 等命令组合，是 Shell 流水线的核心一环。\n- **正则表达式支持强大**：配合 `-E`/`-P` 可实现复杂匹配逻辑。\n- **系统标配**：几乎所有 Linux 发行版默认安装，无需额外部署。\n\n### 缺点/局限\n- **只能按行处理**，无法像 `awk` 一样做列提取、跨行统计等复杂逻辑。\n- **不能直接修改文件内容**（只能查找，改内容需配合 `sed`）。\n- 面对超大文件（几十 GB）单线程处理仍然较慢，此时需考虑 `ripgrep (rg)` 等更快的替代工具。\n- 默认的基础正则（BRE）语法较\"古老\"，`+ ? |` 等符号需要转义，容易踩坑（建议直接用 `-E`）。\n\n---\n\n## 五、常见问题排查思路总结（问题 → 现象 → 原因 → 解决）\n\n### 问题 1：搜索关键字明明存在，却搜不到\n\n- **现象**：`grep \"Error\" app.log` 无输出，但打开文件能看到 `Error` 字样\n- **可能原因**：\n  1. 大小写不一致（如实际是 `error`）\n  2. 文件内容有特殊字符/编码问题（如 Windows 换行符 `\\r\\n`）\n  3. 文件是压缩包，未解压直接搜索\n- **解决方法**：\n  ```bash\n  grep -i \"error\" app.log        # 忽略大小写\n  zgrep \"error\" app.log.gz       # 直接搜索压缩文件\n  file app.log                   # 检查文件编码/类型\n  ```\n- **解决思路**：先确认文件本身是否可读、编码是否正常，再逐步放宽匹配条件（去掉大小写限制），最后用 `-o` 单独提取验证。\n\n### 问题 2：递归搜索目录时太慢，或结果被无关文件淹没\n\n- **现象**：`grep -r \"keyword\" .` 执行很久，结果里混杂大量 `.git`、`node_modules` 内容\n- **原因**：递归遍历了不必要的依赖目录/版本控制目录\n- **解决方法**：\n  ```bash\n  grep -rn \"keyword\" . --exclude-dir={node_modules,.git,dist}\n  ```\n- **解决思路**：明确搜索范围，用 `--include`/`--exclude-dir` 缩小搜索面，或改用更快的 `ripgrep`（`rg` 默认会自动忽略 `.gitignore` 中的文件）。\n\n### 问题 3：想找的是特殊字符（如 `.` `*` `[]`），结果匹配出一堆不相关内容\n\n- **现象**：`grep \"192.168.1.1\" file` 把 `192a168x1a1` 这种也匹配进来\n- **原因**：`.` 在正则中代表\"任意字符\"，被当成正则解析了\n- **解决方法**：\n  ```bash\n  grep -F \"192.168.1.1\" file     # -F 表示按普通字符串搜索，不解析正则\n  # 或对特殊字符转义\n  grep \"192\\.168\\.1\\.1\" file\n  ```\n- **解决思路**：只要搜索内容不需要正则功能，优先用 `-F`，既避免误匹配又能提速。\n\n### 问题 4：日志报错定位到了，但看不到上下文，无法判断报错原因\n\n- **现象**：只看到一行 `ERROR: connection refused`，不知道是哪个请求触发的\n- **原因**：grep 默认只输出匹配行本身\n- **解决方法**：\n  ```bash\n  grep -n -B 10 -A 10 \"ERROR: connection refused\" app.log\n  ```\n- **解决思路**：排查问题时优先用 `-C`/`-A`/`-B` 还原现场，而不是只看单行结果。\n\n---\n\n## 六、实战操作步骤模板（可直接套用）\n\n排查一次线上报错的典型流程：\n\n1. **确认日志文件位置**\n   ```bash\n   ls -lh /var/log/app/\n   ```\n2. **先做粗筛，统计报错数量，评估问题严重程度**\n   ```bash\n   grep -c \"ERROR\" app.log\n   ```\n3. **按时间/关键字精确定位，带上行号**\n   ```bash\n   grep -n \"ERROR\" app.log | tail -20\n   ```\n4. **展开上下文，还原完整现场**\n   ```bash\n   grep -n -C 8 \"具体报错内容\" app.log\n   ```\n5. **如果是持续产生的日志，实时监控**\n   ```bash\n   tail -f app.log | grep --line-buffered \"ERROR\"\n   ```\n6. **多关键字交叉验证，排除干扰**\n   ```bash\n   grep -E \"ERROR|Exception\" app.log | grep -v \"heartbeat\"\n   ```\n\n**为什么这么做：** 先统计规模（心里有数）→ 精确定位（缩小范围）→ 展开上下文（找根因）→ 必要时实时监控（观察是否持续发生）→ 交叉过滤噪音（排除已知的正常干扰项）。这是一套\"由粗到细、由静态到动态\"的通用排查思路，不仅适用于 grep，也适用于绝大多数日志类问题的定位。\n\n---\n\n## 七、速查小结\n\n| 需求 | 命令模板 |\n|---|---|\n| 忽略大小写搜索 | `grep -i \"关键字\" 文件` |\n| 显示行号 | `grep -n \"关键字\" 文件` |\n| 递归搜目录 | `grep -rn \"关键字\" 目录` |\n| 反向过滤 | `grep -v \"关键字\" 文件` |\n| 显示上下文 | `grep -C 5 \"关键字\" 文件` |\n| 只统计次数 | `grep -c \"关键字\" 文件` |\n| 多条件或匹配 | `grep -E \"A|B|C\" 文件` |\n| 只提取匹配内容 | `grep -oE \"正则\" 文件` |\n| 按普通字符串搜索 | `grep -F \"特殊字符串\" 文件` |\n| 判断是否存在(脚本用) | `grep -q \"关键字\" 文件` |\n| 结合实时日志监控 | `tail -f 文件 \\| grep \"关键字\"` |\n\n---\n\n*文档用途：日常排查日志、代码检索时的 grep 用法速查与思路参考，可结合具体场景补充新的问题案例。*",
+      "contentFormat": "markdown",
+      "readingMinutes": 10,
+      "attachments": []
+    },
+    {
       "title": "Git 文件权限误变更问题完整排查与恢复总结",
       "slug": "git-文件权限误变更问题完整排查与恢复总结",
       "date": "2026-07-27",
@@ -1660,6 +1678,25 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-08-11 文章发布记录",
+      "slug": "auto-deploy-20260811074449-posts",
+      "date": "2026-08-11",
+      "createdAt": "2026-08-11T07:44:49.350Z",
+      "updatedAt": "2026-08-11T07:44:49.350Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "文章"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 文章 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-08-11 文章发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-08-11T07:44:49.350Z\n2. 发布模块：文章\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“文章”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update posts content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-08-11 代码库发布记录",
       "slug": "auto-deploy-20260811062345-code",
