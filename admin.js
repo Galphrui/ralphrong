@@ -11,6 +11,7 @@ const RA_DEFAULT_PANEL = "posts";
 const RA_ASSET_DIRECT_UPLOAD_BYTES = 5 * 1024 * 1024;
 const RA_ASSET_CHUNK_BYTES = 5 * 1024 * 1024;
 const RA_ASSET_CHUNK_RETRY_ATTEMPTS = 5;
+const RA_DEFAULT_BATCH_MARKDOWN_TAG = "Android开发记录";
 const RA_CODE_LANGUAGE_PRESETS = [
   { label: "Plain Text", value: "Plain Text", extension: "txt" },
   { label: "C", value: "C", extension: "c" },
@@ -109,6 +110,7 @@ const RaEls = {
   summary: document.querySelector("#RaSummaryInput"),
   content: document.querySelector("#RaContentInput"),
   textContentFile: document.querySelector("#RaTextContentFileInput"),
+  batchMarkdown: document.querySelector("#RaBatchMarkdownInput"),
   pdfContentFile: document.querySelector("#RaPdfContentFileInput"),
   previewPost: document.querySelector("#RaPreviewPostButton"),
   postPreviewPanel: document.querySelector("#RaPostPreviewPanel"),
@@ -1866,6 +1868,110 @@ async function importTextContent(event) {
   }
 }
 
+async function importBatchMarkdown(event) {
+  const files = [...(event.target.files || [])].filter(isSupportedMarkdownFile);
+  event.target.value = "";
+  if (!files.length) {
+    setStatus("请选择 md 或 markdown 文件。");
+    return;
+  }
+
+  try {
+    const now = new Date().toISOString();
+    let imported = 0;
+    let updated = 0;
+    const sortedFiles = files.sort((left, right) =>
+      (left.webkitRelativePath || left.name).localeCompare(right.webkitRelativePath || right.name, "zh-CN", { numeric: true }),
+    );
+
+    for (const file of sortedFiles) {
+      const content = normalizeTextContent(await readTextFile(file)).trim();
+      if (!content) continue;
+
+      const post = postFromMarkdownFile(file, content, now);
+      const existingIndex = RaData.posts.findIndex((item) => item.slug === post.slug);
+      if (existingIndex >= 0) {
+        RaData.posts[existingIndex] = {
+          ...RaData.posts[existingIndex],
+          ...post,
+          createdAt: RaData.posts[existingIndex].createdAt || post.createdAt,
+          tags: normalizeTags([...(RaData.posts[existingIndex].tags || []), ...post.tags]),
+          visibility: RaData.posts[existingIndex].visibility || post.visibility,
+          accessPassword: RaData.posts[existingIndex].accessPassword || post.accessPassword,
+        };
+        updated += 1;
+      } else {
+        RaData.posts.push(post);
+        imported += 1;
+      }
+    }
+
+    saveLocalData();
+    selectPost(RaData.posts[0]?.slug || "");
+    setStatus(`已批量导入 ${imported} 篇 MD，更新 ${updated} 篇；默认标签：${RA_DEFAULT_BATCH_MARKDOWN_TAG}。点击发布到外网即可同步。`);
+  } catch (error) {
+    setStatus(`批量导入失败：${error.message}`);
+  }
+}
+
+function postFromMarkdownFile(file, content, now = new Date().toISOString()) {
+  const fileTitle = (file.name || "未命名文章").replace(/\.[^.]+$/, "");
+  const title = extractMarkdownTitle(content, fileTitle);
+  const baseSlug = slugify(title || fileTitle);
+  const slug = RaData.posts.some((item) => item.slug === baseSlug) ? baseSlug : uniquePostSlug(baseSlug);
+  return {
+    title,
+    slug,
+    date: new Date().toISOString().slice(0, 10),
+    createdAt: now,
+    updatedAt: now,
+    tags: [RA_DEFAULT_BATCH_MARKDOWN_TAG],
+    visibility: "public",
+    accessPassword: "",
+    summary: extractMarkdownSummary(content, title),
+    content,
+    contentFormat: "markdown",
+    readingMinutes: estimateReadingMinutes(content),
+    attachments: [],
+  };
+}
+
+function extractMarkdownTitle(content, fallback = "未命名文章") {
+  const heading = String(content || "").match(/^\s*#\s+(.+?)\s*$/m)?.[1];
+  return String(heading || fallback)
+    .replace(/^\d+[_-]/, "")
+    .replace(/^[#\s]+/, "")
+    .trim();
+}
+
+function extractMarkdownSummary(content, title = "") {
+  const withoutTitle = String(content || "").replace(/^\s*#\s+.+?\s*$/m, "");
+  const paragraph = withoutTitle
+    .split(/\n\s*\n/)
+    .map((item) => item.trim())
+    .find((item) => item && !item.startsWith("#") && !item.startsWith("```") && !item.startsWith("|"));
+  return markdownToPlainText(paragraph || title).slice(0, 160);
+}
+
+function markdownToPlainText(value) {
+  return String(value || "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[*_>#\-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function uniquePostSlug(baseSlug) {
+  const cleanBase = baseSlug || "post";
+  if (!RaData.posts.some((item) => item.slug === cleanBase)) return cleanBase;
+  let index = 2;
+  while (RaData.posts.some((item) => item.slug === `${cleanBase}-${index}`)) index += 1;
+  return `${cleanBase}-${index}`;
+}
+
 async function importPdfContent(event) {
   const file = event.target.files?.[0];
   event.target.value = "";
@@ -1907,6 +2013,12 @@ function isSupportedTextFile(file) {
     type.startsWith("text/") ||
     [".txt", ".md", ".markdown", ".log", ".text"].some((ext) => name.endsWith(ext))
   );
+}
+
+function isSupportedMarkdownFile(file) {
+  const name = (file.name || "").toLowerCase();
+  const type = (file.type || "").toLowerCase();
+  return type === "text/markdown" || name.endsWith(".md") || name.endsWith(".markdown");
 }
 
 function readTextFile(file) {
@@ -3732,6 +3844,7 @@ RaEls.tagPicker.addEventListener("click", (event) => {
 });
 RaEls.clearTags.addEventListener("click", () => setEditorTags([]));
 RaEls.textContentFile.addEventListener("change", importTextContent);
+RaEls.batchMarkdown.addEventListener("change", importBatchMarkdown);
 RaEls.pdfContentFile.addEventListener("change", importPdfContent);
 RaEls.attachmentFile.addEventListener("change", addAttachments);
 RaEls.clearAttachments.addEventListener("click", clearAttachments);
