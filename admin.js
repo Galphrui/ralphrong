@@ -58,6 +58,7 @@ let RaSavedRichRange = null;
 let RaRemoteSha = "";
 let RaPostSearchQuery = "";
 let RaPostListCollapsed = false;
+let RaLocalDataSaveTimer = 0;
 
 const RaEls = {
   adminShell: document.querySelector("#RaAdminShell"),
@@ -383,6 +384,11 @@ function saveLocalData() {
   localStorage.setItem(RA_LOCAL_DATA_KEY, JSON.stringify(RaData, null, 2));
   renderPostList();
   renderTagPicker();
+}
+
+function queueLocalDataSave() {
+  window.clearTimeout(RaLocalDataSaveTimer);
+  RaLocalDataSaveTimer = window.setTimeout(saveLocalData, 300);
 }
 
 async function loadRemoteData() {
@@ -1921,6 +1927,18 @@ async function importTextContent(event) {
       throw new Error("请选择 txt、md、markdown、log 或 text 文本文件。");
     }
     const content = normalizeTextContent(await readTextFile(file));
+    if (isSupportedMarkdownFile(file)) {
+      const post = postFromMarkdownFile(file, content.trim());
+      upsertPostDraft(post, { preferSelected: false });
+      saveLocalData();
+      if (RaEls.postSearch) RaEls.postSearch.value = RA_DEFAULT_BATCH_MARKDOWN_TAG;
+      RaPostSearchQuery = RA_DEFAULT_BATCH_MARKDOWN_TAG;
+      selectPost(post.slug);
+      renderPostPreview();
+      setStatus(`已导入 ${file.name} 为新文章草稿，左侧列表已实时更新。确认内容后点击发布到外网。`);
+      return;
+    }
+
     RaEls.content.value = content;
     if (!RaEls.title.value.trim()) {
       RaEls.title.value = file.name.replace(/\.[^.]+$/, "");
@@ -1929,6 +1947,7 @@ async function importTextContent(event) {
     if (!RaEls.summary.value.trim()) {
       RaEls.summary.value = content.split(/\n\s*\n/).find(Boolean)?.trim().slice(0, 120) || "";
     }
+    syncCurrentPostDraft({ persist: true });
     refreshPostPreviewIfOpen();
     renderPostPreview();
     setStatus(`已导入 ${file.name}，换行和 Markdown 结构会按发布效果预览。`);
@@ -2010,6 +2029,53 @@ function postFromMarkdownFile(file, content, now = new Date().toISOString()) {
     readingMinutes: estimateReadingMinutes(content),
     attachments: [],
   };
+}
+
+function syncCurrentPostDraft(options = {}) {
+  const post = postFromEditorDraft();
+  if (!post) return null;
+  upsertPostDraft(post, { preferSelected: true });
+  renderPostList();
+  renderTagPicker();
+  if (options.persist) saveLocalData();
+  else queueLocalDataSave();
+  return post;
+}
+
+function postFromEditorDraft(now = new Date().toISOString()) {
+  const title = RaEls.title.value.trim();
+  const content = RaEls.content.value.trim();
+  const summary = RaEls.summary.value.trim();
+  const requestedSlug = slugify(RaEls.slug.value || title);
+  if (!RaSelectedSlug && !title && !requestedSlug && !summary && !content) return null;
+
+  const existing = RaData.posts.find((item) => item.slug === RaSelectedSlug);
+  const slug = requestedSlug || existing?.slug || uniquePostSlug(`draft-${Date.now()}`);
+  return {
+    ...(existing || {}),
+    title: title || existing?.title || "未命名文章",
+    slug,
+    date: RaEls.date.value || existing?.date || new Date().toISOString().slice(0, 10),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    tags: getEditorTags(),
+    visibility: normalizePostVisibility(RaEls.visibility.value),
+    accessPassword: RaEls.accessPassword.value.trim(),
+    summary,
+    content,
+    contentFormat: RaDocMode,
+    readingMinutes: estimateReadingMinutes(RaEls.content.value),
+    attachments: normalizeAttachments(RaSelectedAttachments),
+  };
+}
+
+function upsertPostDraft(post, options = {}) {
+  const currentIndex = options.preferSelected && RaSelectedSlug ? RaData.posts.findIndex((item) => item.slug === RaSelectedSlug) : -1;
+  const slugIndex = RaData.posts.findIndex((item) => item.slug === post.slug);
+  const index = currentIndex >= 0 ? currentIndex : slugIndex;
+  if (index >= 0) RaData.posts[index] = post;
+  else RaData.posts.push(post);
+  RaSelectedSlug = post.slug;
 }
 
 function extractMarkdownTitle(content, fallback = "未命名文章") {
@@ -4107,19 +4173,36 @@ RaEls.profileSectionList.addEventListener("click", (event) => {
 RaEls.title.addEventListener("input", () => {
   if (!RaSelectedSlug) RaEls.slug.value = slugify(RaEls.title.value);
   refreshPostPreviewIfOpen();
+  syncCurrentPostDraft();
 });
-RaEls.date.addEventListener("input", refreshPostPreviewIfOpen);
+RaEls.slug.addEventListener("input", () => syncCurrentPostDraft());
+RaEls.date.addEventListener("input", () => {
+  refreshPostPreviewIfOpen();
+  syncCurrentPostDraft();
+});
 RaEls.tags.addEventListener("input", () => {
   renderTagPicker();
   refreshPostPreviewIfOpen();
+  syncCurrentPostDraft();
 });
-RaEls.tags.addEventListener("change", () => setEditorTags(RaEls.tags.value));
-RaEls.summary.addEventListener("input", refreshPostPreviewIfOpen);
+RaEls.tags.addEventListener("change", () => {
+  setEditorTags(RaEls.tags.value);
+  syncCurrentPostDraft();
+});
+RaEls.summary.addEventListener("input", () => {
+  refreshPostPreviewIfOpen();
+  syncCurrentPostDraft();
+});
 RaEls.content.addEventListener("input", () => {
   syncDocumentFromPost();
   refreshPostPreviewIfOpen();
+  syncCurrentPostDraft();
 });
-RaEls.visibility.addEventListener("change", updateAccessPasswordField);
+RaEls.visibility.addEventListener("change", () => {
+  updateAccessPasswordField();
+  syncCurrentPostDraft();
+});
+RaEls.accessPassword.addEventListener("input", () => syncCurrentPostDraft());
 RaEls.createAccount.addEventListener("click", createAccount);
 RaEls.resetPassword.addEventListener("click", resetAccountPassword);
 RaEls.deleteAccount.addEventListener("click", deleteAccount);
