@@ -1274,6 +1274,43 @@ textarea {
   padding-left: 22px;
 }
 
+.RaMarkdownTableWrap {
+  border: 1px solid var(--RaLine);
+  overflow-x: auto;
+}
+
+.RaMarkdownTable {
+  border-collapse: collapse;
+  color: #334155;
+  font-size: 14px;
+  min-width: 100%;
+  text-align: left;
+}
+
+.RaMarkdownTable th,
+.RaMarkdownTable td {
+  border-bottom: 1px solid var(--RaLine);
+  border-right: 1px solid var(--RaLine);
+  line-height: 1.6;
+  padding: 10px 12px;
+  vertical-align: top;
+}
+
+.RaMarkdownTable th:last-child,
+.RaMarkdownTable td:last-child {
+  border-right: 0;
+}
+
+.RaMarkdownTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.RaMarkdownTable th {
+  background: #f8fafc;
+  color: var(--RaInk);
+  font-weight: 900;
+}
+
 .RaPostPreview li {
   color: #334155;
   margin: 6px 0;

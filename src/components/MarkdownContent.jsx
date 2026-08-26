@@ -117,7 +117,8 @@ export function parseMarkdownBlocks(content) {
     blocks.push({ type: `h${Math.min(Math.max(level, 1), 6)}`, text: clean })
   }
 
-  lines.forEach((line) => {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex]
     const trimmed = line.trim()
 
     if (trimmed.startsWith('```')) {
@@ -130,12 +131,29 @@ export function parseMarkdownBlocks(content) {
         flushList()
         isCode = true
       }
-      return
+      continue
     }
 
     if (isCode) {
       codeLines.push(line)
-      return
+      continue
+    }
+
+    const nextTrimmed = lines[lineIndex + 1]?.trim() || ''
+    if (isMarkdownTableRow(trimmed) && isMarkdownTableDelimiter(nextTrimmed)) {
+      flushParagraph()
+      flushList()
+      const headers = splitMarkdownTableRow(trimmed)
+      const alignments = splitMarkdownTableRow(nextTrimmed).map(tableColumnAlignment)
+      const rows = []
+      lineIndex += 2
+      while (lineIndex < lines.length && isMarkdownTableRow(lines[lineIndex].trim())) {
+        rows.push(splitMarkdownTableRow(lines[lineIndex].trim()))
+        lineIndex += 1
+      }
+      lineIndex -= 1
+      blocks.push({ type: 'table', headers, alignments, rows })
+      continue
     }
 
     const setextMatch = trimmed.match(/^(=+|-+)$/)
@@ -147,13 +165,13 @@ export function parseMarkdownBlocks(content) {
       } else if (trimmed.length >= 3) {
         blocks.push({ type: 'hr' })
       }
-      return
+      continue
     }
 
     if (!trimmed) {
       flushParagraph()
       flushList()
-      return
+      continue
     }
 
     const imageMatch = trimmed.match(/^\[\[ra-image\s+(.+)\]\]$/)
@@ -161,7 +179,7 @@ export function parseMarkdownBlocks(content) {
       flushParagraph()
       flushList()
       blocks.push({ type: 'image', ...parseTokenAttributes(imageMatch[1]) })
-      return
+      continue
     }
 
     const markdownImageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
@@ -169,7 +187,7 @@ export function parseMarkdownBlocks(content) {
       flushParagraph()
       flushList()
       blocks.push({ type: 'image', alt: markdownImageMatch[1], src: markdownImageMatch[2] })
-      return
+      continue
     }
 
     const attachmentMatch = trimmed.match(/^\[\[ra-attachment:([^\]]+)\]\]$/)
@@ -177,7 +195,7 @@ export function parseMarkdownBlocks(content) {
       flushParagraph()
       flushList()
       blocks.push({ type: 'attachment', id: attachmentMatch[1].trim() })
-      return
+      continue
     }
 
     const pdfMatch = trimmed.match(/^\[\[ra-pdf:([^\]]+)\]\]$/)
@@ -185,7 +203,7 @@ export function parseMarkdownBlocks(content) {
       flushParagraph()
       flushList()
       blocks.push({ type: 'pdf', id: pdfMatch[1].trim() })
-      return
+      continue
     }
 
     const atxMatch = trimmed.match(/^(#{1,6})\s+(.+)$/)
@@ -193,23 +211,48 @@ export function parseMarkdownBlocks(content) {
       flushParagraph()
       flushList()
       pushHeading(atxMatch[1].length, atxMatch[2].replace(/\s+#+$/, ''))
-      return
+      continue
     }
 
     if (/^[-*+]\s+/.test(trimmed)) {
       flushParagraph()
       listItems.push(trimmed.replace(/^[-*+]\s+/, ''))
-      return
+      continue
     }
 
     paragraph.push(trimmed)
-  })
+  }
 
   flushParagraph()
   flushList()
   if (codeLines.length) blocks.push({ type: 'code', text: codeLines.join('\n') })
 
   return blocks
+}
+
+function isMarkdownTableRow(line) {
+  return line.includes('|') && splitMarkdownTableRow(line).length >= 2
+}
+
+function isMarkdownTableDelimiter(line) {
+  if (!isMarkdownTableRow(line)) return false
+  return splitMarkdownTableRow(line).every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s+/g, '')))
+}
+
+function splitMarkdownTableRow(line) {
+  return String(line || '')
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim())
+}
+
+function tableColumnAlignment(cell) {
+  const value = String(cell || '').replace(/\s+/g, '')
+  if (value.startsWith(':') && value.endsWith(':')) return 'center'
+  if (value.endsWith(':')) return 'right'
+  return 'left'
 }
 
 export default function MarkdownContent({ content, attachments = [], mode = 'markdown' }) {
@@ -277,6 +320,43 @@ export default function MarkdownContent({ content, attachments = [], mode = 'mar
                 </li>
               ))}
             </ul>
+          )
+        }
+
+        if (block.type === 'table') {
+          return (
+            <div key={index} className="overflow-x-auto border border-slate-200">
+              <table className="min-w-full border-collapse text-left text-sm text-slate-700">
+                <thead className="bg-slate-50 text-slate-950">
+                  <tr>
+                    {block.headers.map((cell, cellIndex) => (
+                      <th
+                        key={cellIndex}
+                        className="border-b border-r border-slate-200 px-4 py-3 font-black last:border-r-0"
+                        style={{ textAlign: block.alignments[cellIndex] || 'left' }}
+                      >
+                        {parseInline(cell)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {block.rows.map((row, rowIndex) => (
+                    <tr key={rowIndex} className="odd:bg-white even:bg-slate-50/70">
+                      {block.headers.map((_, cellIndex) => (
+                        <td
+                          key={cellIndex}
+                          className="border-b border-r border-slate-200 px-4 py-3 align-top leading-7 last:border-r-0"
+                          style={{ textAlign: block.alignments[cellIndex] || 'left' }}
+                        >
+                          {parseInline(row[cellIndex] || '')}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )
         }
 
