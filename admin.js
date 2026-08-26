@@ -1880,6 +1880,8 @@ async function importBatchMarkdown(event) {
     const now = new Date().toISOString();
     let imported = 0;
     let updated = 0;
+    const importedSlugs = [];
+    const updatedSlugs = [];
     const sortedFiles = files.sort((left, right) =>
       (left.webkitRelativePath || left.name).localeCompare(right.webkitRelativePath || right.name, "zh-CN", { numeric: true }),
     );
@@ -1900,14 +1902,19 @@ async function importBatchMarkdown(event) {
           accessPassword: RaData.posts[existingIndex].accessPassword || post.accessPassword,
         };
         updated += 1;
+        updatedSlugs.push(RaData.posts[existingIndex].slug);
       } else {
         RaData.posts.push(post);
         imported += 1;
+        importedSlugs.push(post.slug);
       }
     }
 
+    const selectedSlug = importedSlugs[0] || updatedSlugs[0] || "";
     saveLocalData();
-    selectPost(RaData.posts[0]?.slug || "");
+    if (RaEls.postSearch) RaEls.postSearch.value = RA_DEFAULT_BATCH_MARKDOWN_TAG;
+    RaPostSearchQuery = RA_DEFAULT_BATCH_MARKDOWN_TAG;
+    selectPost(selectedSlug || RaData.posts[0]?.slug || "");
     setStatus(`已批量导入 ${imported} 篇 MD，更新 ${updated} 篇；默认标签：${RA_DEFAULT_BATCH_MARKDOWN_TAG}。点击发布到外网即可同步。`);
   } catch (error) {
     setStatus(`批量导入失败：${error.message}`);
