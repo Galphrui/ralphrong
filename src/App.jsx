@@ -10,6 +10,9 @@ import { initAnimations } from './animations'
 import { useBlogStore } from './store/useStore'
 import { fetchPostMetrics, fetchSiteData, recordPostView } from './utils/api'
 
+const BROWSING_STATE_KEY = 'RaBlogBrowsingState'
+const BROWSING_STATE_MAX_AGE_MS = 12 * 60 * 60 * 1000
+
 function getRoute() {
   const hash = window.location.hash.replace(/^#\/?/, '')
   if (hash.startsWith('post/')) {
@@ -42,6 +45,66 @@ function getRoute() {
   return { name: 'home' }
 }
 
+function readBrowsingState() {
+  try {
+    const state = JSON.parse(window.localStorage?.getItem(BROWSING_STATE_KEY) || 'null')
+    if (!state || Date.now() - Number(state.savedAt || 0) > BROWSING_STATE_MAX_AGE_MS) return null
+    if (state.path !== window.location.pathname || state.search !== window.location.search) return null
+    return state
+  } catch {
+    return null
+  }
+}
+
+function saveBrowsingState(route) {
+  try {
+    window.localStorage?.setItem(
+      BROWSING_STATE_KEY,
+      JSON.stringify({
+        path: window.location.pathname,
+        search: window.location.search,
+        hash: window.location.hash,
+        routeName: route?.name || '',
+        routeSlug: route?.slug || '',
+        routeId: route?.id || '',
+        scrollX: window.scrollX || 0,
+        scrollY: window.scrollY || 0,
+        savedAt: Date.now(),
+      }),
+    )
+  } catch {
+    // Ignore private-mode storage failures; the page should still work normally.
+  }
+}
+
+function sameBrowsingRoute(state) {
+  return (
+    state &&
+    state.path === window.location.pathname &&
+    state.search === window.location.search &&
+    state.hash === window.location.hash
+  )
+}
+
+function restoreBrowsingScroll(state) {
+  if (!sameBrowsingRoute(state)) return
+  const targetY = Math.max(0, Number(state.scrollY || 0))
+  const targetX = Math.max(0, Number(state.scrollX || 0))
+  let attempts = 0
+
+  const restore = () => {
+    if (!sameBrowsingRoute(state)) return
+    const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+    window.scrollTo(targetX, Math.min(targetY, maxY))
+    attempts += 1
+    if (attempts < 16 && maxY < targetY) {
+      window.setTimeout(() => window.requestAnimationFrame(restore), 80)
+    }
+  }
+
+  window.requestAnimationFrame(restore)
+}
+
 export default function App() {
   const {
     posts,
@@ -56,15 +119,27 @@ export default function App() {
   const [route, setRoute] = useState(getRoute)
   const routeShellRef = useRef(null)
   const lastSiteRefreshRef = useRef(0)
+  const pendingRestoreRef = useRef(null)
 
   const refreshSiteData = useCallback(
     async ({ force = false } = {}) => {
+      const scrollBeforeRefresh = {
+        ...readBrowsingState(),
+        path: window.location.pathname,
+        search: window.location.search,
+        hash: window.location.hash,
+        scrollX: window.scrollX || 0,
+        scrollY: window.scrollY || 0,
+        savedAt: Date.now(),
+      }
       setIsLoading(true)
       setError(null)
       try {
         const data = await fetchSiteData({ force })
         hydrateSiteData(data)
         lastSiteRefreshRef.current = Date.now()
+        pendingRestoreRef.current = scrollBeforeRefresh
+        window.setTimeout(() => restoreBrowsingScroll(scrollBeforeRefresh), 0)
         fetchPostMetrics()
           .then(setPostMetrics)
           .catch(() => {})
@@ -79,9 +154,51 @@ export default function App() {
   )
 
   useEffect(() => {
-    const onHashChange = () => setRoute(getRoute())
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual'
+    }
+
+    const saved = readBrowsingState()
+    if (saved?.hash && !window.location.hash) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${saved.hash}`)
+      pendingRestoreRef.current = saved
+      setRoute(getRoute())
+    } else if (saved && sameBrowsingRoute(saved)) {
+      pendingRestoreRef.current = saved
+    }
+
+    let ticking = false
+    const saveCurrentState = () => saveBrowsingState(getRoute())
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      window.requestAnimationFrame(() => {
+        ticking = false
+        saveCurrentState()
+      })
+    }
+    const onPageHide = () => saveCurrentState()
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') saveCurrentState()
+    }
+    const onHashChange = () => {
+      setRoute(getRoute())
+      window.requestAnimationFrame(saveCurrentState)
+    }
+
+    saveCurrentState()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('beforeunload', onPageHide)
+    document.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('beforeunload', onPageHide)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('hashchange', onHashChange)
+    }
   }, [])
 
   useEffect(() => {
@@ -146,6 +263,13 @@ export default function App() {
       root: routeShellRef.current || document,
     })
     return cleanup
+  }, [route.name, route.slug, route.id, posts.length, tools.length, devLogs.length])
+
+  useEffect(() => {
+    if (!pendingRestoreRef.current) return
+    const state = pendingRestoreRef.current
+    pendingRestoreRef.current = null
+    restoreBrowsingScroll(state)
   }, [route.name, route.slug, route.id, posts.length, tools.length, devLogs.length])
 
   return (
