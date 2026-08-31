@@ -8,6 +8,7 @@ const RA_SESSION_TOKEN_KEY = "RaBlogAdminSessionToken";
 const RA_PUBLISH_POLL_ATTEMPTS = 72;
 const RA_PUBLISH_POLL_DELAY_MS = 5000;
 const RA_DEFAULT_PANEL = "posts";
+const RA_LOCAL_DATA_CACHE_LIMIT_BYTES = 1800 * 1024;
 const RA_ASSET_DIRECT_UPLOAD_BYTES = 5 * 1024 * 1024;
 const RA_ASSET_CHUNK_BYTES = 5 * 1024 * 1024;
 const RA_ASSET_CHUNK_RETRY_ATTEMPTS = 5;
@@ -363,10 +364,18 @@ async function logoutAdmin() {
 }
 
 async function loadInitialData() {
-  const cached = localStorage.getItem(RA_LOCAL_DATA_KEY);
-  if (cached) {
-    RaData = normalizeData(JSON.parse(cached));
-    return;
+  try {
+    const cached = localStorage.getItem(RA_LOCAL_DATA_KEY);
+    if (cached) {
+      if (cached.length > RA_LOCAL_DATA_CACHE_LIMIT_BYTES) {
+        localStorage.removeItem(RA_LOCAL_DATA_KEY);
+      } else {
+        RaData = normalizeData(JSON.parse(cached));
+        return;
+      }
+    }
+  } catch (error) {
+    localStorage.removeItem(RA_LOCAL_DATA_KEY);
   }
 
   try {
@@ -381,7 +390,17 @@ async function loadInitialData() {
 
 function saveLocalData() {
   RaData.posts = sortPosts(RaData.posts);
-  localStorage.setItem(RA_LOCAL_DATA_KEY, JSON.stringify(RaData, null, 2));
+  try {
+    const snapshot = JSON.stringify(RaData, null, 2);
+    if (snapshot.length > RA_LOCAL_DATA_CACHE_LIMIT_BYTES) {
+      localStorage.removeItem(RA_LOCAL_DATA_KEY);
+    } else {
+      localStorage.setItem(RA_LOCAL_DATA_KEY, snapshot);
+    }
+  } catch (error) {
+    localStorage.removeItem(RA_LOCAL_DATA_KEY);
+    console.warn("Ra local data cache skipped:", error);
+  }
   renderPostList();
   renderTagPicker();
 }
@@ -1460,15 +1479,16 @@ async function insertDocumentImage(event) {
   if (!file) return;
   try {
     if (!file.type.startsWith("image/")) throw new Error("请选择图片文件。");
-    const dataUrl = await fileToDataUrl(file);
+    setDocStatus(`正在上传图片：${file.name}`);
+    const src = await markdownImageSource(file, "posts");
     if (RaDocMode === "rich") {
       const image = document.createElement("img");
-      image.src = dataUrl;
+      image.src = src;
       image.alt = file.name;
       insertRichNodeAtCursor(image, `已在光标处插入图片：${file.name}`);
       return;
     }
-    replaceDocumentSelection(`\n[[ra-image src="${dataUrl}" alt="${file.name.replace(/"/g, "")}"]]\n`);
+    replaceDocumentSelection(`\n[[ra-image src="${src}" alt="${file.name.replace(/"/g, "")}"]]\n`);
     setDocStatus(`已插入图片：${file.name}`);
   } catch (error) {
     setDocStatus(`图片插入失败：${error.message}`);
@@ -1481,7 +1501,9 @@ async function insertDocumentAttachments(event) {
   if (!files.length) return;
   try {
     const next = [];
-    for (const file of files) next.push(await fileToAttachment(file));
+    for (const file of files) {
+      next.push(RA_API_BASE ? await uploadAssetAttachment(file, "posts") : await fileToAttachment(file));
+    }
     RaSelectedAttachments = [...normalizeAttachments(RaSelectedAttachments), ...next];
     renderAttachmentList();
     if (RaDocMode === "rich") {
@@ -1506,9 +1528,10 @@ async function pasteIntoRichEditor(event) {
   event.preventDefault();
   try {
     for (const file of files) {
-      const dataUrl = await fileToDataUrl(file);
+      setDocStatus(`正在上传粘贴图片：${file.name || "clipboard-image"}`);
+      const src = await markdownImageSource(file, "posts");
       const image = document.createElement("img");
-      image.src = dataUrl;
+      image.src = src;
       image.alt = file.name || "粘贴图片";
       insertRichNodeAtCursor(image);
     }
@@ -2186,12 +2209,12 @@ async function addAttachments(event) {
   try {
     const next = [];
     for (const file of files) {
-      if (file.size > 2 * 1024 * 1024) throw new Error(`${file.name} 超过 2MB，请压缩后再上传。`);
-      next.push(await fileToAttachment(file));
+      if (!RA_API_BASE && file.size > 2 * 1024 * 1024) throw new Error(`${file.name} 超过 2MB，请压缩后再上传。`);
+      next.push(RA_API_BASE ? await uploadAssetAttachment(file, "posts") : await fileToAttachment(file));
     }
     RaSelectedAttachments = [...normalizeAttachments(RaSelectedAttachments), ...next];
     renderAttachmentList();
-    setStatus(`已添加 ${next.length} 个附件，保存文章后生效。`);
+    setStatus(`已添加 ${next.length} 个附件，保存文章后生效。${RA_API_BASE ? "附件已上传到 GitHub，不会写入 posts.json 体积。" : ""}`);
   } catch (error) {
     setStatus(`附件添加失败：${error.message}`);
   }
@@ -3026,10 +3049,17 @@ async function selectProfilePhoto(event) {
 
   try {
     if (!file.type.startsWith("image/")) throw new Error("请选择图片文件。");
-    const photoUrl = await resizeProfilePhoto(file);
+    setProfileStatus(`正在上传照片：${file.name}`);
+    const photoUrl = RA_API_BASE
+      ? (await uploadAssetAttachment(file, "profile")).url
+      : await resizeProfilePhoto(file);
     RaEls.profilePhoto.value = photoUrl;
     updateProfilePhotoPreview();
-    setProfileStatus("本地照片已添加并压缩，保存并发布后会显示在外网简历。");
+    setProfileStatus(
+      RA_API_BASE
+        ? "照片已上传到 GitHub，保存并发布后会显示在外网简历。"
+        : "本地照片已添加并压缩，保存并发布后会显示在外网简历。",
+    );
   } catch (error) {
     setProfileStatus(`照片处理失败：${error.message}`);
   } finally {
