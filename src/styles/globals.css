@@ -86,6 +86,16 @@ img.ra-image-loaded {
   transform: translateY(0);
 }
 
+.ra-markdown-heading {
+  scroll-margin-top: 96px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -38,8 +38,50 @@ function sanitizeRichHtml(html) {
   return template.innerHTML
 }
 
+function isSafeHref(value) {
+  return /^(https?:|mailto:|tel:|#|\.\/|\/)/i.test(String(value || ''))
+}
+
+function slugifyHeading(text) {
+  const clean = String(text || '')
+    .replace(/\[\[\/?ra-style[^\]]*\]\]/g, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+  return clean || 'section'
+}
+
+function uniqueHeadingId(text, usedIds) {
+  const base = slugifyHeading(text)
+  const count = usedIds.get(base) || 0
+  usedIds.set(base, count + 1)
+  return count ? base + '-' + (count + 1) : base
+}
+
+function scrollToHashHeading(event, href) {
+  if (!href?.startsWith('#')) return
+  const rawId = href.slice(1)
+  if (!rawId) return
+  event.preventDefault()
+  const decodedId = (() => {
+    try {
+      return decodeURIComponent(rawId)
+    } catch {
+      return rawId
+    }
+  })()
+  const target = document.getElementById(decodedId) || document.getElementById(decodedId.toLowerCase())
+  target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 function parseBasicInline(text) {
-  const parts = String(text).split(/(`[^`]+`|\*\*[^*]+\*\*)/g)
+  const parts = String(text).split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g)
   return parts.map((part, index) => {
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
@@ -53,6 +95,24 @@ function parseBasicInline(text) {
         <strong key={index} className="font-black text-slate-900">
           {part.slice(2, -2)}
         </strong>
+      )
+    }
+    const linkMatch = part.match(/^\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)$/)
+    if (linkMatch) {
+      const href = linkMatch[2]
+      const isHashLink = href.startsWith('#')
+      const isLocalLink = isHashLink || href.startsWith('/') || href.startsWith('./')
+      return (
+        <a
+          key={index}
+          href={isSafeHref(href) ? href : '#'}
+          className="font-bold text-primary-700 underline decoration-primary-200 underline-offset-4 hover:text-primary-500"
+          target={isLocalLink ? undefined : '_blank'}
+          rel={isLocalLink ? undefined : 'noreferrer'}
+          onClick={isHashLink ? (event) => scrollToHashHeading(event, href) : undefined}
+        >
+          {parseBasicInline(linkMatch[1])}
+        </a>
       )
     }
     return <Fragment key={index}>{part}</Fragment>
@@ -96,6 +156,7 @@ export function parseMarkdownBlocks(content) {
   const blocks = []
   let paragraph = []
   let listItems = []
+  let listType = 'ul'
   let codeLines = []
   let isCode = false
 
@@ -107,8 +168,9 @@ export function parseMarkdownBlocks(content) {
 
   const flushList = () => {
     if (!listItems.length) return
-    blocks.push({ type: 'ul', items: listItems })
+    blocks.push({ type: listType, items: listItems })
     listItems = []
+    listType = 'ul'
   }
 
   const pushHeading = (level, text) => {
@@ -214,9 +276,21 @@ export function parseMarkdownBlocks(content) {
       continue
     }
 
-    if (/^[-*+]\s+/.test(trimmed)) {
+    const unorderedMatch = trimmed.match(/^[-*+]\s+(.+)$/)
+    if (unorderedMatch) {
       flushParagraph()
-      listItems.push(trimmed.replace(/^[-*+]\s+/, ''))
+      if (listItems.length && listType !== 'ul') flushList()
+      listType = 'ul'
+      listItems.push(unorderedMatch[1])
+      continue
+    }
+
+    const orderedMatch = trimmed.match(/^\d+[.)]\s+(.+)$/)
+    if (orderedMatch) {
+      flushParagraph()
+      if (listItems.length && listType !== 'ol') flushList()
+      listType = 'ol'
+      listItems.push(orderedMatch[1])
       continue
     }
 
@@ -271,37 +345,42 @@ export default function MarkdownContent({ content, attachments = [], mode = 'mar
 
   const blocks = parseMarkdownBlocks(content)
   const attachmentMap = new Map((attachments || []).map((item) => [item.id, item]))
+  const usedHeadingIds = new Map()
 
   return (
     <div className="space-y-6">
       {blocks.map((block, index) => {
         if (block.type === 'h1') {
+          const headingId = uniqueHeadingId(block.text, usedHeadingIds)
           return (
-            <h2 key={index} className="border-b border-slate-200 pb-3 pt-5 text-3xl font-black leading-tight text-slate-950">
+            <h2 id={headingId} key={index} className="ra-markdown-heading border-b border-slate-200 pb-3 pt-5 text-3xl font-black leading-tight text-slate-950">
               {parseInline(block.text)}
             </h2>
           )
         }
 
         if (block.type === 'h2') {
+          const headingId = uniqueHeadingId(block.text, usedHeadingIds)
           return (
-            <h2 key={index} className="border-b border-slate-200 pb-2 pt-4 text-2xl font-black leading-tight text-slate-950">
+            <h2 id={headingId} key={index} className="ra-markdown-heading border-b border-slate-200 pb-2 pt-4 text-2xl font-black leading-tight text-slate-950">
               {parseInline(block.text)}
             </h2>
           )
         }
 
         if (block.type === 'h3') {
+          const headingId = uniqueHeadingId(block.text, usedHeadingIds)
           return (
-            <h3 key={index} className="pt-3 text-xl font-black leading-tight text-slate-950">
+            <h3 id={headingId} key={index} className="ra-markdown-heading pt-3 text-xl font-black leading-tight text-slate-950">
               {parseInline(block.text)}
             </h3>
           )
         }
 
         if (['h4', 'h5', 'h6'].includes(block.type)) {
+          const headingId = uniqueHeadingId(block.text, usedHeadingIds)
           return (
-            <h3 key={index} className="pt-2 text-lg font-black leading-tight text-slate-950">
+            <h3 id={headingId} key={index} className="ra-markdown-heading pt-2 text-lg font-black leading-tight text-slate-950">
               {parseInline(block.text)}
             </h3>
           )
@@ -311,15 +390,18 @@ export default function MarkdownContent({ content, attachments = [], mode = 'mar
           return <hr key={index} className="border-slate-200" />
         }
 
-        if (block.type === 'ul') {
+        if (block.type === 'ul' || block.type === 'ol') {
+          const ListTag = block.type
           return (
-            <ul key={index} className="list-disc space-y-2 pl-6 text-slate-700">
-              {block.items.map((item) => (
-                <li key={item} className="leading-8">
+            <ListTag key={index} className={
+              block.type === 'ol' ? 'list-decimal space-y-2 pl-6 text-slate-700' : 'list-disc space-y-2 pl-6 text-slate-700'
+            }>
+              {block.items.map((item, itemIndex) => (
+                <li key={item + itemIndex} className="leading-8">
                   {parseInline(item)}
                 </li>
               ))}
-            </ul>
+            </ListTag>
           )
         }
 
