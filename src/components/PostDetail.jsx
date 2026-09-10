@@ -118,7 +118,9 @@ function escapeHtml(value = '') {
     .replace(/"/g, '&quot;')
 }
 
-function ArticleToc({ items, articleRef }) {
+const TOC_SIDE_KEY = 'RaArticleTocSide'
+
+function ArticleToc({ items, articleRef, side, onSideChange }) {
   const [tocQuery, setTocQuery] = useState('')
   const [articleQuery, setArticleQuery] = useState('')
   const [activeId, setActiveId] = useState(items[0]?.id || '')
@@ -203,6 +205,20 @@ function ArticleToc({ items, articleRef }) {
           <button type="button" onClick={() => setCollapsed(true)} className="text-xs font-black text-slate-500 hover:text-primary-700">
             收起
           </button>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {['left', 'right'].map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onSideChange(value)}
+              className={`border px-3 py-2 text-xs font-black ${
+                side === value ? 'border-primary-700 bg-primary-700 text-white' : 'border-slate-200 text-slate-700 hover:border-primary-300'
+              }`}
+            >
+              {value === 'left' ? '左侧' : '右侧'}
+            </button>
+          ))}
         </div>
 
         <div className="mt-4 grid gap-2">
@@ -331,6 +347,19 @@ export default function PostDetail({ post }) {
   }, [post?.slug])
 
   const tocItems = useMemo(() => buildMarkdownToc(post?.content || ''), [post?.content])
+  const [tocSide, setTocSide] = useState(() => {
+    try {
+      return localStorage.getItem(TOC_SIDE_KEY) === 'right' ? 'right' : 'left'
+    } catch {
+      return 'left'
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TOC_SIDE_KEY, tocSide)
+    } catch {}
+  }, [tocSide])
 
   if (isLoading) {
     return (
@@ -425,7 +454,9 @@ export default function PostDetail({ post }) {
 
         {isUnlocked ? (
           <>
-            <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className={`mt-8 grid gap-8 ${tocSide === 'left' ? 'xl:grid-cols-[320px_minmax(0,1fr)]' : 'xl:grid-cols-[minmax(0,1fr)_320px]'}`}>
+              {tocSide === 'left' && <ArticleToc items={tocItems} articleRef={articleContentRef} side={tocSide} onSideChange={setTocSide} />}
+
               <div className="min-w-0">
                 <div ref={articleContentRef}>
                   <MarkdownContent content={post.content} attachments={post.attachments || []} mode={post.contentFormat || 'markdown'} />
@@ -440,7 +471,7 @@ export default function PostDetail({ post }) {
                 </div>
               </div>
 
-              <ArticleToc items={tocItems} articleRef={articleContentRef} />
+              {tocSide === 'right' && <ArticleToc items={tocItems} articleRef={articleContentRef} side={tocSide} onSideChange={setTocSide} />}
             </div>
           </>
         ) : (
