@@ -153,7 +153,8 @@ function ArticleToc({ items, articleRef }) {
 
   useEffect(() => {
     if (!activeId || Date.now() < tocScrollLockedUntilRef.current) return
-    const activeItem = listRef.current?.querySelector(`[data-toc-id="${CSS.escape(activeId)}"]`)
+    const escapedId = window.CSS?.escape ? CSS.escape(activeId) : activeId
+    const activeItem = listRef.current?.querySelector(`[data-toc-id="${escapedId}"]`)
     activeItem?.scrollIntoView({ block: 'nearest' })
   }, [activeId])
 
@@ -329,6 +330,8 @@ export default function PostDetail({ post }) {
     setPasswordError('')
   }, [post?.slug])
 
+  const tocItems = useMemo(() => buildMarkdownToc(post?.content || ''), [post?.content])
+
   if (isLoading) {
     return (
       <div className="border border-slate-200 bg-white p-8 text-slate-600 shadow-soft">
@@ -354,7 +357,6 @@ export default function PostDetail({ post }) {
   const isUnlocked = !isPasswordProtected || unlockedPosts[post.slug] === true
   const inlineAttachmentIds = new Set([...String(post.content || '').matchAll(/\[\[ra-(?:attachment|pdf):([^\]]+)\]\]/g)].map((match) => match[1].trim()))
   const bottomAttachments = (post.attachments || []).filter((item) => !inlineAttachmentIds.has(item.id))
-  const tocItems = useMemo(() => buildMarkdownToc(post.content), [post.content])
 
   const unlockPost = (event) => {
     event.preventDefault()

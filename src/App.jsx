@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Navigation from './components/Navigation'
 import PostDetail from './components/PostDetail'
 import HomePage from './components/HomePage'
@@ -103,6 +103,33 @@ function restoreBrowsingScroll(state) {
   }
 
   window.requestAnimationFrame(restore)
+}
+
+class RouteErrorBoundary extends Component {
+  state = { hasError: false }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error) {
+    console.error('Route render failed:', error)
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children
+    return (
+      <section className="border border-red-200 bg-white p-8 shadow-soft">
+        <p className="text-sm font-black uppercase text-red-600">Ra Page Error</p>
+        <h1 className="mt-3 text-2xl font-black text-slate-950">页面加载失败</h1>
+        <p className="mt-3 leading-7 text-slate-600">页面遇到临时错误，请刷新或返回首页。</p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button type="button" onClick={() => window.location.reload()} className="border border-primary-700 bg-primary-700 px-4 py-2 text-sm font-black text-white">刷新</button>
+          <a href="#" className="border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-900">返回首页</a>
+        </div>
+      </section>
+    )
+  }
 }
 
 export default function App() {
@@ -276,43 +303,45 @@ export default function App() {
     <div className="min-h-screen bg-gradient-hero text-slate-900">
       <Navigation />
       <main ref={routeShellRef} data-route-shell className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
-        {route.name === 'profile' ? (
-          <ProfilePage />
-        ) : route.name === 'guestbook' ? (
-          <div className="mx-auto max-w-2xl">
-            <Guestbook />
-          </div>
-        ) : route.name === 'code' ? (
-          <CodeRepositoryPage selectedId={route.id} />
-        ) : route.name === 'tools' ? (
-          <CollectionPage
-            items={tools}
-            selectedSlug={route.slug}
-            baseHash="tools"
-            title="工具库"
-            eyebrow="Ra Tools"
-            description="集中存放可下载工具、脚本包、安装包、说明文档和其他附件资源。附件以独立文件保存到 GitHub 仓库，数据里只保留下载地址。"
-            emptyText="暂无工具条目"
-            detailBackLabel="返回工具库"
-            attachmentTitle="工具附件"
-          />
-        ) : route.name === 'devlogs' ? (
-          <CollectionPage
-            items={devLogs}
-            selectedSlug={route.slug}
-            baseHash="devlogs"
-            title="开发日志"
-            eyebrow="Ra Dev Logs"
-            description="记录每次开发、部署、推送、运行、上线的全过程。这里以 Markdown 文档形式沉淀项目演进记录，也支持手动补充。"
-            emptyText="暂无开发日志"
-            detailBackLabel="返回开发日志"
-            attachmentTitle="日志附件"
-          />
-        ) : route.name === 'post' ? (
-          <PostDetail post={selectedPost} />
-        ) : (
-          <HomePage />
-        )}
+        <RouteErrorBoundary key={`${route.name}-${route.slug || route.id || ''}`}>
+          {route.name === 'profile' ? (
+            <ProfilePage />
+          ) : route.name === 'guestbook' ? (
+            <div className="mx-auto max-w-2xl">
+              <Guestbook />
+            </div>
+          ) : route.name === 'code' ? (
+            <CodeRepositoryPage selectedId={route.id} />
+          ) : route.name === 'tools' ? (
+            <CollectionPage
+              items={tools}
+              selectedSlug={route.slug}
+              baseHash="tools"
+              title="工具库"
+              eyebrow="Ra Tools"
+              description="集中存放可下载工具、脚本包、安装包、说明文档和其他附件资源。附件以独立文件保存到 GitHub 仓库，数据里只保留下载地址。"
+              emptyText="暂无工具条目"
+              detailBackLabel="返回工具库"
+              attachmentTitle="工具附件"
+            />
+          ) : route.name === 'devlogs' ? (
+            <CollectionPage
+              items={devLogs}
+              selectedSlug={route.slug}
+              baseHash="devlogs"
+              title="开发日志"
+              eyebrow="Ra Dev Logs"
+              description="记录每次开发、部署、推送、运行、上线的全过程。这里以 Markdown 文档形式沉淀项目演进记录，也支持手动补充。"
+              emptyText="暂无开发日志"
+              detailBackLabel="返回开发日志"
+              attachmentTitle="日志附件"
+            />
+          ) : route.name === 'post' ? (
+            <PostDetail post={selectedPost} />
+          ) : (
+            <HomePage />
+          )}
+        </RouteErrorBoundary>
       </main>
     </div>
   )
