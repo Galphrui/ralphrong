@@ -90,6 +90,11 @@ img.ra-image-loaded {
   scroll-margin-top: 96px;
 }
 
+.ra-article-search-hit {
+  outline: 3px solid rgba(15, 159, 127, 0.35);
+  outline-offset: 4px;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   html {
     scroll-behavior: smooth;

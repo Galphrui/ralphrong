@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useBlogStore } from '../store/useStore'
 import { likePost } from '../utils/api'
 import Guestbook from './Guestbook'
-import MarkdownContent from './MarkdownContent'
+import MarkdownContent, { buildMarkdownToc } from './MarkdownContent'
 import ScrollPositionControls from './ScrollPositionControls'
 import { attachmentDirectUrl, attachmentName, downloadAttachment, formatAttachmentBytes, isChunkedAttachment } from '../utils/attachments'
 
@@ -118,6 +118,148 @@ function escapeHtml(value = '') {
     .replace(/"/g, '&quot;')
 }
 
+function ArticleToc({ items, articleRef }) {
+  const [tocQuery, setTocQuery] = useState('')
+  const [articleQuery, setArticleQuery] = useState('')
+  const [activeId, setActiveId] = useState(items[0]?.id || '')
+  const [collapsed, setCollapsed] = useState(false)
+  const listRef = useRef(null)
+  const articleMatchRef = useRef({ query: '', index: -1 })
+  const tocScrollLockedUntilRef = useRef(0)
+
+  const filteredItems = useMemo(() => {
+    const query = tocQuery.trim().toLowerCase()
+    if (!query) return items
+    return items.filter((item) => item.text.toLowerCase().includes(query))
+  }, [items, tocQuery])
+
+  useEffect(() => {
+    setActiveId(items[0]?.id || '')
+  }, [items])
+
+  useEffect(() => {
+    if (!items.length || typeof IntersectionObserver === 'undefined') return undefined
+    const headings = items.map((item) => document.getElementById(item.id)).filter(Boolean)
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
+        if (visible?.target?.id) setActiveId(visible.target.id)
+      },
+      { rootMargin: '-110px 0px -65% 0px', threshold: 0 },
+    )
+    headings.forEach((heading) => observer.observe(heading))
+    return () => observer.disconnect()
+  }, [items])
+
+  useEffect(() => {
+    if (!activeId || Date.now() < tocScrollLockedUntilRef.current) return
+    const activeItem = listRef.current?.querySelector(`[data-toc-id="${CSS.escape(activeId)}"]`)
+    activeItem?.scrollIntoView({ block: 'nearest' })
+  }, [activeId])
+
+  const scrollToHeading = (id) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const findInArticle = (backward = false) => {
+    const query = articleQuery.trim().toLowerCase()
+    const root = articleRef.current
+    if (!query || !root) return
+    const matches = [...root.querySelectorAll('h2, h3, p, li, td, th, pre')].filter((node) =>
+      node.innerText?.toLowerCase().includes(query),
+    )
+    if (!matches.length) return
+    const sameQuery = articleMatchRef.current.query === query
+    const step = backward ? -1 : 1
+    const nextIndex = sameQuery ? (articleMatchRef.current.index + step + matches.length) % matches.length : 0
+    articleMatchRef.current = { query, index: nextIndex }
+    matches[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'center' })
+    matches[nextIndex].classList.add('ra-article-search-hit')
+    window.setTimeout(() => matches[nextIndex]?.classList.remove('ra-article-search-hit'), 1200)
+  }
+
+  if (!items.length) return null
+
+  if (collapsed) {
+    return (
+      <aside className="RaNoPrint order-first xl:order-none">
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          className="sticky top-24 w-full border border-primary-200 bg-white px-4 py-3 text-sm font-black text-primary-700 shadow-soft xl:w-auto"
+        >
+          目录
+        </button>
+      </aside>
+    )
+  }
+
+  return (
+    <aside className="RaNoPrint order-first xl:order-none">
+      <div className="sticky top-24 border border-slate-200 bg-white p-4 shadow-soft">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-black text-slate-950">文章目录</h2>
+          <button type="button" onClick={() => setCollapsed(true)} className="text-xs font-black text-slate-500 hover:text-primary-700">
+            收起
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-2">
+          <input
+            value={articleQuery}
+            onChange={(event) => setArticleQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') findInArticle(event.shiftKey)
+            }}
+            className="min-h-10 border border-slate-200 px-3 text-sm outline-none focus:border-primary-500"
+            placeholder="搜索正文"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => findInArticle(true)} className="border border-slate-200 px-3 py-2 text-xs font-black text-slate-700 hover:border-primary-300">
+              上一个
+            </button>
+            <button type="button" onClick={() => findInArticle(false)} className="border border-primary-700 bg-primary-700 px-3 py-2 text-xs font-black text-white">
+              下一个
+            </button>
+          </div>
+          <input
+            value={tocQuery}
+            onChange={(event) => setTocQuery(event.target.value)}
+            className="min-h-10 border border-slate-200 px-3 text-sm outline-none focus:border-primary-500"
+            placeholder="筛选目录"
+          />
+        </div>
+
+        <nav
+          ref={listRef}
+          onScroll={() => {
+            tocScrollLockedUntilRef.current = Date.now() + 2500
+          }}
+          className="mt-4 max-h-[calc(100vh-300px)] space-y-1 overflow-y-auto pr-1"
+        >
+          {filteredItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              data-toc-id={item.id}
+              onClick={() => scrollToHeading(item.id)}
+              className={`block w-full border-l-2 py-1.5 pr-2 text-left text-sm leading-6 transition ${
+                activeId === item.id
+                  ? 'border-primary-600 bg-primary-50 font-black text-primary-800'
+                  : 'border-transparent text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950'
+              }`}
+              style={{ paddingLeft: `${Math.min(Math.max(item.level - 1, 0), 4) * 12 + 8}px` }}
+            >
+              {item.text}
+            </button>
+          ))}
+          {!filteredItems.length && <p className="px-2 py-3 text-sm font-bold text-slate-500">没有匹配的目录</p>}
+        </nav>
+      </div>
+    </aside>
+  )
+}
+
 function ExportPanel({ post, contentRef }) {
   const exportMarkdown = () => {
     downloadTextFile(`${safeFileName(post.slug || post.title)}.md`, buildMarkdownExport(post), 'text/markdown;charset=utf-8')
@@ -212,6 +354,7 @@ export default function PostDetail({ post }) {
   const isUnlocked = !isPasswordProtected || unlockedPosts[post.slug] === true
   const inlineAttachmentIds = new Set([...String(post.content || '').matchAll(/\[\[ra-(?:attachment|pdf):([^\]]+)\]\]/g)].map((match) => match[1].trim()))
   const bottomAttachments = (post.attachments || []).filter((item) => !inlineAttachmentIds.has(item.id))
+  const tocItems = useMemo(() => buildMarkdownToc(post.content), [post.content])
 
   const unlockPost = (event) => {
     event.preventDefault()
@@ -280,16 +423,22 @@ export default function PostDetail({ post }) {
 
         {isUnlocked ? (
           <>
-            <div ref={articleContentRef} className="mt-8">
-              <MarkdownContent content={post.content} attachments={post.attachments || []} mode={post.contentFormat || 'markdown'} />
-            </div>
+            <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="min-w-0">
+                <div ref={articleContentRef}>
+                  <MarkdownContent content={post.content} attachments={post.attachments || []} mode={post.contentFormat || 'markdown'} />
+                </div>
 
-            <AttachmentList attachments={bottomAttachments} />
+                <AttachmentList attachments={bottomAttachments} />
 
-            <ExportPanel post={post} contentRef={articleContentRef} />
+                <ExportPanel post={post} contentRef={articleContentRef} />
 
-            <div className="mt-10">
-              <Guestbook postSlug={post.slug} title="文章留言" />
+                <div className="mt-10">
+                  <Guestbook postSlug={post.slug} title="文章留言" />
+                </div>
+              </div>
+
+              <ArticleToc items={tocItems} articleRef={articleContentRef} />
             </div>
           </>
         ) : (

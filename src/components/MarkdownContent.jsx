@@ -42,7 +42,7 @@ function isSafeHref(value) {
   return /^(https?:|mailto:|tel:|#|\.\/|\/)/i.test(String(value || ''))
 }
 
-function slugifyHeading(text) {
+export function slugifyHeading(text) {
   const clean = String(text || '')
     .replace(/\[\[\/?ra-style[^\]]*\]\]/g, '')
     .replace(/`([^`]+)`/g, '$1')
@@ -62,6 +62,17 @@ function uniqueHeadingId(text, usedIds) {
   const count = usedIds.get(base) || 0
   usedIds.set(base, count + 1)
   return count ? base + '-' + (count + 1) : base
+}
+
+export function buildMarkdownToc(content) {
+  const usedIds = new Map()
+  return parseMarkdownBlocks(content)
+    .filter((block) => /^h[1-6]$/.test(block.type))
+    .map((block) => ({
+      id: uniqueHeadingId(block.text, usedIds),
+      level: Number(block.type.slice(1)),
+      text: block.text,
+    }))
 }
 
 function scrollToHashHeading(event, href) {
