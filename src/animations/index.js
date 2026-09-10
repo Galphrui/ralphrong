@@ -17,21 +17,30 @@ export function motionProfile() {
   const lowCpu = Number(navigator.hardwareConcurrency || 8) <= 4
   const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches
 
-  if (reduce || disabled) return { enabled: false, complex: false }
+  if (reduce || disabled || saveData || lowMemory || lowCpu) return { enabled: false, complex: false }
   return {
     enabled: true,
-    complex: !(saveData || lowMemory || lowCpu || coarsePointer),
+    complex: !coarsePointer,
   }
+}
+
+function revealStaticContent(root = document) {
+  root?.querySelectorAll?.('[data-route-shell], [data-animate-section], [data-animate-text]').forEach((item) => {
+    item.style.opacity = '1'
+    item.style.visibility = 'visible'
+    item.style.filter = 'none'
+    item.style.transform = 'none'
+  })
 }
 
 export function initAnimations({ routeKey, root = document } = {}) {
   const profile = motionProfile()
   if (!profile.enabled || typeof window === 'undefined') {
-    root?.querySelectorAll?.('[data-animate-text]').forEach((item) => {
-      item.style.opacity = '1'
-    })
+    revealStaticContent(root)
     return () => {}
   }
+
+  const fallbackTimer = window.setTimeout(() => revealStaticContent(root), 1000)
 
   const cleanups = [
     initPageTransition({ routeKey, root, profile }),
@@ -43,6 +52,7 @@ export function initAnimations({ routeKey, root = document } = {}) {
   ].filter(Boolean)
 
   return () => {
+    window.clearTimeout(fallbackTimer)
     cleanups.forEach((cleanup) => cleanup?.())
   }
 }
