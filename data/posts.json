@@ -36,6 +36,23 @@
       "attachments": []
     },
     {
+      "title": "App启动流程",
+      "slug": "app启动流程",
+      "date": "2026-09-20",
+      "createdAt": "2026-09-20T01:38:34.132Z",
+      "updatedAt": "2026-09-20T01:40:30.359Z",
+      "tags": [
+        "GalphRong-Android"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "Android App 启动流程一句话概括：Launcher/调用方发起 startActivity → 通过 Binder 进入 AMS/ATMS → 系统判断目标进程是否存在，不存在则通知 Zygote fork 新进程 → 新进程启动 ActivityThread.main() 并建立主线程消息循环 → 向 AMS 注册应用进程 → AMS 再调度创建 Application 和目标 Activity → Activity 执行 onCreate → onStart → onResume，最终完成界面显示。",
+      "content": "以 Android 8.1 的冷启动为例，用户点击 Launcher 上的应用图标以后，Launcher 会构造目标 Activity 的 Intent，然后调用 startActivity。\n\nstartActivity 并不是直接创建 Activity，而是经过 Instrumentation，通过 Binder 把 Activity 启动请求发送到 system_server 中的 AMS。\n\n在 Android 8.1 中，AMS 会把具体的一次 Activity 启动请求交给 ActivityStarter 处理。ActivityStarter 会解析 Intent、检查权限、判断启动模式和 Task，并通过 PMS resolve 出目标 ActivityInfo 和目标进程。\n\n在我的隐私授权项目里面，我就是在这条 ActivityStarter 公共启动链附近加入了目标 Package 的隐私授权检查。如果用户还没有同意隐私协议，就先中断原 Activity 启动，交给 PrivacyConsentService 和 SystemUI 展示隐私授权页面；授权完成以后重新启动 originalIntent，再进入正常 AOSP 启动流程。\n\n如果 AMS 发现目标应用进程还不存在，就会通过 startProcessLocked 和 Process.start，把创建进程的请求通过 Zygote socket 发送给 Zygote。\n\nZygote 因为已经提前加载好了 ART 和大量 Framework Class，所以收到请求以后可以直接 fork 一个新的 App Process。子进程随后进入 ActivityThread.main，创建主线程 Looper，并通过 ActivityThread.attach 使用 Binder 向 AMS 调用 attachApplication，告诉 AMS 应用进程已经启动完成。\n\nAMS 收到 attachApplication 以后，会继续调度 Application 和 Activity 的创建。ActivityThread 先创建 Application，执行 Application.onCreate，然后再通过 handleLaunchActivity 和 performLaunchActivity 创建真正的 Activity 实例，并依次执行 onCreate、onStart、onResume。\n\nActivity 创建之后，PhoneWindow、DecorView 和 ViewRootImpl 会建立起来，ViewRootImpl 通过 WindowManager 与 WMS 建立 Window，随后经过 measure、layout、draw 将内容绘制到 Surface，最后由 SurfaceFlinger 完成图层合成并输出到屏幕。\n\n所以如果把整个应用冷启动过程压缩成一条线，就是：\n\nLauncher → AMS → ActivityStarter → PMS → Zygote fork → ActivityThread → Application → Activity → ViewRootImpl → WMS → SurfaceFlinger。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
+    {
       "title": "Android Framework 工作记录",
       "slug": "android-framework-工作记录",
       "date": "2026-09-15",
@@ -2451,6 +2468,25 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-09-20 文章发布记录",
+      "slug": "auto-deploy-20260920014030-posts",
+      "date": "2026-09-20",
+      "createdAt": "2026-09-20T01:40:30.390Z",
+      "updatedAt": "2026-09-20T01:40:30.390Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "文章"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 文章 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-09-20 文章发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-09-20T01:40:30.390Z\n2. 发布模块：文章\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“文章”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update posts content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-09-20 文章发布记录",
       "slug": "auto-deploy-20260920013623-posts",
