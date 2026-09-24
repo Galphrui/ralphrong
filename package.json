@@ -9,6 +9,7 @@
     "verify:config": "node scripts/verify-config.mjs",
     "test:browsing": "node scripts/test-browsing-state.mjs",
     "test:ui": "node scripts/test-ui-style.mjs",
+    "test:visibility": "node scripts/test-content-visibility.mjs",
     "prebuild": "node scripts/verify-config.mjs",
     "build": "vite build",
     "build:backend": "echo 'Backend ready for Vercel'",

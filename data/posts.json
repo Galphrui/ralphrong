@@ -4469,7 +4469,8 @@
       "maxTopModules": 6,
       "globalDisplayStyle": "list",
       "moduleDisplayStyles": {},
-      "uiStyle": "studio"
+      "uiStyle": "studio",
+      "adminUiStyle": "studio"
     },
     "modules": [
       {
@@ -4530,6 +4531,15 @@
         "external": true
       }
     ]
+  },
+  "contentVisibility": {
+    "hiddenTags": [],
+    "hiddenItems": {
+      "posts": [],
+      "repositories": [],
+      "tools": [],
+      "devLogs": []
+    }
   },
   "profile": {
     "name": "Ralph Rong / Ra",

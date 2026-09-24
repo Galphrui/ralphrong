@@ -44,6 +44,12 @@ const RA_DISPLAY_STYLES = [
   { id: "magazine", label: "杂志" },
 ];
 const RA_UI_STYLES = ["classic", "studio"];
+const RA_CONTENT_TYPES = [
+  { key: "posts", label: "文章", id: "slug", title: "title" },
+  { key: "repositories", label: "代码库", id: "id", title: "name" },
+  { key: "tools", label: "工具库", id: "slug", title: "title" },
+  { key: "devLogs", label: "开发日志", id: "slug", title: "title" },
+];
 const RA_DOC_COLORS = ["#0f172a", "#dc2626", "#ea580c", "#ca8a04", "#16a34a", "#0891b2", "#2563eb", "#7c3aed", "#db2777"];
 const RA_DOC_BACKGROUNDS = ["#ffffff", "#fee2e2", "#ffedd5", "#fef3c7", "#dcfce7", "#cffafe", "#dbeafe", "#ede9fe", "#fce7f3"];
 
@@ -186,12 +192,20 @@ const RaEls = {
   moduleMaxTop: document.querySelector("#RaModuleMaxTopInput"),
   moduleGlobalStyle: document.querySelector("#RaModuleGlobalStyleInput"),
   moduleUiStyle: document.querySelector("#RaModuleUiStyleInput"),
+  adminUiStyle: document.querySelector("#RaAdminUiStyleInput"),
   moduleList: document.querySelector("#RaModuleList"),
   applyModuleVisual: document.querySelector("#RaApplyModuleVisualButton"),
   modules: document.querySelector("#RaModulesInput"),
   saveModules: document.querySelector("#RaSaveModulesButton"),
   publishModules: document.querySelector("#RaPublishModulesButton"),
   modulesStatus: document.querySelector("#RaModulesStatusText"),
+  visibilitySummary: document.querySelector("#RaVisibilitySummary"),
+  visibilityTagList: document.querySelector("#RaVisibilityTagList"),
+  visibilitySearch: document.querySelector("#RaVisibilitySearchInput"),
+  visibilityGroups: document.querySelector("#RaVisibilityGroups"),
+  saveVisibility: document.querySelector("#RaSaveVisibilityButton"),
+  publishVisibility: document.querySelector("#RaPublishVisibilityButton"),
+  visibilityStatus: document.querySelector("#RaVisibilityStatusText"),
   saveCode: document.querySelector("#RaSaveCodeButton"),
   publishCode: document.querySelector("#RaPublishCodeButton"),
   codeStatus: document.querySelector("#RaCodeStatusText"),
@@ -280,6 +294,7 @@ async function initRaAdmin() {
   renderProfileForm();
   renderCodeForm();
   renderModuleForm();
+  renderVisibilityForm();
   renderToolsForm();
   renderDevLogsForm();
   renderPostList();
@@ -424,6 +439,7 @@ async function loadRemoteData() {
     renderProfileForm();
     renderCodeForm();
     renderModuleForm();
+    renderVisibilityForm();
     renderToolsForm();
     renderDevLogsForm();
     selectPost(RaData.posts[0]?.slug || "");
@@ -475,6 +491,7 @@ function appendAutomaticDevLog(target = "posts") {
     tools: "工具库",
     devlogs: "开发日志",
     modules: "模块",
+    visibility: "可见性",
     profile: "个人页",
     site: "站点",
   };
@@ -887,7 +904,15 @@ function renderModuleForm() {
     RaEls.moduleGlobalStyle.value = normalizeDisplayStyle(RaData.modules.settings?.globalDisplayStyle || "list");
   }
   if (RaEls.moduleUiStyle) RaEls.moduleUiStyle.value = normalizeUiStyle(RaData.modules.settings?.uiStyle);
+  if (RaEls.adminUiStyle) RaEls.adminUiStyle.value = normalizeUiStyle(RaData.modules.settings?.adminUiStyle);
+  applyAdminUiStyle(RaData.modules.settings?.adminUiStyle);
   renderModuleList();
+}
+
+function applyAdminUiStyle(value) {
+  const style = normalizeUiStyle(value);
+  document.documentElement.dataset.adminUiStyle = style;
+  localStorage.setItem("RaAdminUiStyle", style);
 }
 
 function renderModuleList() {
@@ -922,6 +947,8 @@ function syncModuleJsonFromVisual() {
   config.settings.maxTopModules = clampModuleCount(RaEls.moduleMaxTop?.value || config.settings.maxTopModules);
   config.settings.globalDisplayStyle = normalizeDisplayStyle(RaEls.moduleGlobalStyle?.value || config.settings.globalDisplayStyle);
   config.settings.uiStyle = normalizeUiStyle(RaEls.moduleUiStyle?.value || config.settings.uiStyle);
+  config.settings.adminUiStyle = normalizeUiStyle(RaEls.adminUiStyle?.value || config.settings.adminUiStyle);
+  applyAdminUiStyle(config.settings.adminUiStyle);
   RaData.modules = normalizeModuleConfig(config);
   RaEls.modules.value = JSON.stringify(RaData.modules, null, 2);
   renderModuleList();
@@ -975,6 +1002,100 @@ function setModuleStyle(id, style) {
   };
   RaData.modules = normalizeModuleConfig(config);
   renderModuleForm();
+}
+
+function renderVisibilityForm() {
+  if (!RaEls.visibilityGroups) return;
+  RaData.contentVisibility = normalizeContentVisibility(RaData.contentVisibility);
+  const rules = RaData.contentVisibility;
+  const hiddenTags = new Set(rules.hiddenTags);
+  const allTags = [...new Set(RA_CONTENT_TYPES.flatMap(({ key }) => (RaData[key] || []).flatMap((item) => item.tags || [])))]
+    .map((tag) => String(tag || "").trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "zh-CN"));
+
+  RaEls.visibilityTagList.innerHTML = allTags.length
+    ? allTags
+        .map(
+          (tag) => `
+            <label class="RaVisibilityChoice${hiddenTags.has(tag) ? " RaActive" : ""}">
+              <input type="checkbox" data-ra-hidden-tag="${escapeAttr(tag)}" ${hiddenTags.has(tag) ? "checked" : ""} />
+              <span>${escapeHtml(tag)}</span>
+            </label>`,
+        )
+        .join("")
+    : '<p class="RaEmptyState">当前内容还没有标签。</p>';
+
+  const query = String(RaEls.visibilitySearch?.value || "").trim().toLocaleLowerCase();
+  RaEls.visibilityGroups.innerHTML = RA_CONTENT_TYPES.map((type) => {
+    const hiddenIds = new Set(rules.hiddenItems[type.key]);
+    const items = (RaData[type.key] || []).filter((item) => {
+      const haystack = [item[type.title], item[type.id], ...(item.tags || [])].join(" ").toLocaleLowerCase();
+      return !query || haystack.includes(query);
+    });
+    return `
+      <details class="RaVisibilityGroup" open>
+        <summary>${type.label}<span>${items.length} 项 · 已隐藏 ${rules.hiddenItems[type.key].length} 项</span></summary>
+        <div class="RaVisibilityItemList">
+          ${
+            items.length
+              ? items
+                  .map((item) => {
+                    const id = String(item[type.id] || item.slug || item.name || "").trim();
+                    const title = item[type.title] || id || "未命名内容";
+                    const hidden = hiddenIds.has(id);
+                    const tagHidden = (item.tags || []).some((tag) => hiddenTags.has(String(tag || "").trim()));
+                    return `
+                      <label class="RaVisibilityItem${hidden || tagHidden ? " RaActive" : ""}">
+                        <input type="checkbox" data-ra-hidden-item="${escapeAttr(id)}" data-ra-content-type="${type.key}" ${hidden ? "checked" : ""} />
+                        <span><strong>${escapeHtml(title)}</strong><small>${escapeHtml((item.tags || []).join(" · ") || id)}${tagHidden ? " · 已被标签规则隐藏" : ""}</small></span>
+                      </label>`;
+                  })
+                  .join("")
+              : '<p class="RaEmptyState">没有匹配内容。</p>'
+          }
+        </div>
+      </details>`;
+  }).join("");
+
+  const itemCount = Object.values(rules.hiddenItems).reduce((sum, ids) => sum + ids.length, 0);
+  RaEls.visibilitySummary.innerHTML = `
+    <div><strong>${rules.hiddenTags.length}</strong><span>个隐藏标签</span></div>
+    <div><strong>${itemCount}</strong><span>个单独隐藏项</span></div>
+    <div><strong>${RA_CONTENT_TYPES.reduce((sum, type) => sum + (RaData[type.key] || []).length, 0)}</strong><span>项内容可管理</span></div>`;
+}
+
+function updateVisibilityRule(event) {
+  const tagInput = event.target.closest("[data-ra-hidden-tag]");
+  const itemInput = event.target.closest("[data-ra-hidden-item]");
+  if (!tagInput && !itemInput) return;
+  const rules = normalizeContentVisibility(RaData.contentVisibility);
+  if (tagInput) {
+    const values = new Set(rules.hiddenTags);
+    tagInput.checked ? values.add(tagInput.dataset.raHiddenTag) : values.delete(tagInput.dataset.raHiddenTag);
+    rules.hiddenTags = [...values];
+  }
+  if (itemInput) {
+    const type = itemInput.dataset.raContentType;
+    const values = new Set(rules.hiddenItems[type] || []);
+    itemInput.checked ? values.add(itemInput.dataset.raHiddenItem) : values.delete(itemInput.dataset.raHiddenItem);
+    rules.hiddenItems[type] = [...values];
+  }
+  RaData.contentVisibility = normalizeContentVisibility(rules);
+  renderVisibilityForm();
+  setVisibilityStatus("隐藏规则已修改，点击保存或保存并发布后生效。");
+}
+
+function saveVisibilityConfig() {
+  RaData.contentVisibility = normalizeContentVisibility(RaData.contentVisibility);
+  saveLocalData();
+  renderVisibilityForm();
+  setVisibilityStatus("隐藏规则已保存到全局数据；发布后所有设备同步生效。");
+  return true;
+}
+
+async function publishVisibilityConfig() {
+  if (saveVisibilityConfig()) await publishData("visibility");
 }
 
 function renderToolsForm() {
@@ -3424,6 +3545,7 @@ function importJson(event) {
     renderProfileForm();
     renderCodeForm();
     renderModuleForm();
+    renderVisibilityForm();
     renderToolsForm();
     renderDevLogsForm();
     selectPost(RaData.posts[0]?.slug || "");
@@ -3705,7 +3827,7 @@ function delay(ms) {
 }
 
 function setPublishing(isPublishing) {
-  [RaEls.publish, RaEls.publishSite, RaEls.publishProfile, RaEls.publishCode, RaEls.publishModules, RaEls.publishTools, RaEls.publishDevLogs, RaEls.syncData, RaEls.docPublish].forEach((button) => {
+  [RaEls.publish, RaEls.publishSite, RaEls.publishProfile, RaEls.publishCode, RaEls.publishModules, RaEls.publishVisibility, RaEls.publishTools, RaEls.publishDevLogs, RaEls.syncData, RaEls.docPublish].forEach((button) => {
     if (button) button.disabled = isPublishing;
   });
 }
@@ -3715,6 +3837,7 @@ function setTargetStatus(target, message) {
   if (target === "site") setSiteStatus(message);
   if (target === "code") setCodeStatus(message);
   if (target === "modules") setModulesStatus(message);
+  if (target === "visibility") setVisibilityStatus(message);
   if (target === "tools") setToolsStatus(message);
   if (target === "devlogs") setDevLogsStatus(message);
 }
@@ -3770,6 +3893,7 @@ function normalizeData(input) {
     tools: normalizeCollectionItems(input.tools, "tool"),
     devLogs: normalizeCollectionItems(input.devLogs, "devlog"),
     modules: normalizeModuleConfig(input.modules || getDefaultModules()),
+    contentVisibility: normalizeContentVisibility(input.contentVisibility),
     profile: normalizeProfile(input.profile),
   };
 }
@@ -3790,13 +3914,14 @@ function getDefaultData() {
     tools: [],
     devLogs: [],
     modules: normalizeModuleConfig(getDefaultModules()),
+    contentVisibility: normalizeContentVisibility(),
     profile: getDefaultProfile(),
   };
 }
 
 function getDefaultModules() {
   return {
-    settings: { maxTopModules: 6, globalDisplayStyle: "list", moduleDisplayStyles: {}, uiStyle: "classic" },
+    settings: { maxTopModules: 6, globalDisplayStyle: "list", moduleDisplayStyles: {}, uiStyle: "classic", adminUiStyle: "classic" },
     modules: [
       { id: "posts", label: "文章", href: "#posts", enabled: true, order: 10, surface: "top" },
       { id: "code", label: "代码库", href: "#code", enabled: true, order: 20, surface: "top" },
@@ -3821,6 +3946,7 @@ function normalizeModuleConfig(value = {}) {
     globalDisplayStyle: normalizeDisplayStyle(value.settings?.globalDisplayStyle),
     moduleDisplayStyles: normalizeModuleDisplayStyles(value.settings?.moduleDisplayStyles),
     uiStyle: normalizeUiStyle(value.settings?.uiStyle),
+    adminUiStyle: normalizeUiStyle(value.settings?.adminUiStyle),
   };
   return {
     settings,
@@ -3847,6 +3973,16 @@ function normalizeDisplayStyle(value) {
 
 function normalizeUiStyle(value) {
   return RA_UI_STYLES.includes(value) ? value : "classic";
+}
+
+function normalizeContentVisibility(value = {}) {
+  const uniqueStrings = (values) =>
+    [...new Set((Array.isArray(values) ? values : []).map((item) => String(item || "").trim()).filter(Boolean))];
+  const hiddenItems = value?.hiddenItems && typeof value.hiddenItems === "object" ? value.hiddenItems : {};
+  return {
+    hiddenTags: uniqueStrings(value?.hiddenTags),
+    hiddenItems: Object.fromEntries(RA_CONTENT_TYPES.map(({ key }) => [key, uniqueStrings(hiddenItems[key])])),
+  };
 }
 
 function normalizeModuleDisplayStyles(value = {}) {
@@ -3962,6 +4098,10 @@ function setToolsStatus(message) {
 
 function setDevLogsStatus(message) {
   if (RaEls.devLogsStatus) RaEls.devLogsStatus.textContent = message;
+}
+
+function setVisibilityStatus(message) {
+  if (RaEls.visibilityStatus) RaEls.visibilityStatus.textContent = message;
 }
 
 function setAccountStatus(message) {
@@ -4130,6 +4270,12 @@ RaEls.publishModules.addEventListener("click", publishModuleConfig);
 RaEls.moduleMaxTop.addEventListener("change", syncModuleJsonFromVisual);
 RaEls.moduleGlobalStyle.addEventListener("change", syncModuleJsonFromVisual);
 RaEls.moduleUiStyle.addEventListener("change", syncModuleJsonFromVisual);
+RaEls.adminUiStyle.addEventListener("change", syncModuleJsonFromVisual);
+RaEls.visibilityTagList.addEventListener("change", updateVisibilityRule);
+RaEls.visibilityGroups.addEventListener("change", updateVisibilityRule);
+RaEls.visibilitySearch.addEventListener("input", renderVisibilityForm);
+RaEls.saveVisibility.addEventListener("click", saveVisibilityConfig);
+RaEls.publishVisibility.addEventListener("click", publishVisibilityConfig);
 RaEls.moduleList.addEventListener("click", (event) => {
   const toggle = event.target.closest("[data-ra-module-toggle]");
   if (toggle) {

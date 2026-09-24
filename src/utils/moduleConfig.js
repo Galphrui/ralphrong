@@ -13,6 +13,7 @@ export const DEFAULT_MODULE_SETTINGS = {
   globalDisplayStyle: 'list',
   moduleDisplayStyles: {},
   uiStyle: 'classic',
+  adminUiStyle: 'classic',
 }
 
 export const DISPLAY_STYLE_IDS = ['list', 'code-block', 'compact', 'gallery', 'timeline', 'magazine']
@@ -41,6 +42,7 @@ export function normalizeModuleSettings(rawSettings = {}, rawModules = DEFAULT_M
     globalDisplayStyle: normalizeDisplayStyle(rawSettings.globalDisplayStyle),
     moduleDisplayStyles: normalizeModuleDisplayStyles(rawSettings.moduleDisplayStyles),
     uiStyle: normalizeUiStyle(rawSettings.uiStyle),
+    adminUiStyle: normalizeUiStyle(rawSettings.adminUiStyle),
     modules: modules.sort((a, b) => a.order - b.order || a.label.localeCompare(b.label)),
   }
 }

@@ -13,7 +13,7 @@ const androidOfflinePath = join(root, 'RaAndroidNotesApp', 'app', 'src', 'main',
 const iosOfflinePath = join(root, 'RaIosNotesApp', 'RaIosNotesApp', 'Resources', 'offline-posts.json')
 
 const defaultModules = {
-  settings: { maxTopModules: 6, globalDisplayStyle: 'list', moduleDisplayStyles: {}, uiStyle: 'classic' },
+  settings: { maxTopModules: 6, globalDisplayStyle: 'list', moduleDisplayStyles: {}, uiStyle: 'classic', adminUiStyle: 'classic' },
   modules: [
     { id: 'posts', label: '文章', href: '#posts', enabled: true, order: 10, surface: 'top' },
     { id: 'code', label: '代码库', href: '#code', enabled: true, order: 20, surface: 'top' },
@@ -94,6 +94,18 @@ if (!posts.modules || !Array.isArray(posts.modules.modules)) {
     posts.modules.settings.uiStyle = defaultModules.settings.uiStyle
     postsChanged = mark('补齐 uiStyle')
   }
+  if (!['classic', 'studio'].includes(posts.modules.settings.adminUiStyle)) {
+    posts.modules.settings.adminUiStyle = defaultModules.settings.adminUiStyle
+    postsChanged = mark('补齐 adminUiStyle')
+  }
+}
+
+if (!posts.contentVisibility || typeof posts.contentVisibility !== 'object') {
+  posts.contentVisibility = {
+    hiddenTags: [],
+    hiddenItems: { posts: [], repositories: [], tools: [], devLogs: [] },
+  }
+  postsChanged = mark('补齐 contentVisibility')
 }
 
 if (!Array.isArray(posts.repositories)) {

@@ -2,6 +2,7 @@ import { sortPosts } from './postSort'
 import { validateGuestMessage } from './moderation'
 import { visitorId } from './visitor'
 import { mergeSiteModuleSettings } from './moduleConfig'
+import { filterVisibleContent, normalizeContentVisibility } from './contentVisibility'
 
 const DATA_PATH = 'data/posts.json'
 const DATA_URL = `${import.meta.env.BASE_URL}${DATA_PATH}`
@@ -36,17 +37,24 @@ const loadSiteData = async () => {
   if (!response.ok) throw new Error('Failed to fetch site data')
 
   const data = await response.json()
-  const posts = sortPosts((data.posts || []).map(normalizePostAccess))
-  const tools = sortPosts((data.tools || []).map(normalizeCollectionItem))
-  const devLogs = sortPosts((data.devLogs || []).map(normalizeCollectionItem))
+  const contentVisibility = normalizeContentVisibility(data.contentVisibility)
+  const posts = sortPosts(filterVisibleContent((data.posts || []).map(normalizePostAccess), 'posts', contentVisibility))
+  const tools = sortPosts(filterVisibleContent((data.tools || []).map(normalizeCollectionItem), 'tools', contentVisibility))
+  const devLogs = sortPosts(filterVisibleContent((data.devLogs || []).map(normalizeCollectionItem), 'devLogs', contentVisibility))
+  const repositories = filterVisibleContent(
+    Array.isArray(data.repositories) ? data.repositories.map(normalizeRepository) : [],
+    'repositories',
+    contentVisibility,
+  )
 
   return {
     site: data.site || {},
     profile: data.profile || null,
-    repositories: Array.isArray(data.repositories) ? data.repositories.map(normalizeRepository) : [],
+    repositories,
     tools,
     devLogs,
     moduleSettings: mergeSiteModuleSettings(data.modules),
+    contentVisibility,
     posts,
     total: posts.length,
   }
@@ -112,9 +120,8 @@ export const extractPdf = async (file) => {
 
 export const fetchTags = async () => {
   try {
-    const response = await fetch(dataUrl(), { cache: 'no-store' })
-    const data = await response.json()
-    const tags = [...new Set(data.posts?.flatMap((p) => p.tags) || [])].sort()
+    const data = await fetchSiteData()
+    const tags = [...new Set(data.posts.flatMap((post) => post.tags || []))].sort()
     return tags
   } catch (error) {
     console.error('Error fetching tags:', error)

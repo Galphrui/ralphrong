@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
     <title>Ra 管理员登录</title>
-    <link rel="stylesheet" href="./styles.css?v=ra-20260624-3" />
+    <script>
+      document.documentElement.dataset.adminUiStyle = localStorage.getItem("RaAdminUiStyle") || "studio";
+    </script>
+    <link rel="stylesheet" href="./styles.css?v=ra-20260925-admin-studio" />
   </head>
   <body class="RaPage RaLoginPage">
     <header class="RaTopbar">

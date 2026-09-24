@@ -559,6 +559,345 @@ textarea {
   }
 }
 
+/* Admin Studio: intentionally scoped so the classic admin remains fully available. */
+.RaVisibilitySummary {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 20px 0;
+}
+
+.RaVisibilitySummary > div,
+.RaVisibilityBlock,
+.RaVisibilityGroup {
+  background: #f8fafc;
+  border: 1px solid var(--RaLine);
+  border-radius: 8px;
+}
+
+.RaVisibilitySummary > div {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+}
+
+.RaVisibilitySummary strong {
+  color: var(--RaInk);
+  font-size: 26px;
+}
+
+.RaVisibilitySummary span,
+.RaVisibilityGroup summary span {
+  color: var(--RaMuted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.RaVisibilityBlock {
+  margin-top: 18px;
+  padding: 18px;
+}
+
+.RaVisibilityTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.RaVisibilityChoice,
+.RaVisibilityItem {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--RaLine);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.RaVisibilityChoice.RaActive,
+.RaVisibilityItem.RaActive {
+  background: #fff1f0;
+  border-color: #ff8a7a;
+}
+
+.RaVisibilityToolbar {
+  align-items: end;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+}
+
+.RaVisibilityToolbar h3 {
+  margin: 5px 0 0;
+}
+
+.RaVisibilityToolbar .RaSearchField {
+  min-width: min(420px, 45vw);
+}
+
+.RaVisibilityGroups,
+.RaVisibilityItemList {
+  display: grid;
+  gap: 10px;
+}
+
+.RaVisibilityGroups {
+  margin-top: 16px;
+}
+
+.RaVisibilityGroup {
+  overflow: hidden;
+}
+
+.RaVisibilityGroup summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-weight: 900;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.RaVisibilityItemList {
+  border-top: 1px solid var(--RaLine);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 440px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.RaVisibilityItem strong,
+.RaVisibilityItem small {
+  display: block;
+}
+
+.RaVisibilityItem small {
+  color: var(--RaMuted);
+  margin-top: 3px;
+}
+
+html[data-admin-ui-style="studio"] .RaPage {
+  --RaBg: #f3efe7;
+  --RaPanel: #fffdf8;
+  --RaText: #171a21;
+  --RaMuted: #686c72;
+  --RaLine: #181b22;
+  --RaPrimary: #08766a;
+  --RaPrimaryStrong: #005f56;
+  --RaInk: #11141b;
+  --RaDanger: #b42318;
+  --RaSoft: #e9fff7;
+  --RaShadow: 8px 9px 0 rgba(17, 20, 27, 0.12);
+  background:
+    radial-gradient(circle at 8% 15%, rgba(215, 255, 69, 0.28), transparent 28%),
+    radial-gradient(circle at 92% 34%, rgba(109, 140, 255, 0.18), transparent 30%),
+    var(--RaBg);
+}
+
+html[data-admin-ui-style="studio"] .RaTopbar {
+  background: rgba(17, 20, 27, 0.96);
+  border-bottom: 2px solid #11141b;
+  color: #fff;
+  gap: 20px;
+  padding-block: 12px;
+}
+
+html[data-admin-ui-style="studio"] .RaBrand,
+html[data-admin-ui-style="studio"] .RaBrand small,
+html[data-admin-ui-style="studio"] .RaNav a,
+html[data-admin-ui-style="studio"] .RaTopLink {
+  color: #fff;
+}
+
+html[data-admin-ui-style="studio"] .RaBrandMark {
+  background: #d7ff45;
+  border: 2px solid #11141b;
+  border-radius: 14px;
+  color: #11141b;
+  transform: rotate(-3deg);
+}
+
+html[data-admin-ui-style="studio"] .RaNav {
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+html[data-admin-ui-style="studio"] .RaAdminTabs {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+html[data-admin-ui-style="studio"] .RaPage .RaTabButton {
+  border-radius: 999px;
+  color: #d5d7dc;
+}
+
+html[data-admin-ui-style="studio"] .RaPage .RaTabButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+html[data-admin-ui-style="studio"] .RaPage .RaTabButton.RaActive {
+  background: #d7ff45;
+  box-shadow: none;
+  color: #11141b;
+}
+
+html[data-admin-ui-style="studio"] .RaPage .RaNavButton {
+  background: #ff6b57;
+  border: 1px solid #11141b;
+  border-radius: 999px;
+  color: #11141b;
+}
+
+html[data-admin-ui-style="studio"] .RaAdminShell {
+  max-width: 1580px;
+  padding-top: 34px;
+}
+
+html[data-admin-ui-style="studio"] .RaLoginPanel,
+html[data-admin-ui-style="studio"] .RaPanel {
+  border: 1.5px solid #11141b;
+  border-radius: 26px;
+  box-shadow: var(--RaShadow);
+}
+
+html[data-admin-ui-style="studio"] .RaPanel {
+  padding: clamp(20px, 3vw, 32px);
+}
+
+html[data-admin-ui-style="studio"] .RaSectionHeading h1,
+html[data-admin-ui-style="studio"] .RaSectionHeading h2 {
+  font-size: clamp(28px, 3vw, 46px);
+  letter-spacing: -0.045em;
+}
+
+html[data-admin-ui-style="studio"] .RaEyebrow {
+  color: #08766a;
+  letter-spacing: 0.1em;
+}
+
+html[data-admin-ui-style="studio"] .RaPage input,
+html[data-admin-ui-style="studio"] .RaPage textarea,
+html[data-admin-ui-style="studio"] .RaPage select {
+  background: #fffefb;
+  border: 1.5px solid #11141b;
+  border-radius: 13px;
+}
+
+html[data-admin-ui-style="studio"] .RaPage input:focus,
+html[data-admin-ui-style="studio"] .RaPage textarea:focus,
+html[data-admin-ui-style="studio"] .RaPage select:focus {
+  box-shadow: 0 0 0 4px rgba(109, 140, 255, 0.22);
+  outline: none;
+}
+
+html[data-admin-ui-style="studio"] .RaPage button,
+html[data-admin-ui-style="studio"] .RaFileButton,
+html[data-admin-ui-style="studio"] .RaLinkButton {
+  background: #11141b;
+  border: 1.5px solid #11141b;
+  border-radius: 999px;
+  color: #fff;
+}
+
+html[data-admin-ui-style="studio"] .RaPage button:hover,
+html[data-admin-ui-style="studio"] .RaFileButton:hover,
+html[data-admin-ui-style="studio"] .RaLinkButton:hover {
+  background: #08766a;
+  transform: translateY(-1px);
+}
+
+html[data-admin-ui-style="studio"] .RaPage .RaSecondaryButton,
+html[data-admin-ui-style="studio"] .RaPage .RaLinkButton {
+  background: #fffdf8;
+  color: #11141b;
+}
+
+html[data-admin-ui-style="studio"] .RaPage .RaPublishButton {
+  background: #d7ff45;
+  color: #11141b;
+}
+
+html[data-admin-ui-style="studio"] .RaPage .RaDangerButton {
+  background: #ff6b57;
+  color: #11141b;
+}
+
+html[data-admin-ui-style="studio"] .RaItem,
+html[data-admin-ui-style="studio"] .RaQuickConnect,
+html[data-admin-ui-style="studio"] .RaTagPicker,
+html[data-admin-ui-style="studio"] .RaProfilePhotoEditor,
+html[data-admin-ui-style="studio"] .RaProfileSectionItem,
+html[data-admin-ui-style="studio"] .RaAttachmentEditor,
+html[data-admin-ui-style="studio"] .RaCodeManager,
+html[data-admin-ui-style="studio"] .RaVisibilitySummary > div,
+html[data-admin-ui-style="studio"] .RaVisibilityBlock,
+html[data-admin-ui-style="studio"] .RaVisibilityGroup {
+  background: rgba(255, 253, 248, 0.92);
+  border: 1.5px solid #11141b;
+  border-radius: 18px;
+}
+
+html[data-admin-ui-style="studio"] .RaItem:hover,
+html[data-admin-ui-style="studio"] .RaItem.RaActive {
+  background: #efffc0;
+  border-color: #11141b;
+  box-shadow: 4px 5px 0 rgba(17, 20, 27, 0.13);
+}
+
+html[data-admin-ui-style="studio"] .RaVisibilityChoice,
+html[data-admin-ui-style="studio"] .RaVisibilityItem {
+  border: 1.5px solid #11141b;
+  border-radius: 14px;
+}
+
+html[data-admin-ui-style="studio"] .RaVisibilityChoice.RaActive,
+html[data-admin-ui-style="studio"] .RaVisibilityItem.RaActive {
+  background: #ffe2dc;
+  box-shadow: inset 5px 0 #ff6b57;
+}
+
+@media (max-width: 1100px) {
+  html[data-admin-ui-style="studio"] .RaTopbar,
+  html[data-admin-ui-style="studio"] .RaNav {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  html[data-admin-ui-style="studio"] .RaAdminTabs {
+    border-radius: 20px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .RaVisibilitySummary,
+  .RaVisibilityItemList {
+    grid-template-columns: 1fr;
+  }
+
+  .RaVisibilityToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .RaVisibilityToolbar .RaSearchField {
+    min-width: 0;
+  }
+
+  html[data-admin-ui-style="studio"] .RaAdminTabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .RaPage {
   --RaBg: #f5f7fb;
   --RaPanel: #ffffff;

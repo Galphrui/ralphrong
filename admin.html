@@ -8,7 +8,10 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Ra 后台管理</title>
-    <link rel="stylesheet" href="./styles.css?v=ra-20260709-pdf-raw-preview" />
+    <script>
+      document.documentElement.dataset.adminUiStyle = localStorage.getItem("RaAdminUiStyle") || "studio";
+    </script>
+    <link rel="stylesheet" href="./styles.css?v=ra-20260925-admin-studio" />
   </head>
   <body class="RaPage RaAdminPage RaAuthPending">
     <header class="RaTopbar">
@@ -28,6 +31,7 @@
           <button class="RaTabButton" type="button" data-ra-admin-tab="tools">工具库</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="devlogs">开发日志</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="modules">模块</button>
+          <button class="RaTabButton" type="button" data-ra-admin-tab="visibility">可见性</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="site">站点</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="profile">简历</button>
           <button class="RaTabButton" type="button" data-ra-admin-tab="accounts" id="RaAccountsNavLink">账号</button>
@@ -445,6 +449,14 @@
               </select>
               <small>新版启用卡片展开动画与全新色彩排版；旧版保留原有界面。</small>
             </label>
+            <label class="RaField">
+              后台视觉风格
+              <select id="RaAdminUiStyleInput">
+                <option value="classic">旧版经典</option>
+                <option value="studio">新版 Studio</option>
+              </select>
+              <small>只改变后台管理界面，切换后立即预览，发布后跨设备生效。</small>
+            </label>
           </div>
           <div class="RaList" id="RaModuleList"></div>
           <label class="RaField RaWide">
@@ -457,6 +469,42 @@
             <button id="RaPublishModulesButton" class="RaPublishButton" type="button">保存并发布</button>
           </div>
           <p class="RaStatus" id="RaModulesStatusText" role="status"></p>
+        </div>
+      </section>
+
+      <section class="RaWorkspacePanel" id="RaVisibilityPanel" data-ra-admin-panel="visibility" hidden>
+        <div class="RaPanel">
+          <div class="RaSectionHeading">
+            <p class="RaEyebrow">Content Visibility</p>
+            <h2>内容可见性管理</h2>
+          </div>
+          <p class="RaHint">按标签隐藏会同时作用于文章、代码库、工具库和开发日志；也可以只隐藏某一个条目。隐藏后前台列表、搜索、推荐和直接详情地址都不会展示。</p>
+          <div class="RaVisibilitySummary" id="RaVisibilitySummary"></div>
+          <section class="RaVisibilityBlock">
+            <div class="RaSectionHeading RaCompactHeading">
+              <p class="RaEyebrow">Hidden Tags</p>
+              <h3>按标签批量隐藏</h3>
+            </div>
+            <div class="RaVisibilityTags" id="RaVisibilityTagList"></div>
+          </section>
+          <section class="RaVisibilityBlock">
+            <div class="RaVisibilityToolbar">
+              <div>
+                <p class="RaEyebrow">Hidden Items</p>
+                <h3>按内容单独隐藏</h3>
+              </div>
+              <label class="RaSearchField">
+                <span>搜索内容</span>
+                <input id="RaVisibilitySearchInput" type="search" placeholder="标题、名称、标签或标识" />
+              </label>
+            </div>
+            <div class="RaVisibilityGroups" id="RaVisibilityGroups"></div>
+          </section>
+          <div class="RaActions">
+            <button id="RaSaveVisibilityButton" type="button">保存隐藏规则</button>
+            <button id="RaPublishVisibilityButton" class="RaPublishButton" type="button">保存并发布</button>
+          </div>
+          <p class="RaStatus" id="RaVisibilityStatusText" role="status"></p>
         </div>
       </section>
 
@@ -795,6 +843,6 @@
     </main>
 
     <script src="./admin-config.js?v=ra-20260703-2"></script>
-    <script src="./admin.js?v=ra-20260715-multipart-assets"></script>
+    <script src="./admin.js?v=ra-20260925-visibility-studio"></script>
   </body>
 </html>
