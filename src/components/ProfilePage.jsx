@@ -212,7 +212,7 @@ export default function ProfilePage() {
   const extraSections = getExtraSections(profile)
 
   return (
-    <div className="resume-page">
+    <div className="resume-page ra-profile-page">
       <button type="button" onClick={() => window.print()} className="resume-print-button resume-print-hide">
         导出 PDF
       </button>

@@ -55,7 +55,7 @@ export default function Guestbook({ compact = false, postSlug = '', title = '留
   const visibleMessages = compact ? messages.slice(0, 4) : messages
 
   return (
-    <section className="border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="ra-guestbook border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase text-primary-700">Ra Guestbook</p>

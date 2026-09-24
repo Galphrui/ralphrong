@@ -11,7 +11,7 @@ import { sortLabel } from '../utils/postSort'
 function AttachmentList({ attachments = [], title = '附件' }) {
   if (!attachments.length) return null
   return (
-    <section className="mt-8 border border-slate-200 bg-slate-50 p-5">
+    <section className="ra-article-panel mt-8 border border-slate-200 bg-slate-50 p-5">
       <p className="text-xs font-black uppercase text-primary-700">Ra Attachments</p>
       <h2 className="mt-1 text-xl font-black text-slate-950">{title}</h2>
       <div className="mt-4 grid gap-3">
@@ -157,7 +157,7 @@ function CollectionList({ items, baseHash, title, eyebrow, description, emptyTex
   }
 
   return (
-    <section id={baseHash} data-animate-section className="py-4">
+    <section id={baseHash} data-animate-section className="ra-collection-page py-4">
       <FeatureHero
         eyebrow={eyebrow}
         title={title}
@@ -176,7 +176,7 @@ function CollectionList({ items, baseHash, title, eyebrow, description, emptyTex
         ]}
       />
 
-      <div className="mt-6 mb-6">
+      <div className="ra-filter-panel mb-6 mt-6">
         <input
           type="search"
           value={query}
@@ -202,7 +202,7 @@ function CollectionList({ items, baseHash, title, eyebrow, description, emptyTex
         </div>
       </div>
 
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div className="ra-list-toolbar mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-2xl font-black text-slate-950">{title}列表</h2>
           <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -234,7 +234,7 @@ function CollectionList({ items, baseHash, title, eyebrow, description, emptyTex
               data-animate-card
               key={item.slug}
               href={`#${baseHash}/${encodeURIComponent(item.slug)}`}
-              className="block border border-slate-200 bg-white p-5 shadow-sm transition hover:border-primary-300 hover:shadow-soft"
+              className="ra-content-card block border border-slate-200 bg-white p-5 shadow-sm transition hover:border-primary-300 hover:shadow-soft"
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.035 }}
@@ -263,7 +263,7 @@ function CollectionList({ items, baseHash, title, eyebrow, description, emptyTex
           />
         </>
       ) : (
-        <div className="border border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-500 shadow-sm">
+        <div className="ra-empty-card border border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-500 shadow-sm">
           {emptyText}
         </div>
       )}
@@ -273,7 +273,7 @@ function CollectionList({ items, baseHash, title, eyebrow, description, emptyTex
 
 function PaginationBar({ currentPage, totalPages, pageRange, pageSummary, onPageChange, label }) {
   return (
-    <nav className="mt-6 border border-slate-200 bg-white p-3 shadow-sm" aria-label={`${label}分页`}>
+    <nav className="ra-pagination mt-6 border border-slate-200 bg-white p-3 shadow-sm" aria-label={`${label}分页`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm font-bold text-slate-500">
           第 {currentPage} / {totalPages} 页 · {pageSummary}
@@ -326,9 +326,9 @@ function CollectionDetail({ item, baseHash, backLabel, attachmentTitle }) {
   return (
     <>
       <ScrollPositionControls ariaLabelPrefix={backLabel} />
-      <article data-animate-section className="mx-auto max-w-5xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
+      <article data-animate-section className="ra-content-detail mx-auto max-w-5xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
         <a href={`#${baseHash}`} className="text-sm font-bold text-primary-700">{backLabel}</a>
-        <header className="mt-6 border-b border-slate-200 pb-6">
+        <header className="ra-content-header mt-6 border-b border-slate-200 pb-6">
           <div className="flex flex-wrap gap-2">
             {(item.tags || []).map((tag) => <span key={tag} className="bg-primary-50 px-3 py-1 text-xs font-bold text-primary-700">{tag}</span>)}
           </div>

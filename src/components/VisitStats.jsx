@@ -64,7 +64,7 @@ export default function VisitStats() {
   }, [])
 
   return (
-    <section className="border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="ra-visit-stats border border-slate-200 bg-white p-4 shadow-sm">
       <p className="mb-3 text-xs font-black uppercase text-primary-700">Ra Visit Record</p>
       <div className="grid gap-3">
         <div>

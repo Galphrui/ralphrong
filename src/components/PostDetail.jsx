@@ -10,7 +10,7 @@ import { attachmentDirectUrl, attachmentName, downloadAttachment, formatAttachme
 function AttachmentList({ attachments = [] }) {
   if (!attachments.length) return null
   return (
-    <section className="mt-10 border border-slate-200 bg-slate-50 p-5">
+    <section className="ra-article-panel ra-attachment-panel mt-10 border border-slate-200 bg-slate-50 p-5">
       <div className="mb-4">
         <p className="text-xs font-black uppercase text-primary-700">Ra Attachments</p>
         <h2 className="mt-1 text-xl font-black text-slate-950">文章附件</h2>
@@ -190,7 +190,7 @@ function ArticleToc({ items, articleRef, side, onSideChange }) {
 
   if (collapsed) {
     return (
-      <aside className="RaNoPrint order-first xl:order-none">
+      <aside className="ra-article-toc RaNoPrint order-first xl:order-none">
         <button
           type="button"
           onClick={() => setCollapsed(false)}
@@ -203,8 +203,8 @@ function ArticleToc({ items, articleRef, side, onSideChange }) {
   }
 
   return (
-    <aside className="RaNoPrint order-first xl:order-none">
-      <div className="sticky top-24 border border-slate-200 bg-white p-4 shadow-soft">
+    <aside className="ra-article-toc RaNoPrint order-first xl:order-none">
+      <div className="ra-toc-card sticky top-24 border border-slate-200 bg-white p-4 shadow-soft">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-black text-slate-950">文章目录</h2>
           <button type="button" onClick={() => setCollapsed(true)} className="text-xs font-black text-slate-500 hover:text-primary-700">
@@ -316,7 +316,7 @@ function ExportPanel({ post, contentRef }) {
   }
 
   return (
-    <section className="RaNoPrint mt-10 border border-slate-200 bg-slate-50 p-5">
+    <section className="ra-article-panel ra-export-panel RaNoPrint mt-10 border border-slate-200 bg-slate-50 p-5">
       <div className="mb-4">
         <p className="text-xs font-black uppercase text-primary-700">Ra Export</p>
         <h2 className="mt-1 text-xl font-black text-slate-950">下载文章</h2>
@@ -424,11 +424,11 @@ export default function PostDetail({ post }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
       >
-        <a href="#" className="text-sm font-bold text-primary-700 hover:text-primary-500">
+        <a href="#" className="ra-article-back text-sm font-bold text-primary-700 hover:text-primary-500">
           返回 Ra 文章列表
         </a>
 
-        <header className="mt-8 border-b border-slate-200 pb-8">
+        <header className="ra-post-header mt-8 border-b border-slate-200 pb-8">
           <div className="mb-4 flex flex-wrap gap-2">
             {post.tags?.map((tag) => (
               <span key={tag} className="bg-primary-50 px-3 py-1 text-xs font-bold text-primary-700">
@@ -459,11 +459,11 @@ export default function PostDetail({ post }) {
 
         {isUnlocked ? (
           <>
-            <div className={`mt-8 grid gap-8 ${tocSide === 'left' ? 'xl:grid-cols-[320px_minmax(0,1fr)]' : 'xl:grid-cols-[minmax(0,1fr)_320px]'}`}>
+            <div className={`ra-reading-layout mt-8 grid gap-8 ${tocSide === 'left' ? 'xl:grid-cols-[280px_minmax(0,1fr)]' : 'xl:grid-cols-[minmax(0,1fr)_280px]'}`}>
               {tocSide === 'left' && <ArticleToc items={tocItems} articleRef={articleContentRef} side={tocSide} onSideChange={setTocSide} />}
 
-              <div className="min-w-0">
-                <div ref={articleContentRef}>
+              <div className="ra-reading-column min-w-0">
+                <div ref={articleContentRef} className="ra-article-body">
                   <MarkdownContent content={post.content} attachments={post.attachments || []} mode={post.contentFormat || 'markdown'} />
                 </div>
 
@@ -471,7 +471,7 @@ export default function PostDetail({ post }) {
 
                 <ExportPanel post={post} contentRef={articleContentRef} />
 
-                <div className="mt-10">
+                <div className="ra-article-guestbook mt-10">
                   <Guestbook postSlug={post.slug} title="文章留言" />
                 </div>
               </div>
@@ -480,7 +480,7 @@ export default function PostDetail({ post }) {
             </div>
           </>
         ) : (
-          <form onSubmit={unlockPost} className="mt-8 border border-amber-200 bg-amber-50 p-6">
+          <form onSubmit={unlockPost} className="ra-article-lock mt-8 border border-amber-200 bg-amber-50 p-6">
             <h2 className="text-xl font-black text-slate-950">这篇文章需要密码授权</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">输入发布者设置的访问密码后，可以在当前浏览会话中阅读正文。</p>
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">

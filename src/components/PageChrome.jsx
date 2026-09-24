@@ -10,7 +10,7 @@ export function AuthorPanel() {
   const { profile } = useBlogStore()
 
   return (
-    <aside className="grid content-start gap-5">
+    <aside className="ra-side-column ra-side-column-left grid content-start gap-5">
       <section data-animate-section className="border border-slate-200 bg-white p-4 shadow-sm">
         <p className="mb-3 text-xs font-black uppercase text-primary-700">Ra Profile</p>
         <div className="mb-4 flex h-11 w-11 items-center justify-center bg-gradient-brand text-base font-black text-white">
@@ -94,7 +94,7 @@ export function PageScaffold({ children, stats, focusText, sortMode, onSortModeC
     <div className="ra-page-scaffold grid items-start gap-5 xl:grid-cols-[240px_minmax(0,1fr)_240px] 2xl:grid-cols-[260px_minmax(0,900px)_260px]">
       <AuthorPanel />
       <div className="min-w-0">{children}</div>
-      <aside className="grid content-start gap-5">
+      <aside className="ra-side-column ra-side-column-right grid content-start gap-5">
         <SortPanel sortMode={sortMode} onSortModeChange={onSortModeChange} />
         <IndexPanel stats={stats} focusText={focusText} />
       </aside>
@@ -145,7 +145,7 @@ export function FeatureHero({
   const currentTabLabel = tabs.find((tab) => tab.key === promoMode)?.label || ''
 
   return (
-    <section data-hero-motion data-animate-section className="ra-hero-motion relative overflow-hidden border border-slate-200 bg-hero-panel px-5 py-8 shadow-soft sm:px-8 lg:px-10">
+    <section data-hero-motion data-animate-section className="ra-feature-hero ra-hero-motion relative overflow-hidden border border-slate-200 bg-hero-panel px-5 py-8 shadow-soft sm:px-8 lg:px-10">
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-brand" />
       <div className="absolute inset-0 bg-grid-pattern opacity-45" />
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative z-10 grid gap-6">

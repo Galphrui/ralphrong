@@ -10,9 +10,9 @@ export default function TagFilter() {
   const hasMore = allTags.length > 5
 
   return (
-    <div>
+    <div className="ra-tag-filter">
       <motion.div
-        className="flex flex-wrap gap-2 mb-4"
+        className="mb-4 flex flex-wrap gap-2"
         layout
       >
         {/* All tag */}

@@ -89,7 +89,7 @@ export default function PostList() {
     <section id="posts" data-animate-section className="ra-post-list py-8">
       {/* Search and filter */}
       <motion.div
-        className="mb-6"
+        className="ra-filter-panel mb-6"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3 }}
@@ -109,7 +109,7 @@ export default function PostList() {
 
       {/* Posts grid */}
       <div>
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div className="ra-list-toolbar mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-2xl font-black text-slate-950">文章列表</h2>
             <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -160,7 +160,7 @@ export default function PostList() {
             </AnimatePresence>
 
             <motion.nav
-              className="mt-6 border border-slate-200 bg-white p-3 shadow-sm"
+              className="ra-pagination mt-6 border border-slate-200 bg-white p-3 shadow-sm"
               aria-label="文章分页"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
