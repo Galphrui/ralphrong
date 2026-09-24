@@ -12,9 +12,11 @@ export const DEFAULT_MODULE_SETTINGS = {
   maxTopModules: 6,
   globalDisplayStyle: 'list',
   moduleDisplayStyles: {},
+  uiStyle: 'classic',
 }
 
 export const DISPLAY_STYLE_IDS = ['list', 'code-block', 'compact', 'gallery', 'timeline', 'magazine']
+export const UI_STYLE_IDS = ['classic', 'studio']
 
 export function normalizeModuleSettings(rawSettings = {}, rawModules = DEFAULT_MODULES) {
   const moduleMap = new Map(DEFAULT_MODULES.map((module) => [module.id, module]))
@@ -38,6 +40,7 @@ export function normalizeModuleSettings(rawSettings = {}, rawModules = DEFAULT_M
     maxTopModules: clampMaxModules(rawSettings.maxTopModules),
     globalDisplayStyle: normalizeDisplayStyle(rawSettings.globalDisplayStyle),
     moduleDisplayStyles: normalizeModuleDisplayStyles(rawSettings.moduleDisplayStyles),
+    uiStyle: normalizeUiStyle(rawSettings.uiStyle),
     modules: modules.sort((a, b) => a.order - b.order || a.label.localeCompare(b.label)),
   }
 }
@@ -76,6 +79,10 @@ export function clampMaxModules(value) {
 
 export function normalizeDisplayStyle(value) {
   return DISPLAY_STYLE_IDS.includes(value) ? value : DEFAULT_MODULE_SETTINGS.globalDisplayStyle
+}
+
+export function normalizeUiStyle(value) {
+  return UI_STYLE_IDS.includes(value) ? value : DEFAULT_MODULE_SETTINGS.uiStyle
 }
 
 export function normalizeModuleDisplayStyles(value = {}) {

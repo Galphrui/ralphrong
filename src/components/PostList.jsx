@@ -1,6 +1,7 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { createRef, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import PostCard from './PostCard'
+import ArticlePreviewDialog from './ArticlePreviewDialog'
 import TagFilter from './TagFilter'
 import { useBlogStore } from '../store/useStore'
 import { sortLabel, sortPosts } from '../utils/postSort'
@@ -20,6 +21,8 @@ export default function PostList() {
   const [filteredPosts, setFilteredPosts] = useState([])
   const [currentPage, setCurrentPage] = useState(1)
   const [postsPerPage, setPostsPerPage] = useState(10)
+  const [previewPost, setPreviewPost] = useState(null)
+  const cardRefs = useRef(new Map())
   const deferredSearchQuery = useDeferredValue(searchQuery)
 
   // Filter posts
@@ -58,6 +61,16 @@ export default function PostList() {
   const currentPosts = filteredPosts.slice(pageStartIndex, pageEndIndex)
   const pageRange = useMemo(() => getPageRange(currentPage, totalPages), [currentPage, totalPages])
   const displayStyle = displayStyleForModule(moduleSettings, 'posts')
+  const usePreviewDialog = moduleSettings?.uiStyle === 'studio'
+
+  const getCardRef = (slug) => {
+    if (!cardRefs.current.has(slug)) cardRefs.current.set(slug, createRef())
+    return cardRefs.current.get(slug)
+  }
+
+  const readPost = (post) => {
+    window.location.hash = `post/${encodeURIComponent(post.slug)}`
+  }
 
   const goToPage = (page) => {
     const nextPage = Math.min(Math.max(page, 1), totalPages)
@@ -73,7 +86,7 @@ export default function PostList() {
       : `0 / ${filteredPosts.length}`
 
   return (
-    <section id="posts" data-animate-section className="py-8">
+    <section id="posts" data-animate-section className="ra-post-list py-8">
       {/* Search and filter */}
       <motion.div
         className="mb-6"
@@ -136,8 +149,10 @@ export default function PostList() {
                     key={post.slug}
                     post={post}
                     displayStyle={displayStyle}
+                    cardRef={getCardRef(post.slug)}
                     onClick={() => {
-                      window.location.hash = `post/${encodeURIComponent(post.slug)}`
+                      if (usePreviewDialog) setPreviewPost(post)
+                      else readPost(post)
                     }}
                   />
                 ))}
@@ -213,6 +228,14 @@ export default function PostList() {
           </motion.div>
         )}
       </div>
+      {previewPost && (
+        <ArticlePreviewDialog
+          post={previewPost}
+          sourceElement={getCardRef(previewPost.slug).current}
+          onClose={() => setPreviewPost(null)}
+          onRead={() => readPost(previewPost)}
+        />
+      )}
     </section>
   )
 }

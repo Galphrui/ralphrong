@@ -4468,7 +4468,8 @@
     "settings": {
       "maxTopModules": 6,
       "globalDisplayStyle": "list",
-      "moduleDisplayStyles": {}
+      "moduleDisplayStyles": {},
+      "uiStyle": "studio"
     },
     "modules": [
       {

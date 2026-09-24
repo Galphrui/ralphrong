@@ -8,12 +8,12 @@ export default function Navigation() {
 
   return (
     <motion.nav
-      className="print-hide sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur-md"
+      className="ra-navigation print-hide sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur-md"
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
     >
-      <div className="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+      <div className="ra-navigation-inner mx-auto flex max-w-[1600px] items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
         {/* Brand */}
         <motion.a
           href="#posts"
@@ -22,7 +22,7 @@ export default function Navigation() {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
-          <div className="flex h-10 w-10 items-center justify-center bg-gradient-brand text-lg font-black text-white shadow-brand">
+          <div className="ra-brand-mark flex h-10 w-10 items-center justify-center bg-gradient-brand text-lg font-black text-white shadow-brand">
             RA
           </div>
           <div>

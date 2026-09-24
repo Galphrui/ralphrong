@@ -65,7 +65,7 @@ export default function Hero() {
   }
 
   return (
-    <section data-hero-motion data-animate-section className="ra-hero-motion relative overflow-hidden border border-slate-200 bg-hero-panel px-5 py-8 shadow-soft sm:px-8 lg:px-10">
+    <section data-hero-motion data-animate-section className="ra-home-hero ra-hero-motion relative overflow-hidden border border-slate-200 bg-hero-panel px-5 py-8 shadow-soft sm:px-8 lg:px-10">
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-brand" />
       <div className="absolute inset-0 bg-grid-pattern opacity-45" />
       <motion.div

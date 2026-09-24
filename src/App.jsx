@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Navigation from './components/Navigation'
 import PostDetail from './components/PostDetail'
 import HomePage from './components/HomePage'
@@ -9,9 +9,7 @@ import CollectionPage from './components/CollectionPage'
 import { initAnimations } from './animations'
 import { useBlogStore } from './store/useStore'
 import { fetchPostMetrics, fetchSiteData, recordPostView } from './utils/api'
-
-const BROWSING_STATE_KEY = 'RaBlogBrowsingState'
-const BROWSING_STATE_MAX_AGE_MS = 12 * 60 * 60 * 1000
+import { readBrowsingState, saveBrowsingState } from './utils/browsingState'
 
 function getRoute() {
   const hash = window.location.hash.replace(/^#\/?/, '')
@@ -45,35 +43,11 @@ function getRoute() {
   return { name: 'home' }
 }
 
-function readBrowsingState() {
-  try {
-    const state = JSON.parse(window.localStorage?.getItem(BROWSING_STATE_KEY) || 'null')
-    if (!state || Date.now() - Number(state.savedAt || 0) > BROWSING_STATE_MAX_AGE_MS) return null
-    if (state.path !== window.location.pathname || state.search !== window.location.search) return null
-    return state
-  } catch {
-    return null
-  }
-}
-
-function saveBrowsingState(route) {
-  try {
-    window.localStorage?.setItem(
-      BROWSING_STATE_KEY,
-      JSON.stringify({
-        path: window.location.pathname,
-        search: window.location.search,
-        hash: window.location.hash,
-        routeName: route?.name || '',
-        routeSlug: route?.slug || '',
-        routeId: route?.id || '',
-        scrollX: window.scrollX || 0,
-        scrollY: window.scrollY || 0,
-        savedAt: Date.now(),
-      }),
-    )
-  } catch {
-    // Ignore private-mode storage failures; the page should still work normally.
+function currentLocation() {
+  return {
+    pathname: window.location.pathname,
+    search: window.location.search,
+    hash: window.location.hash,
   }
 }
 
@@ -91,18 +65,32 @@ function restoreBrowsingScroll(state) {
   const targetY = Math.max(0, Number(state.scrollY || 0))
   const targetX = Math.max(0, Number(state.scrollX || 0))
   let attempts = 0
+  let stopped = false
+
+  const stop = () => {
+    stopped = true
+    window.removeEventListener('wheel', stop)
+    window.removeEventListener('touchstart', stop)
+    window.removeEventListener('pointerdown', stop)
+    window.removeEventListener('keydown', stop)
+  }
+
+  window.addEventListener('wheel', stop, { passive: true })
+  window.addEventListener('touchstart', stop, { passive: true })
+  window.addEventListener('pointerdown', stop, { passive: true })
+  window.addEventListener('keydown', stop)
 
   const restore = () => {
-    if (!sameBrowsingRoute(state)) return
+    if (stopped || !sameBrowsingRoute(state)) return stop()
     const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
     window.scrollTo(targetX, Math.min(targetY, maxY))
     attempts += 1
-    if (attempts < 16 && maxY < targetY) {
-      window.setTimeout(() => window.requestAnimationFrame(restore), 80)
-    }
+    if (maxY >= targetY || attempts >= 100) return stop()
+    window.setTimeout(() => window.requestAnimationFrame(restore), 100)
   }
 
-  window.requestAnimationFrame(restore)
+  restore()
+  return stop
 }
 
 class RouteErrorBoundary extends Component {
@@ -137,6 +125,7 @@ export default function App() {
     posts,
     tools,
     devLogs,
+    moduleSettings,
     hydrateSiteData,
     setPostMetrics,
     setIsLoading,
@@ -145,63 +134,34 @@ export default function App() {
 
   const [route, setRoute] = useState(getRoute)
   const routeShellRef = useRef(null)
-  const lastSiteRefreshRef = useRef(0)
   const pendingRestoreRef = useRef(null)
-
-  const refreshSiteData = useCallback(
-    async ({ force = false } = {}) => {
-      const scrollBeforeRefresh = {
-        ...readBrowsingState(),
-        path: window.location.pathname,
-        search: window.location.search,
-        hash: window.location.hash,
-        scrollX: window.scrollX || 0,
-        scrollY: window.scrollY || 0,
-        savedAt: Date.now(),
-      }
-      setIsLoading(true)
-      setError(null)
-      try {
-        const data = await fetchSiteData({ force })
-        hydrateSiteData(data)
-        lastSiteRefreshRef.current = Date.now()
-        pendingRestoreRef.current = scrollBeforeRefresh
-        window.setTimeout(() => restoreBrowsingScroll(scrollBeforeRefresh), 0)
-        fetchPostMetrics()
-          .then(setPostMetrics)
-          .catch(() => {})
-      } catch (error) {
-        console.error('Failed to load posts:', error)
-        setError(error)
-      } finally {
-        setIsLoading(false)
-      }
-    },
-    [hydrateSiteData, setError, setIsLoading, setPostMetrics],
-  )
+  const activeLocationRef = useRef(currentLocation())
 
   useEffect(() => {
     if ('scrollRestoration' in window.history) {
       window.history.scrollRestoration = 'manual'
     }
 
-    const saved = readBrowsingState()
-    if (saved?.hash && !window.location.hash) {
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${saved.hash}`)
-      pendingRestoreRef.current = saved
-      setRoute(getRoute())
-    } else if (saved && sameBrowsingRoute(saved)) {
-      pendingRestoreRef.current = saved
-    }
+    pendingRestoreRef.current = readBrowsingState(activeLocationRef.current)
 
     let ticking = false
-    const saveCurrentState = () => saveBrowsingState(getRoute())
+    const saveCurrentState = () => {
+      saveBrowsingState(activeLocationRef.current, window.scrollX, window.scrollY)
+    }
+    let pendingScroll = null
     const onScroll = () => {
+      pendingScroll = {
+        location: activeLocationRef.current,
+        scrollX: window.scrollX,
+        scrollY: window.scrollY,
+      }
       if (ticking) return
       ticking = true
       window.requestAnimationFrame(() => {
         ticking = false
-        saveCurrentState()
+        if (!pendingScroll) return
+        saveBrowsingState(pendingScroll.location, pendingScroll.scrollX, pendingScroll.scrollY)
+        pendingScroll = null
       })
     }
     const onPageHide = () => saveCurrentState()
@@ -209,20 +169,25 @@ export default function App() {
       if (document.visibilityState === 'hidden') saveCurrentState()
     }
     const onHashChange = () => {
+      activeLocationRef.current = currentLocation()
+      pendingRestoreRef.current =
+        readBrowsingState(activeLocationRef.current) || {
+          path: activeLocationRef.current.pathname,
+          search: activeLocationRef.current.search,
+          hash: activeLocationRef.current.hash,
+          scrollX: 0,
+          scrollY: 0,
+        }
       setRoute(getRoute())
-      window.requestAnimationFrame(saveCurrentState)
     }
 
-    saveCurrentState()
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('pagehide', onPageHide)
-    window.addEventListener('beforeunload', onPageHide)
     document.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('hashchange', onHashChange)
     return () => {
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('pagehide', onPageHide)
-      window.removeEventListener('beforeunload', onPageHide)
       document.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('hashchange', onHashChange)
     }
@@ -238,7 +203,6 @@ export default function App() {
         const data = await fetchSiteData()
         if (!active) return
         hydrateSiteData(data)
-        lastSiteRefreshRef.current = Date.now()
         fetchPostMetrics()
           .then((metrics) => {
             if (active) setPostMetrics(metrics)
@@ -259,21 +223,6 @@ export default function App() {
     }
   }, [hydrateSiteData, setError, setIsLoading, setPostMetrics])
 
-  useEffect(() => {
-    const refreshIfStale = () => {
-      if (document.visibilityState === 'hidden') return
-      if (Date.now() - lastSiteRefreshRef.current < 15000) return
-      refreshSiteData({ force: true }).catch(() => {})
-    }
-
-    window.addEventListener('focus', refreshIfStale)
-    document.addEventListener('visibilitychange', refreshIfStale)
-    return () => {
-      window.removeEventListener('focus', refreshIfStale)
-      document.removeEventListener('visibilitychange', refreshIfStale)
-    }
-  }, [refreshSiteData])
-
   const selectedPost = useMemo(
     () => posts.find((post) => post.slug === route.slug),
     [posts, route.slug],
@@ -292,17 +241,18 @@ export default function App() {
     return cleanup
   }, [route.name, route.slug, route.id, posts.length, tools.length, devLogs.length])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!pendingRestoreRef.current) return
+    if (route.name === 'post' && !posts.length) return
     const state = pendingRestoreRef.current
     pendingRestoreRef.current = null
-    restoreBrowsingScroll(state)
+    return restoreBrowsingScroll(state)
   }, [route.name, route.slug, route.id, posts.length, tools.length, devLogs.length])
 
   return (
-    <div className="min-h-screen bg-gradient-hero text-slate-900">
+    <div className="ra-app min-h-screen bg-gradient-hero text-slate-900" data-ui-style={moduleSettings?.uiStyle || 'classic'}>
       <Navigation />
-      <main ref={routeShellRef} data-route-shell className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
+      <main ref={routeShellRef} data-route-shell className="ra-main mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
         <RouteErrorBoundary key={`${route.name}-${route.slug || route.id || ''}`}>
           {route.name === 'profile' ? (
             <ProfilePage />

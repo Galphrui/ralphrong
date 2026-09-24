@@ -43,6 +43,7 @@ const RA_DISPLAY_STYLES = [
   { id: "timeline", label: "时间线" },
   { id: "magazine", label: "杂志" },
 ];
+const RA_UI_STYLES = ["classic", "studio"];
 const RA_DOC_COLORS = ["#0f172a", "#dc2626", "#ea580c", "#ca8a04", "#16a34a", "#0891b2", "#2563eb", "#7c3aed", "#db2777"];
 const RA_DOC_BACKGROUNDS = ["#ffffff", "#fee2e2", "#ffedd5", "#fef3c7", "#dcfce7", "#cffafe", "#dbeafe", "#ede9fe", "#fce7f3"];
 
@@ -184,6 +185,7 @@ const RaEls = {
   repositories: document.querySelector("#RaRepositoriesInput"),
   moduleMaxTop: document.querySelector("#RaModuleMaxTopInput"),
   moduleGlobalStyle: document.querySelector("#RaModuleGlobalStyleInput"),
+  moduleUiStyle: document.querySelector("#RaModuleUiStyleInput"),
   moduleList: document.querySelector("#RaModuleList"),
   applyModuleVisual: document.querySelector("#RaApplyModuleVisualButton"),
   modules: document.querySelector("#RaModulesInput"),
@@ -884,6 +886,7 @@ function renderModuleForm() {
     RaEls.moduleGlobalStyle.innerHTML = RA_DISPLAY_STYLES.map((style) => `<option value="${style.id}">${style.label}</option>`).join("");
     RaEls.moduleGlobalStyle.value = normalizeDisplayStyle(RaData.modules.settings?.globalDisplayStyle || "list");
   }
+  if (RaEls.moduleUiStyle) RaEls.moduleUiStyle.value = normalizeUiStyle(RaData.modules.settings?.uiStyle);
   renderModuleList();
 }
 
@@ -918,6 +921,7 @@ function syncModuleJsonFromVisual() {
   const config = normalizeModuleConfig(RaData.modules || getDefaultModules());
   config.settings.maxTopModules = clampModuleCount(RaEls.moduleMaxTop?.value || config.settings.maxTopModules);
   config.settings.globalDisplayStyle = normalizeDisplayStyle(RaEls.moduleGlobalStyle?.value || config.settings.globalDisplayStyle);
+  config.settings.uiStyle = normalizeUiStyle(RaEls.moduleUiStyle?.value || config.settings.uiStyle);
   RaData.modules = normalizeModuleConfig(config);
   RaEls.modules.value = JSON.stringify(RaData.modules, null, 2);
   renderModuleList();
@@ -3792,7 +3796,7 @@ function getDefaultData() {
 
 function getDefaultModules() {
   return {
-    settings: { maxTopModules: 6, globalDisplayStyle: "list", moduleDisplayStyles: {} },
+    settings: { maxTopModules: 6, globalDisplayStyle: "list", moduleDisplayStyles: {}, uiStyle: "classic" },
     modules: [
       { id: "posts", label: "文章", href: "#posts", enabled: true, order: 10, surface: "top" },
       { id: "code", label: "代码库", href: "#code", enabled: true, order: 20, surface: "top" },
@@ -3816,6 +3820,7 @@ function normalizeModuleConfig(value = {}) {
     maxTopModules: clampModuleCount(value.settings?.maxTopModules),
     globalDisplayStyle: normalizeDisplayStyle(value.settings?.globalDisplayStyle),
     moduleDisplayStyles: normalizeModuleDisplayStyles(value.settings?.moduleDisplayStyles),
+    uiStyle: normalizeUiStyle(value.settings?.uiStyle),
   };
   return {
     settings,
@@ -3838,6 +3843,10 @@ function clampModuleCount(value) {
 
 function normalizeDisplayStyle(value) {
   return RA_DISPLAY_STYLES.some((style) => style.id === value) ? value : "list";
+}
+
+function normalizeUiStyle(value) {
+  return RA_UI_STYLES.includes(value) ? value : "classic";
 }
 
 function normalizeModuleDisplayStyles(value = {}) {
@@ -4120,6 +4129,7 @@ RaEls.saveModules.addEventListener("click", saveModuleConfig);
 RaEls.publishModules.addEventListener("click", publishModuleConfig);
 RaEls.moduleMaxTop.addEventListener("change", syncModuleJsonFromVisual);
 RaEls.moduleGlobalStyle.addEventListener("change", syncModuleJsonFromVisual);
+RaEls.moduleUiStyle.addEventListener("change", syncModuleJsonFromVisual);
 RaEls.moduleList.addEventListener("click", (event) => {
   const toggle = event.target.closest("[data-ra-module-toggle]");
   if (toggle) {

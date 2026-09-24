@@ -91,7 +91,7 @@ export function IndexPanel({ stats = [], focusText }) {
 
 export function PageScaffold({ children, stats, focusText, sortMode, onSortModeChange }) {
   return (
-    <div className="grid items-start gap-5 xl:grid-cols-[240px_minmax(0,1fr)_240px] 2xl:grid-cols-[260px_minmax(0,900px)_260px]">
+    <div className="ra-page-scaffold grid items-start gap-5 xl:grid-cols-[240px_minmax(0,1fr)_240px] 2xl:grid-cols-[260px_minmax(0,900px)_260px]">
       <AuthorPanel />
       <div className="min-w-0">{children}</div>
       <aside className="grid content-start gap-5">

@@ -7,6 +7,8 @@
     "predev:web": "node scripts/verify-config.mjs",
     "dev:web": "vite",
     "verify:config": "node scripts/verify-config.mjs",
+    "test:browsing": "node scripts/test-browsing-state.mjs",
+    "test:ui": "node scripts/test-ui-style.mjs",
     "prebuild": "node scripts/verify-config.mjs",
     "build": "vite build",
     "build:backend": "echo 'Backend ready for Vercel'",
@@ -15,6 +17,7 @@
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.5.1",
+    "animejs": "^4.5.0",
     "axios": "^1.6.0",
     "clsx": "^2.1.0",
     "cors": "^2.8.6",

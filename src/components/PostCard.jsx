@@ -3,7 +3,7 @@ import { postUpdatedAt } from '../utils/postSort'
 import { likePost } from '../utils/api'
 import { useBlogStore } from '../store/useStore'
 
-export default function PostCard({ post, onClick, displayStyle = 'list' }) {
+export default function PostCard({ post, onClick, displayStyle = 'list', cardRef }) {
   const { postMetrics, setPostMetrics } = useBlogStore()
   const updatedAt = postUpdatedAt(post)
   const showUpdatedAt = updatedAt && updatedAt !== post.date
@@ -31,8 +31,13 @@ export default function PostCard({ post, onClick, displayStyle = 'list' }) {
 
   return (
     <motion.article
+      ref={cardRef}
       data-animate-card
-      className={`cursor-pointer border shadow-sm ${cardTone} ${
+      data-layout-id={`article-${post.slug}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`预览文章：${post.title}`}
+      className={`ra-product-card ra-layout-card cursor-pointer border shadow-sm ${cardTone} ${
         isCompact ? 'p-4' : 'p-5'
       } ${isTimeline ? 'border-l-4 border-l-primary-600' : ''} ${
         isMagazine ? 'grid gap-4 lg:grid-cols-[0.85fr_1.15fr]' : ''
@@ -40,6 +45,13 @@ export default function PostCard({ post, onClick, displayStyle = 'list' }) {
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onClick(event)
+        }
+      }}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
@@ -56,19 +68,19 @@ export default function PostCard({ post, onClick, displayStyle = 'list' }) {
       </div>
 
       {/* Title */}
-      <h3 className={`mb-3 line-clamp-2 font-black leading-tight ${isGallery ? 'text-lg' : 'text-xl'} ${isCodeBlock ? 'text-white' : 'text-slate-950'}`}>
+      <h3 data-layout-id={`article-${post.slug}-title`} className={`ra-layout-title mb-3 line-clamp-2 font-black leading-tight ${isGallery ? 'text-lg' : 'text-xl'} ${isCodeBlock ? 'text-white' : 'text-slate-950'}`}>
         {post.title}
       </h3>
 
       {/* Summary */}
       {!isCompact && (
-        <p className={`mb-4 line-clamp-3 text-sm leading-6 ${isCodeBlock ? 'text-slate-300' : 'text-slate-600'}`}>
+        <p data-layout-id={`article-${post.slug}-summary`} className={`ra-layout-summary mb-4 line-clamp-3 text-sm leading-6 ${isCodeBlock ? 'text-slate-300' : 'text-slate-600'}`}>
           {post.summary}
         </p>
       )}
 
       {/* Tags */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div data-layout-id={`article-${post.slug}-tags`} className="ra-layout-tags flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap gap-2">
           {post.tags?.slice(0, 3).map((tag) => (
             <span

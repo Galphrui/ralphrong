@@ -156,8 +156,13 @@ function ArticleToc({ items, articleRef, side, onSideChange }) {
   useEffect(() => {
     if (!activeId || Date.now() < tocScrollLockedUntilRef.current) return
     const escapedId = window.CSS?.escape ? CSS.escape(activeId) : activeId
-    const activeItem = listRef.current?.querySelector(`[data-toc-id="${escapedId}"]`)
-    activeItem?.scrollIntoView({ block: 'nearest' })
+    const list = listRef.current
+    const activeItem = list?.querySelector(`[data-toc-id="${escapedId}"]`)
+    if (!list || !activeItem) return
+    const listRect = list.getBoundingClientRect()
+    const itemRect = activeItem.getBoundingClientRect()
+    if (itemRect.top < listRect.top) list.scrollTop -= listRect.top - itemRect.top
+    else if (itemRect.bottom > listRect.bottom) list.scrollTop += itemRect.bottom - listRect.bottom
   }, [activeId])
 
   const scrollToHeading = (id) => {
@@ -361,7 +366,7 @@ export default function PostDetail({ post }) {
     } catch {}
   }, [tocSide])
 
-  if (isLoading) {
+  if (isLoading && !post) {
     return (
       <div className="border border-slate-200 bg-white p-8 text-slate-600 shadow-soft">
         正在加载 Ra 文章...
@@ -414,7 +419,7 @@ export default function PostDetail({ post }) {
       <ScrollPositionControls ariaLabelPrefix="文章" />
       <motion.article
         data-animate-section
-        className="border border-slate-200 bg-white px-6 py-8 shadow-soft sm:px-10 lg:px-12"
+        className="ra-post-detail border border-slate-200 bg-white px-6 py-8 shadow-soft sm:px-10 lg:px-12"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
