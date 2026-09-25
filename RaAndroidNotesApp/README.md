@@ -15,6 +15,8 @@ Ra Android Notes App 是基于当前 Ra Android Notes 网页博客扩展出来�
 - 离线/只读模式：断网或 Cloudflare Worker 不可达时，只显示文章和简历，统计和管理入口会自动隐藏。
 - 下拉刷新：在页面顶部下拉并松开，可以重新读取公网文章、简历和后台连通状态；网络从无到有时无需退出 App。
 - 文章排序：文章首页通过悬浮排序按钮支持最新发布、最早发布、标题 A-Z、标题 Z-A、最近修改等排序方式。
+- 新旧 UI：默认跟随网页 `modules.settings.uiStyle`，网页使用 Studio 新版时 Android 自动同步；设置页也可关闭跟随并在本机切换经典版或 Studio 版。
+- 内容可见性：同步网页后台的标签和单条内容隐藏规则，隐藏的文章、代码库、工具和开发日志不会在 App 前台显示。
 
 ## 数据关联
 
@@ -104,7 +106,7 @@ org.gradle.java.home=/Applications/Android Studio.app/Contents/jbr/Contents/Home
 当前本机已生成 release 签名包：
 
 ```text
-app/build/outputs/apk/release/app-release.apk
+app/build/outputs/apk/release/RuiAO.apk
 ```
 
 签名配置读取本机文件：
@@ -165,7 +167,7 @@ app/src/main/res/layout/view_post_item.xml
 
 这里控制首页文章列表每一项的标题、摘要、标签和间距。
 
-颜色和背景优先改：
+经典版颜色和背景优先改：
 
 ```text
 app/src/main/res/values/colors.xml
@@ -177,7 +179,7 @@ app/src/main/res/drawable/bg_input.xml
 app/src/main/res/drawable/bg_chip.xml
 ```
 
-`MainActivity.java` 现在主要负责读取数据、切换页面、把文章和简历内容填充到 XML 容器里。
+Studio 版运行时主题和新旧切换集中在 `MainActivity.java` 的 `applyUiTheme`，所有页面共用同一入口，避免两套布局产生功能差异。
 
 下拉刷新和文章排序逻辑也在 `MainActivity.java` 中：当 `ScrollView` 位于顶部且下拉距离达到阈值时，会显示悬浮圆形加载指示器并重新执行公开数据加载；加载后会重新判断离线/只读状态，并尽量停留在刷新前所在页面。文章排序使用右下角悬浮按钮打开排序面板，会优先使用 `updatedAt`，旧文章没有该字段时回退到发布日期。
 

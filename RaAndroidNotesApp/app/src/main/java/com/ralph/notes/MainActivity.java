@@ -14,6 +14,8 @@ import android.os.Build;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -30,6 +32,7 @@ import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
@@ -75,17 +78,27 @@ public class MainActivity extends Activity {
     private static final String KEY_STATS_VISIBLE = "stats_visible";
     private static final String KEY_MESSAGE_RECORDS_VISIBLE = "message_records_visible";
     private static final String KEY_VOICE_MESSAGE_VISIBLE = "voice_message_visible";
+    private static final String KEY_UI_FOLLOW_WEB = "ui_follow_web";
+    private static final String KEY_UI_STUDIO = "ui_studio";
     private static final String GSENSOR_TAG = "Ra_YR_GSENSER";
     private static final String DIRECTION_TAG = "Ra_YR_Direction";
     private static final long GSENSOR_LOG_INTERVAL_MS = 500L;
-    private static final int BG = Color.rgb(246, 251, 248);
-    private static final int PANEL = Color.WHITE;
-    private static final int PRIMARY = Color.rgb(7, 95, 81);
-    private static final int PRIMARY_LIGHT = Color.rgb(233, 251, 246);
-    private static final int ACCENT = Color.rgb(245, 158, 11);
-    private static final int TEXT = Color.rgb(2, 6, 23);
-    private static final int MUTED = Color.rgb(100, 116, 139);
-    private static final int LINE = Color.rgb(216, 228, 224);
+    private static final int CLASSIC_BG = Color.rgb(246, 251, 248);
+    private static final int CLASSIC_PANEL = Color.WHITE;
+    private static final int CLASSIC_PRIMARY = Color.rgb(7, 95, 81);
+    private static final int CLASSIC_PRIMARY_LIGHT = Color.rgb(233, 251, 246);
+    private static final int CLASSIC_ACCENT = Color.rgb(245, 158, 11);
+    private static final int CLASSIC_TEXT = Color.rgb(2, 6, 23);
+    private static final int CLASSIC_MUTED = Color.rgb(100, 116, 139);
+    private static final int CLASSIC_LINE = Color.rgb(216, 228, 224);
+    private static final int STUDIO_BG = Color.rgb(243, 239, 231);
+    private static final int STUDIO_PANEL = Color.rgb(255, 253, 248);
+    private static final int STUDIO_PRIMARY = Color.rgb(8, 118, 106);
+    private static final int STUDIO_PRIMARY_LIGHT = Color.rgb(233, 255, 247);
+    private static final int STUDIO_ACCENT = Color.rgb(215, 255, 69);
+    private static final int STUDIO_TEXT = Color.rgb(17, 20, 27);
+    private static final int STUDIO_MUTED = Color.rgb(104, 108, 114);
+    private static final int STUDIO_LINE = Color.rgb(17, 20, 27);
     private static final int MARKDOWN_CHUNK_LINES = 180;
     private static final int MAX_INLINE_TEXT_CHARS = 3000;
     private static final int MAX_CODE_DISPLAY_CHARS = 12000;
@@ -245,16 +258,187 @@ public class MainActivity extends Activity {
         installPullRefresh();
         bindFloatingSortControls();
         bindFloatingScrollControls();
+        applyUiTheme();
         selectTab(navArticles);
         updateNavigation();
     }
 
     private void configureSystemBars() {
-        getWindow().setStatusBarColor(PANEL);
-        getWindow().setNavigationBarColor(BG);
+        getWindow().setStatusBarColor(isStudioUi() ? STUDIO_TEXT : CLASSIC_PANEL);
+        getWindow().setNavigationBarColor(bgColor());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+            getWindow().getDecorView().setSystemUiVisibility(isStudioUi() ? 0 : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         }
+    }
+
+    private boolean isStudioUi() {
+        if (settingEnabled(KEY_UI_FOLLOW_WEB, true) && data != null) {
+            return "studio".equals(data.uiStyle);
+        }
+        return settingEnabled(KEY_UI_STUDIO, true);
+    }
+
+    private int bgColor() {
+        return isStudioUi() ? STUDIO_BG : CLASSIC_BG;
+    }
+
+    private int primaryColor() {
+        return isStudioUi() ? STUDIO_PRIMARY : CLASSIC_PRIMARY;
+    }
+
+    private int textColor() {
+        return isStudioUi() ? STUDIO_TEXT : CLASSIC_TEXT;
+    }
+
+    private int mutedColor() {
+        return isStudioUi() ? STUDIO_MUTED : CLASSIC_MUTED;
+    }
+
+    private int selectedTextColor() {
+        return isStudioUi() ? STUDIO_TEXT : Color.WHITE;
+    }
+
+    private void applyUiTheme() {
+        if (root == null) return;
+        applyUiStyleTree(root);
+        root.setBackgroundColor(bgColor());
+        if (content != null) {
+            content.setBackgroundColor(bgColor());
+            int horizontal = dp(isStudioUi() ? 16 : 14);
+            content.setPadding(horizontal, dp(isStudioUi() ? 18 : 14), horizontal, dp(132));
+        }
+        configureSystemBars();
+    }
+
+    private void applyUiStyleTree(View view) {
+        if (view == null) return;
+        rememberAndApplyBackground(view);
+        if (view instanceof TextView) applyTextTheme((TextView) view);
+
+        if (view.getId() == R.id.top_bar) {
+            view.setBackgroundColor(isStudioUi() ? STUDIO_TEXT : CLASSIC_PANEL);
+            view.setElevation(dp(isStudioUi() ? 5 : 3));
+        } else if (view.getId() == R.id.logo_text) {
+            applyBackground(view, R.drawable.bg_logo);
+            view.setRotation(isStudioUi() ? -3f : 0f);
+        } else if (view.getId() == R.id.brand_title) {
+            ((TextView) view).setTextColor(isStudioUi() ? Color.WHITE : CLASSIC_TEXT);
+        } else if (view.getId() == R.id.brand_subtitle) {
+            ((TextView) view).setTextColor(isStudioUi() ? Color.rgb(213, 215, 220) : CLASSIC_MUTED);
+        }
+
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) applyUiStyleTree(group.getChildAt(i));
+        }
+    }
+
+    private void applyTextTheme(TextView view) {
+        Object saved = view.getTag(R.id.ra_original_text_color);
+        int classicColor;
+        if (saved instanceof Integer) {
+            classicColor = (Integer) saved;
+        } else {
+            classicColor = classicColorFor(view.getCurrentTextColor());
+            view.setTag(R.id.ra_original_text_color, classicColor);
+        }
+        int color = classicColor;
+        if (isStudioUi()) {
+            if (classicColor == CLASSIC_PRIMARY) color = STUDIO_PRIMARY;
+            else if (classicColor == CLASSIC_PRIMARY_LIGHT) color = STUDIO_PRIMARY_LIGHT;
+            else if (classicColor == CLASSIC_ACCENT) color = STUDIO_ACCENT;
+            else if (classicColor == CLASSIC_TEXT) color = STUDIO_TEXT;
+            else if (classicColor == CLASSIC_MUTED) color = STUDIO_MUTED;
+            else if (classicColor == CLASSIC_LINE) color = STUDIO_LINE;
+        }
+        Object background = view.getTag(R.id.ra_original_background);
+        if (background instanceof Integer) {
+            int resource = (Integer) background;
+            if (resource == R.drawable.bg_button_primary || resource == R.drawable.bg_chip_selected || resource == R.drawable.bg_logo) {
+                color = selectedTextColor();
+            }
+        }
+        view.setTextColor(color);
+    }
+
+    private int classicColorFor(int color) {
+        if (color == STUDIO_PRIMARY) return CLASSIC_PRIMARY;
+        if (color == STUDIO_PRIMARY_LIGHT) return CLASSIC_PRIMARY_LIGHT;
+        if (color == STUDIO_ACCENT) return CLASSIC_ACCENT;
+        if (color == STUDIO_TEXT) return CLASSIC_TEXT;
+        if (color == STUDIO_MUTED) return CLASSIC_MUTED;
+        if (color == STUDIO_LINE) return CLASSIC_LINE;
+        return color;
+    }
+
+    private void rememberAndApplyBackground(View view) {
+        Object saved = view.getTag(R.id.ra_original_background);
+        if (!(saved instanceof Integer)) {
+            int[] resources = new int[]{
+                    R.drawable.bg_panel, R.drawable.bg_hero, R.drawable.bg_input,
+                    R.drawable.bg_button_primary, R.drawable.bg_button_secondary,
+                    R.drawable.bg_chip, R.drawable.bg_chip_selected, R.drawable.bg_logo,
+                    R.drawable.bg_photo_placeholder, R.drawable.bg_refresh_circle
+            };
+            for (int resource : resources) {
+                if (sameBackground(view.getBackground(), getDrawable(resource))) {
+                    view.setTag(R.id.ra_original_background, resource);
+                    saved = resource;
+                    break;
+                }
+            }
+        }
+        if (saved instanceof Integer) applyBackground(view, (Integer) saved);
+    }
+
+    private boolean sameBackground(Drawable left, Drawable right) {
+        if (left == null || right == null || left.getConstantState() == null || right.getConstantState() == null) return false;
+        return left.getConstantState().equals(right.getConstantState());
+    }
+
+    private void applyBackground(View view, int classicResource) {
+        view.setTag(R.id.ra_original_background, classicResource);
+        if (!isStudioUi()) {
+            view.setBackgroundResource(classicResource);
+            if (classicResource == R.drawable.bg_panel) view.setElevation(dp(1));
+            return;
+        }
+        view.setBackground(studioBackground(classicResource));
+        if (classicResource == R.drawable.bg_panel) view.setElevation(dp(4));
+    }
+
+    private Drawable studioBackground(int classicResource) {
+        if (classicResource == R.drawable.bg_refresh_circle) {
+            GradientDrawable circle = new GradientDrawable();
+            circle.setShape(GradientDrawable.OVAL);
+            circle.setColor(STUDIO_PANEL);
+            circle.setStroke(dp(1), STUDIO_LINE);
+            return circle;
+        }
+        int fill = STUDIO_PANEL;
+        int radius = 18;
+        int stroke = STUDIO_LINE;
+        if (classicResource == R.drawable.bg_hero) {
+            fill = STUDIO_ACCENT;
+            radius = 24;
+        } else if (classicResource == R.drawable.bg_button_primary || classicResource == R.drawable.bg_chip_selected) {
+            fill = STUDIO_ACCENT;
+            radius = 28;
+        } else if (classicResource == R.drawable.bg_button_secondary || classicResource == R.drawable.bg_chip) {
+            radius = 28;
+        } else if (classicResource == R.drawable.bg_input) {
+            radius = 14;
+        } else if (classicResource == R.drawable.bg_logo) {
+            fill = STUDIO_ACCENT;
+            radius = 14;
+        } else if (classicResource == R.drawable.bg_photo_placeholder) {
+            fill = STUDIO_PRIMARY_LIGHT;
+        }
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(fill);
+        drawable.setCornerRadius(dp(radius));
+        drawable.setStroke(dp(classicResource == R.drawable.bg_panel || classicResource == R.drawable.bg_hero ? 2 : 1), stroke);
+        return drawable;
     }
 
     private final SensorEventListener rotationDebugListener = new SensorEventListener() {
@@ -504,6 +688,7 @@ public class MainActivity extends Activity {
         runAsync(() -> repository.fetchPublicData(), result -> {
             data = result;
             backendAvailable = !data.offlineMode;
+            applyUiTheme();
             updateNavigation();
             if (manualRefresh) finishRefresh(data.offlineMode ? "已切换到离线缓存。" : "刷新完成。");
             renderAfterDataRefresh(manualRefresh, targetPage, targetSlug);
@@ -756,8 +941,8 @@ public class MainActivity extends Activity {
     private void bindSort(TextView view, String mode) {
         if (view == null) return;
         boolean selected = sortMode.equals(mode);
-        view.setTextColor(selected ? Color.WHITE : PRIMARY);
-        view.setBackgroundResource(selected ? R.drawable.bg_button_primary : R.drawable.bg_button_secondary);
+        view.setTextColor(selected ? selectedTextColor() : primaryColor());
+        applyBackground(view, selected ? R.drawable.bg_button_primary : R.drawable.bg_button_secondary);
         view.setOnClickListener(v -> {
             sortMode = mode;
             sortPanelOpen = false;
@@ -832,6 +1017,7 @@ public class MainActivity extends Activity {
         }
         for (Post post : filtered) {
             View item = LayoutInflater.from(this).inflate(R.layout.view_post_item, homePostList, false);
+            applyUiStyleTree(item);
             item.setOnClickListener(v -> openPostDetail(post));
             String updatedAt = postUpdatedAt(post);
             PostMetric metric = metricFor(post.slug);
@@ -1174,8 +1360,8 @@ public class MainActivity extends Activity {
             if (repo.snippet != null && !repo.snippet.isEmpty()) {
                 TextView snippet = paragraph(previewText(repo.snippet, MAX_LIST_PREVIEW_CHARS));
                 snippet.setTypeface(Typeface.MONOSPACE);
-                snippet.setTextColor(TEXT);
-                snippet.setBackgroundColor(Color.rgb(241, 245, 249));
+                snippet.setTextColor(isStudioUi() ? Color.rgb(248, 250, 252) : textColor());
+                snippet.setBackgroundColor(isStudioUi() ? STUDIO_TEXT : Color.rgb(241, 245, 249));
                 snippet.setPadding(dp(12), dp(10), dp(12), dp(10));
                 item.addView(snippet);
             }
@@ -1418,7 +1604,7 @@ public class MainActivity extends Activity {
         LinearLayout contacts = page.findViewById(R.id.profile_contacts);
         contacts.removeAllViews();
         for (String contact : profile.contacts) {
-            contacts.addView(text(contact.replace("【", "").replace("】", ""), 14, MUTED, Typeface.BOLD));
+            contacts.addView(text(contact.replace("【", "").replace("】", ""), 14, mutedColor(), Typeface.BOLD));
         }
 
         LinearLayout sections = page.findViewById(R.id.profile_sections);
@@ -1522,7 +1708,7 @@ public class MainActivity extends Activity {
             block.setOrientation(LinearLayout.VERTICAL);
             block.setPadding(0, dp(10), 0, dp(10));
             TextView header = text((item.name == null || item.name.isEmpty() ? "陌生朋友" : item.name)
-                    + " · " + formatDate(item.createdAt), 13, PRIMARY, Typeface.BOLD);
+                    + " · " + formatDate(item.createdAt), 13, primaryColor(), Typeface.BOLD);
             block.addView(header);
             block.addView(paragraph(item.message));
             list.addView(block);
@@ -1596,7 +1782,21 @@ public class MainActivity extends Activity {
         LinearLayout page = card();
         page.addView(label("APP SETTINGS"));
         page.addView(title("设置", 24));
-        page.addView(paragraph("控制 App 旋转和各个模块是否显示。"));
+        page.addView(paragraph("控制视觉风格、App 旋转和各个模块是否显示。"));
+        page.addView(title("视觉风格", 19));
+        page.addView(paragraph("当前：" + (isStudioUi() ? "新版 Studio" : "旧版经典")
+                + "。网页端发布为 " + (data != null && "studio".equals(data.uiStyle) ? "新版 Studio" : "旧版经典") + "。"));
+        page.addView(settingCheckBox("跟随网页端视觉风格", KEY_UI_FOLLOW_WEB, true, checked -> {
+            applyUiTheme();
+            renderSettings();
+        }));
+        page.addView(settingCheckBox("本机使用新版 Studio UI（修改后自动关闭跟随）", KEY_UI_STUDIO, true, checked -> {
+            appSettings.edit().putBoolean(KEY_UI_FOLLOW_WEB, false).apply();
+            applyUiTheme();
+            renderSettings();
+        }));
+        page.addView(paragraph("开启“跟随网页端”时，网页是新版，Android 同步使用新版；网页切回旧版，Android 也会同步切回。"));
+        page.addView(title("设备与模块", 19));
         page.addView(settingCheckBox("允许 App 旋转", KEY_ROTATION_ENABLED, true, checked -> {
             applyRotationPreference();
             toast(checked ? "已允许 App 旋转。" : "已锁定为竖屏。");
@@ -1826,7 +2026,7 @@ public class MainActivity extends Activity {
         TextView publish = page.findViewById(R.id.editor_publish);
         publish.setOnClickListener(v -> runAsync(() -> repository.publish(adminSession.token, adminData.raw), result -> {
             toast("发布成功：" + shortSha(result.commitSha));
-            data = adminData;
+            data = JsonMapper.parseBlog(adminData.raw);
             data.offlineMode = false;
             data.fromCache = false;
             data.sourceMessage = "发布后的本地缓存";
@@ -1854,7 +2054,7 @@ public class MainActivity extends Activity {
                         profileSummary.getText().toString(),
                         TextTools.splitLines(contacts.getText().toString())
                 );
-                adminData = JsonMapper.parseBlog(adminData.raw);
+                adminData = JsonMapper.parseAdminBlog(adminData.raw);
                 toast("简历基础信息已保存到待发布数据。");
             } catch (Exception e) {
                 toast("简历保存失败：" + e.getMessage());
@@ -1880,7 +2080,7 @@ public class MainActivity extends Activity {
                 }
             }
             if (!updated) array.put(next);
-            adminData = JsonMapper.parseBlog(adminData.raw);
+            adminData = JsonMapper.parseAdminBlog(adminData.raw);
         } catch (Exception e) {
             toast("文章保存失败：" + e.getMessage());
         }
@@ -1896,7 +2096,7 @@ public class MainActivity extends Activity {
                 if (item == null || !slug.equals(item.optString("slug"))) next.put(item);
             }
             adminData.raw.put("posts", next);
-            adminData = JsonMapper.parseBlog(adminData.raw);
+            adminData = JsonMapper.parseAdminBlog(adminData.raw);
         } catch (Exception e) {
             toast("文章删除失败：" + e.getMessage());
         }
@@ -2004,7 +2204,7 @@ public class MainActivity extends Activity {
         LinearLayout card = sectionCard("核心技能");
         LinearLayout bodyContainer = card.findViewById(R.id.section_body);
         for (SkillGroup group : groups) {
-            bodyContainer.addView(text(group.name, 16, TEXT, Typeface.BOLD));
+            bodyContainer.addView(text(group.name, 16, textColor(), Typeface.BOLD));
             bodyContainer.addView(paragraph(TextTools.join(group.items, " / ")));
         }
         return card;
@@ -2014,9 +2214,9 @@ public class MainActivity extends Activity {
         LinearLayout card = sectionCard(title);
         LinearLayout bodyContainer = card.findViewById(R.id.section_body);
         for (ExperienceItem item : items) {
-            bodyContainer.addView(text(item.title.replace("【", "").replace("】", ""), 16, TEXT, Typeface.BOLD));
-            if (!item.period.isEmpty()) bodyContainer.addView(text(item.period.replace("【", "").replace("】", ""), 13, PRIMARY, Typeface.BOLD));
-            if (!item.meta.isEmpty()) bodyContainer.addView(text(item.meta.replace("【", "").replace("】", ""), 13, MUTED, Typeface.NORMAL));
+            bodyContainer.addView(text(item.title.replace("【", "").replace("】", ""), 16, textColor(), Typeface.BOLD));
+            if (!item.period.isEmpty()) bodyContainer.addView(text(item.period.replace("【", "").replace("】", ""), 13, primaryColor(), Typeface.BOLD));
+            if (!item.meta.isEmpty()) bodyContainer.addView(text(item.meta.replace("【", "").replace("】", ""), 13, mutedColor(), Typeface.NORMAL));
             for (String detail : item.details) bodyContainer.addView(bullet(detail));
         }
         return card;
@@ -2024,6 +2224,7 @@ public class MainActivity extends Activity {
 
     private LinearLayout sectionCard(String label) {
         LinearLayout card = (LinearLayout) LayoutInflater.from(this).inflate(R.layout.view_profile_section, content, false);
+        applyUiStyleTree(card);
         setText(card, R.id.section_label, label);
         LinearLayout bodyContainer = card.findViewById(R.id.section_body);
         bodyContainer.removeAllViews();
@@ -2048,7 +2249,7 @@ public class MainActivity extends Activity {
             String line = raw.trim();
             if (line.startsWith("```")) {
                 if (inCode) {
-                    parent.addView(monoText(previewText(code.toString(), MAX_CODE_DISPLAY_CHARS), 13, TEXT));
+                    parent.addView(monoText(previewText(code.toString(), MAX_CODE_DISPLAY_CHARS), 13, textColor()));
                     code.setLength(0);
                     inCode = false;
                 } else {
@@ -2079,7 +2280,7 @@ public class MainActivity extends Activity {
             }
         }
         if (code.length() > 0) {
-            parent.addView(monoText(previewText(code.toString(), MAX_CODE_DISPLAY_CHARS), 13, TEXT));
+            parent.addView(monoText(previewText(code.toString(), MAX_CODE_DISPLAY_CHARS), 13, textColor()));
         }
         if (end < lines.length) {
             Button more = secondaryButton("继续加载正文 " + end + " / " + lines.length);
@@ -2147,7 +2348,9 @@ public class MainActivity extends Activity {
     }
 
     private View inflatePage(int layoutId) {
-        return LayoutInflater.from(this).inflate(layoutId, content, false);
+        View page = LayoutInflater.from(this).inflate(layoutId, content, false);
+        applyUiStyleTree(page);
+        return page;
     }
 
     private void setText(View rootView, int id, String value) {
@@ -2159,7 +2362,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(16), dp(16), dp(16));
-        card.setBackgroundResource(R.drawable.bg_panel);
+        applyBackground(card, R.drawable.bg_panel);
         card.setLayoutParams(margins(new LinearLayout.LayoutParams(-1, -2), 0, 0, 0, 12));
         return card;
     }
@@ -2171,20 +2374,20 @@ public class MainActivity extends Activity {
     }
 
     private TextView label(String value) {
-        TextView label = text(value, 12, PRIMARY, Typeface.BOLD);
+        TextView label = text(value, 12, primaryColor(), Typeface.BOLD);
         label.setAllCaps(true);
         return label;
     }
 
     private TextView title(String value, int size) {
-        TextView title = text(value, adjustedTitleSize(size), TEXT, Typeface.BOLD);
+        TextView title = text(value, adjustedTitleSize(size), textColor(), Typeface.BOLD);
         title.setPadding(0, dp(6), 0, dp(6));
         title.setLineSpacing(dp(2), 1.02f);
         return title;
     }
 
     private TextView paragraph(String value) {
-        TextView text = text(value == null ? "" : value, 15, MUTED, Typeface.NORMAL);
+        TextView text = text(value == null ? "" : value, 15, mutedColor(), Typeface.NORMAL);
         text.setLineSpacing(dp(2), 1.05f);
         text.setPadding(0, dp(4), 0, dp(6));
         return text;
@@ -2195,7 +2398,7 @@ public class MainActivity extends Activity {
     }
 
     private TextView stat(String label, String value) {
-        TextView text = text(value + "\n" + label, 16, PRIMARY, Typeface.BOLD);
+        TextView text = text(value + "\n" + label, 16, primaryColor(), Typeface.BOLD);
         text.setGravity(Gravity.CENTER);
         text.setPadding(dp(8), dp(6), dp(8), dp(6));
         text.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1));
@@ -2203,7 +2406,7 @@ public class MainActivity extends Activity {
     }
 
     private TextView statVertical(String label, String value) {
-        TextView text = text(value + "\n" + label, 20, TEXT, Typeface.BOLD);
+        TextView text = text(value + "\n" + label, 20, textColor(), Typeface.BOLD);
         text.setPadding(0, dp(8), 0, dp(8));
         return text;
     }
@@ -2228,9 +2431,9 @@ public class MainActivity extends Activity {
         EditText input = new EditText(this);
         input.setHint(hint);
         input.setSingleLine(true);
-        input.setTextColor(TEXT);
-        input.setHintTextColor(MUTED);
-        input.setBackgroundResource(R.drawable.bg_input);
+        input.setTextColor(textColor());
+        input.setHintTextColor(mutedColor());
+        applyBackground(input, R.drawable.bg_input);
         input.setPadding(dp(10), dp(8), dp(10), dp(8));
         input.setMinHeight(dp(44));
         input.setTextSize(15);
@@ -2261,17 +2464,17 @@ public class MainActivity extends Activity {
     private TextView actionText(String label, boolean primary) {
         TextView action = (TextView) LayoutInflater.from(this).inflate(R.layout.view_action_chip, content, false);
         action.setText(label);
-        action.setTextColor(primary ? Color.WHITE : PRIMARY);
-        action.setBackgroundResource(primary ? R.drawable.bg_button_primary : R.drawable.bg_button_secondary);
+        action.setTextColor(primary ? selectedTextColor() : primaryColor());
+        applyBackground(action, primary ? R.drawable.bg_button_primary : R.drawable.bg_button_secondary);
         return action;
     }
 
     private Button primaryButton(String label) {
         Button button = new Button(this);
         button.setText(label);
-        button.setTextColor(Color.WHITE);
+        button.setTextColor(selectedTextColor());
         button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        button.setBackgroundResource(R.drawable.bg_button_primary);
+        applyBackground(button, R.drawable.bg_button_primary);
         button.setAllCaps(false);
         button.setMinHeight(0);
         button.setMinimumHeight(0);
@@ -2285,9 +2488,9 @@ public class MainActivity extends Activity {
     private Button secondaryButton(String label) {
         Button button = new Button(this);
         button.setText(label);
-        button.setTextColor(PRIMARY);
+        button.setTextColor(primaryColor());
         button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        button.setBackgroundResource(R.drawable.bg_button_secondary);
+        applyBackground(button, R.drawable.bg_button_secondary);
         button.setAllCaps(false);
         button.setMinHeight(0);
         button.setMinimumHeight(0);
@@ -2301,10 +2504,10 @@ public class MainActivity extends Activity {
     private CheckBox settingCheckBox(String label, String key, boolean defaultValue, SettingChangeHandler handler) {
         CheckBox box = new CheckBox(this);
         box.setText(label);
-        box.setTextColor(TEXT);
+        box.setTextColor(textColor());
         box.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         box.setTextSize(16);
-        box.setButtonTintList(android.content.res.ColorStateList.valueOf(PRIMARY));
+        box.setButtonTintList(android.content.res.ColorStateList.valueOf(primaryColor()));
         box.setPadding(0, dp(8), 0, dp(8));
         box.setChecked(settingEnabled(key, defaultValue));
         box.setLayoutParams(margins(new LinearLayout.LayoutParams(-1, -2), 0, 2, 0, 2));
@@ -2318,8 +2521,8 @@ public class MainActivity extends Activity {
     private TextView chip(String label, boolean selected, View.OnClickListener listener) {
         TextView chip = (TextView) LayoutInflater.from(this).inflate(R.layout.view_tag_chip, content, false);
         chip.setText(label);
-        chip.setTextColor(selected ? Color.WHITE : PRIMARY);
-        chip.setBackgroundResource(selected ? R.drawable.bg_chip_selected : R.drawable.bg_chip);
+        chip.setTextColor(selected ? selectedTextColor() : primaryColor());
+        applyBackground(chip, selected ? R.drawable.bg_chip_selected : R.drawable.bg_chip);
         chip.setOnClickListener(listener);
         return chip;
     }
@@ -2329,8 +2532,8 @@ public class MainActivity extends Activity {
         for (TextView tab : tabs) {
             if (tab == null) continue;
             boolean selected = tab == active;
-            tab.setTextColor(selected ? Color.WHITE : PRIMARY);
-            tab.setBackgroundResource(selected ? R.drawable.bg_button_primary : R.drawable.bg_button_secondary);
+            tab.setTextColor(selected ? selectedTextColor() : primaryColor());
+            applyBackground(tab, selected ? R.drawable.bg_button_primary : R.drawable.bg_button_secondary);
         }
     }
 

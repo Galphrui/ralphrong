@@ -17,6 +17,7 @@ public class BlogData {
     public final List<ModuleEntry> modules = new ArrayList<>();
     public int maxTopModules = 6;
     public String globalDisplayStyle = "list";
+    public String uiStyle = "classic";
     public boolean offlineMode;
     public boolean fromCache;
     public String sourceMessage = "";

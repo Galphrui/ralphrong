@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="ra_original_background" type="id" />
+    <item name="ra_original_text_color" type="id" />
+</resources>

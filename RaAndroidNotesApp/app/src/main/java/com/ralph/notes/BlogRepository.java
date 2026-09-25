@@ -209,7 +209,7 @@ public class BlogRepository {
     public BlogData fetchAdminData(String token) throws Exception {
         JSONObject response = new JSONObject(request("GET", WORKER_BASE_URL + "/api/posts", null, token));
         if (!response.optBoolean("ok")) throw new IllegalStateException(response.optString("error", "读取后台数据失败"));
-        return JsonMapper.parseBlog(response.getJSONObject("data"));
+        return JsonMapper.parseAdminBlog(response.getJSONObject("data"));
     }
 
     public DeployResult publish(String token, JSONObject data) throws Exception {

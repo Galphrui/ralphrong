@@ -12,6 +12,14 @@ public final class JsonMapper {
     }
 
     public static BlogData parseBlog(JSONObject root) {
+        return parseBlog(root, true);
+    }
+
+    public static BlogData parseAdminBlog(JSONObject root) {
+        return parseBlog(root, false);
+    }
+
+    private static BlogData parseBlog(JSONObject root, boolean applyVisibility) {
         BlogData data = new BlogData();
         data.raw = root;
 
@@ -51,6 +59,7 @@ public final class JsonMapper {
             }
         }
         parseModules(root.optJSONObject("modules"), data);
+        if (applyVisibility) applyContentVisibility(root.optJSONObject("contentVisibility"), data);
 
         Collections.sort(data.posts, new Comparator<Post>() {
             @Override
@@ -233,6 +242,8 @@ public final class JsonMapper {
         if (settings != null) {
             data.maxTopModules = Math.max(1, settings.optInt("maxTopModules", data.maxTopModules));
             data.globalDisplayStyle = settings.optString("globalDisplayStyle", data.globalDisplayStyle);
+            String uiStyle = settings.optString("uiStyle", data.uiStyle);
+            data.uiStyle = "studio".equals(uiStyle) ? "studio" : "classic";
         }
         JSONArray modules = modulesRoot.optJSONArray("modules");
         if (modules != null) {
@@ -258,6 +269,48 @@ public final class JsonMapper {
             }
         });
         if (data.modules.isEmpty()) addDefaultModules(data);
+    }
+
+    private static void applyContentVisibility(JSONObject visibility, BlogData data) {
+        if (visibility == null) return;
+        final List<String> hiddenTags = new java.util.ArrayList<>();
+        readStringArray(visibility.optJSONArray("hiddenTags"), hiddenTags);
+        JSONObject hiddenItems = visibility.optJSONObject("hiddenItems");
+        final List<String> hiddenPosts = readHiddenIds(hiddenItems, "posts");
+        final List<String> hiddenRepositories = readHiddenIds(hiddenItems, "repositories");
+        final List<String> hiddenTools = readHiddenIds(hiddenItems, "tools");
+        final List<String> hiddenDevLogs = readHiddenIds(hiddenItems, "devLogs");
+        removeHiddenPosts(data.posts, hiddenPosts, hiddenTags);
+        removeHiddenRepositories(data.repositories, hiddenRepositories, hiddenTags);
+        removeHiddenPosts(data.tools, hiddenTools, hiddenTags);
+        removeHiddenPosts(data.devLogs, hiddenDevLogs, hiddenTags);
+    }
+
+    private static List<String> readHiddenIds(JSONObject hiddenItems, String key) {
+        List<String> values = new java.util.ArrayList<>();
+        if (hiddenItems != null) readStringArray(hiddenItems.optJSONArray(key), values);
+        return values;
+    }
+
+    private static boolean hasHiddenTag(List<String> tags, List<String> hiddenTags) {
+        for (String tag : tags) {
+            if (hiddenTags.contains(tag)) return true;
+        }
+        return false;
+    }
+
+    private static void removeHiddenPosts(List<Post> items, List<String> hiddenIds, List<String> hiddenTags) {
+        for (int index = items.size() - 1; index >= 0; index--) {
+            Post item = items.get(index);
+            if (hiddenIds.contains(item.slug) || hasHiddenTag(item.tags, hiddenTags)) items.remove(index);
+        }
+    }
+
+    private static void removeHiddenRepositories(List<CodeRepository> items, List<String> hiddenIds, List<String> hiddenTags) {
+        for (int index = items.size() - 1; index >= 0; index--) {
+            CodeRepository item = items.get(index);
+            if (hiddenIds.contains(item.id) || hasHiddenTag(item.tags, hiddenTags)) items.remove(index);
+        }
     }
 
     private static void addDefaultModules(BlogData data) {
