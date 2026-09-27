@@ -41,8 +41,13 @@ export function timeValue(value) {
   return Number.isNaN(time) ? 0 : time
 }
 
-export function sortContentItems(items, mode = 'date-desc') {
+export function sortContentItems(items, mode = 'manual') {
   return [...(items || [])].sort((left, right) => {
+    if (mode === 'manual') {
+      const leftOrder = Number.isFinite(Number(left.sortOrder)) ? Number(left.sortOrder) : Number.MAX_SAFE_INTEGER
+      const rightOrder = Number.isFinite(Number(right.sortOrder)) ? Number(right.sortOrder) : Number.MAX_SAFE_INTEGER
+      return leftOrder - rightOrder || timeValue(itemDate(right)) - timeValue(itemDate(left)) || collator.compare(itemTitle(left), itemTitle(right))
+    }
     if (mode === 'date-asc') {
       return timeValue(itemDate(left)) - timeValue(itemDate(right)) || collator.compare(itemTitle(left), itemTitle(right))
     }

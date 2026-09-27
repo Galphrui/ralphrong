@@ -2595,6 +2595,7 @@ function safeDownloadFileName(value) {
 
 function normalizeCodeRepositories(value) {
   return (Array.isArray(value) ? value : []).map((repo) => ({
+    sortOrder: Number.isFinite(Number(repo.sortOrder)) ? Number(repo.sortOrder) : undefined,
     id: repo.id || slugify(repo.name || `code-${Date.now()}`),
     name: repo.name || "未命名代码",
     fileName: repo.fileName || "",
@@ -2613,6 +2614,7 @@ function normalizeCodeRepositories(value) {
 function normalizeCollectionItems(value, prefix = "item") {
   return sortPosts(
     (Array.isArray(value) ? value : []).map((item) => ({
+      sortOrder: Number.isFinite(Number(item.sortOrder)) ? Number(item.sortOrder) : undefined,
       title: item.title || item.name || "未命名条目",
       slug: slugify(item.slug || item.id || item.title || item.name || `${prefix}-${Date.now()}`),
       date: item.date || item.createdAt?.slice?.(0, 10) || new Date().toISOString().slice(0, 10),
@@ -3874,6 +3876,7 @@ function normalizeData(input) {
     },
     posts: sortPosts(
       (input.posts || []).map((post) => ({
+        sortOrder: Number.isFinite(Number(post.sortOrder)) ? Number(post.sortOrder) : undefined,
         title: post.title || "未命名文章",
         slug: slugify(post.slug || post.title || "post"),
         date: post.date || new Date().toISOString().slice(0, 10),
@@ -4040,7 +4043,11 @@ function getDefaultProfile() {
 }
 
 function sortPosts(posts) {
-  return [...posts].sort((a, b) => b.date.localeCompare(a.date));
+  return [...posts].sort((a, b) => {
+    const leftOrder = Number.isFinite(Number(a.sortOrder)) ? Number(a.sortOrder) : Number.MAX_SAFE_INTEGER;
+    const rightOrder = Number.isFinite(Number(b.sortOrder)) ? Number(b.sortOrder) : Number.MAX_SAFE_INTEGER;
+    return leftOrder - rightOrder || String(b.date || "").localeCompare(String(a.date || ""));
+  });
 }
 
 function slugify(value) {

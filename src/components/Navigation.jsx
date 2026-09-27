@@ -3,7 +3,7 @@ import { splitTopModules } from '../utils/moduleConfig'
 import { useBlogStore } from '../store/useStore'
 
 export default function Navigation() {
-  const { moduleSettings } = useBlogStore()
+  const { moduleSettings, adminUser } = useBlogStore()
   const { visible, overflow } = splitTopModules(moduleSettings)
 
   return (
@@ -33,6 +33,15 @@ export default function Navigation() {
 
         {/* Nav Links */}
         <nav className="flex min-w-0 flex-wrap items-center justify-end gap-3 sm:gap-5 lg:gap-8">
+          {adminUser && (
+            <a
+              href={`${import.meta.env.BASE_URL}admin.html`}
+              className="ra-admin-online-badge whitespace-nowrap border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-black text-emerald-700"
+              title={`管理员 ${adminUser} 已在线`}
+            >
+              管理员在线
+            </a>
+          )}
           {visible.map((link) => (
             <motion.a
               key={link.id}

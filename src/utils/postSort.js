@@ -4,6 +4,7 @@ const collator = new Intl.Collator('zh-Hans-CN', {
 })
 
 export const SORT_OPTIONS = [
+  { value: 'manual', label: '手动排序' },
   { value: 'date-desc', label: '最新发布' },
   { value: 'date-asc', label: '最早发布' },
   { value: 'title-asc', label: '标题 A-Z' },
@@ -24,8 +25,13 @@ function titleValue(post) {
   return post?.title || post?.slug || ''
 }
 
-export function sortPosts(posts, mode = 'date-desc') {
+export function sortPosts(posts, mode = 'manual') {
   return [...(posts || [])].sort((left, right) => {
+    if (mode === 'manual') {
+      const leftOrder = Number.isFinite(Number(left.sortOrder)) ? Number(left.sortOrder) : Number.MAX_SAFE_INTEGER
+      const rightOrder = Number.isFinite(Number(right.sortOrder)) ? Number(right.sortOrder) : Number.MAX_SAFE_INTEGER
+      return leftOrder - rightOrder || timeValue(right.date) - timeValue(left.date) || collator.compare(titleValue(left), titleValue(right))
+    }
     if (mode === 'date-asc') {
       return timeValue(left.date) - timeValue(right.date) || collator.compare(titleValue(left), titleValue(right))
     }

@@ -13,11 +13,14 @@ export const useBlogStore = create((set) => ({
   devLogs: [],
   moduleSettings: normalizeModuleSettings(),
   postMetrics: {},
+  adminUser: null,
+  adminData: null,
+  adminSessionStatus: 'checking',
 
   // Search and filter
   searchQuery: '',
   selectedTag: '全部',
-  sortMode: 'date-desc',
+  sortMode: 'manual',
   allTags: [],
 
   // UI state
@@ -33,6 +36,9 @@ export const useBlogStore = create((set) => ({
   setDevLogs: (devLogs) => set({ devLogs }),
   setModuleSettings: (moduleSettings) => set({ moduleSettings: normalizeModuleSettings(moduleSettings, moduleSettings?.modules) }),
   setPostMetrics: (postMetrics) => set({ postMetrics }),
+  setAdminSession: (adminUser, adminData = null) => set({ adminUser, adminData, adminSessionStatus: 'authenticated' }),
+  setAdminData: (adminData) => set({ adminData }),
+  clearAdminSession: () => set({ adminUser: null, adminData: null, adminSessionStatus: 'anonymous' }),
   hydrateSiteData: (data) =>
     set({
       posts: data.posts || [],
@@ -53,5 +59,5 @@ export const useBlogStore = create((set) => ({
   setError: (error) => set({ error }),
 
   // Helper methods
-  resetFilters: () => set({ searchQuery: '', selectedTag: '全部', sortMode: 'date-desc', currentPage: 1 }),
+  resetFilters: () => set({ searchQuery: '', selectedTag: '全部', sortMode: 'manual', currentPage: 1 }),
 }))

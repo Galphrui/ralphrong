@@ -60,7 +60,7 @@ function AttachmentDownloadItem({ item }) {
 
 export default function CollectionPage({ items = [], selectedSlug = '', baseHash, title, eyebrow, description, emptyText, detailBackLabel, attachmentTitle }) {
   const { isLoading } = useBlogStore()
-  const [sortMode, setSortMode] = useState('date-desc')
+  const [sortMode, setSortMode] = useState('manual')
   const selected = useMemo(() => items.find((item) => item.slug === selectedSlug), [items, selectedSlug])
   const tags = useMemo(() => uniqueTags(items), [items])
   const latestItem = useMemo(() => sortContentItems(items, 'updated-desc')[0] || sortContentItems(items, 'date-desc')[0], [items])

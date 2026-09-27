@@ -33,7 +33,7 @@ export function AuthorPanel() {
   )
 }
 
-export function SortPanel({ sortMode = 'date-desc', onSortModeChange, options = SORT_OPTIONS }) {
+export function SortPanel({ sortMode = 'manual', onSortModeChange, options = SORT_OPTIONS }) {
   if (!onSortModeChange) return null
 
   return (

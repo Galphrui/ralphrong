@@ -6,10 +6,12 @@ import ProfilePage from './components/ProfilePage'
 import Guestbook from './components/Guestbook'
 import CodeRepositoryPage from './components/CodeRepositoryPage'
 import CollectionPage from './components/CollectionPage'
+import InlineAdminEditor from './components/InlineAdminEditor'
 import { initAnimations } from './animations'
 import { useBlogStore } from './store/useStore'
 import { fetchPostMetrics, fetchSiteData, recordPostView } from './utils/api'
 import { readBrowsingState, saveBrowsingState } from './utils/browsingState'
+import { checkAdminSession, fetchAdminData, SESSION_TOKEN_KEY } from './utils/adminApi'
 
 function getRoute() {
   const hash = window.location.hash.replace(/^#\/?/, '')
@@ -125,11 +127,15 @@ export default function App() {
     posts,
     tools,
     devLogs,
+    repositories,
+    profile,
     moduleSettings,
     hydrateSiteData,
     setPostMetrics,
     setIsLoading,
     setError,
+    setAdminSession,
+    clearAdminSession,
   } = useBlogStore()
 
   const [route, setRoute] = useState(getRoute)
@@ -195,6 +201,46 @@ export default function App() {
 
   useEffect(() => {
     let active = true
+    let checking = false
+    const syncAdminSession = async () => {
+      if (checking) return
+      checking = true
+      try {
+        const session = await checkAdminSession()
+        const current = useBlogStore.getState()
+        if (current.adminUser === session.user && current.adminData) {
+          if (active) setAdminSession(session.user, current.adminData)
+        } else {
+          const payload = await fetchAdminData()
+          if (active) setAdminSession(session.user, payload.data)
+        }
+      } catch {
+        if (active) clearAdminSession()
+      } finally {
+        checking = false
+      }
+    }
+    const onFocus = () => syncAdminSession()
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') syncAdminSession()
+    }
+    const onStorage = (event) => {
+      if (!event.key || event.key === SESSION_TOKEN_KEY) syncAdminSession()
+    }
+    syncAdminSession()
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('storage', onStorage)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      active = false
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('storage', onStorage)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [clearAdminSession, setAdminSession])
+
+  useEffect(() => {
+    let active = true
 
     const loadPosts = async () => {
       try {
@@ -227,6 +273,15 @@ export default function App() {
     () => posts.find((post) => post.slug === route.slug),
     [posts, route.slug],
   )
+  const inlineAdmin = useMemo(() => {
+    if (route.name === 'home') return <InlineAdminEditor type="posts" backHash="post" />
+    if (route.name === 'post') return <InlineAdminEditor type="posts" item={selectedPost} backHash="post" />
+    if (route.name === 'profile') return <InlineAdminEditor type="profile" item={profile} />
+    if (route.name === 'code') return <InlineAdminEditor type="repositories" item={repositories.find((item) => item.id === route.id)} backHash="code" />
+    if (route.name === 'tools') return <InlineAdminEditor type="tools" item={tools.find((item) => item.slug === route.slug)} backHash="tools" />
+    if (route.name === 'devlogs') return <InlineAdminEditor type="devLogs" item={devLogs.find((item) => item.slug === route.slug)} backHash="devlogs" />
+    return null
+  }, [devLogs, profile, repositories, route.id, route.name, route.slug, selectedPost, tools])
 
   useEffect(() => {
     if (route.name !== 'post' || !route.slug) return
@@ -254,6 +309,7 @@ export default function App() {
       <Navigation />
       <main ref={routeShellRef} data-route-shell className="ra-main mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
         <RouteErrorBoundary key={`${route.name}-${route.slug || route.id || ''}`}>
+          {inlineAdmin}
           {route.name === 'profile' ? (
             <ProfilePage />
           ) : route.name === 'guestbook' ? (

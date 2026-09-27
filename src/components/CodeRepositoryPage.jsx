@@ -18,7 +18,7 @@ import ScrollPositionControls from './ScrollPositionControls'
 
 export default function CodeRepositoryPage({ selectedId = '' }) {
   const { repositories, moduleSettings, isLoading } = useBlogStore()
-  const [sortMode, setSortMode] = useState('updated-desc')
+  const [sortMode, setSortMode] = useState('manual')
   const selectedRepo = useMemo(
     () => repositories.find((repo) => repo.id === selectedId),
     [repositories, selectedId],

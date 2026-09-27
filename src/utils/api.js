@@ -37,6 +37,10 @@ const loadSiteData = async () => {
   if (!response.ok) throw new Error('Failed to fetch site data')
 
   const data = await response.json()
+  return normalizeSiteData(data)
+}
+
+export const normalizeSiteData = (data = {}) => {
   const contentVisibility = normalizeContentVisibility(data.contentVisibility)
   const posts = sortPosts(filterVisibleContent((data.posts || []).map(normalizePostAccess), 'posts', contentVisibility))
   const tools = sortPosts(filterVisibleContent((data.tools || []).map(normalizeCollectionItem), 'tools', contentVisibility))
@@ -137,6 +141,7 @@ const normalizePostAccess = (post) => ({
 })
 
 const normalizeCollectionItem = (item) => ({
+  sortOrder: Number.isFinite(Number(item.sortOrder)) ? Number(item.sortOrder) : undefined,
   title: item.title || item.name || '未命名条目',
   slug: item.slug || item.id || item.title || item.name || `item-${Math.random().toString(36).slice(2)}`,
   date: item.date || item.createdAt?.slice?.(0, 10) || '',
@@ -184,6 +189,7 @@ const normalizeAttachments = (attachments) =>
     .filter((item) => item.url || item.rawUrl || item.dataUrl || (item.chunked && item.chunks.length))
 
 const normalizeRepository = (repo) => ({
+  sortOrder: Number.isFinite(Number(repo.sortOrder)) ? Number(repo.sortOrder) : undefined,
   id: repo.id || repo.slug || repo.name || `repo-${Math.random().toString(36).slice(2)}`,
   name: repo.name || '未命名代码库',
   fileName: repo.fileName || '',
