@@ -19,6 +19,23 @@
   },
   "posts": [
     {
+      "title": "银行家算法：HALF_EVEN",
+      "slug": "half-even",
+      "date": "2026-10-10",
+      "createdAt": "2026-10-10T01:50:28.411Z",
+      "updatedAt": "2026-10-10T01:52:19.716Z",
+      "tags": [
+        "算法"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "HALF_EVEN 是一种舍入模式，正常四舍五入到最近值；如果恰好处于两个候选值的正中间，也就是“平局/tie”，则选择最低有效位为偶数的那个。",
+      "content": "HALF_EVEN 是一种舍入模式，中文常叫 **“银行家舍入法”**，也常被描述为 **“四舍六入五成双”**。英文全称通常是 **Round Half to Even** 或 **roundTiesToEven**。\n\n它的核心规则是：\n\n> 正常四舍五入到最近值；如果恰好处于两个候选值的正中间，也就是“平局/tie”，则选择最低有效位为偶数的那个。\n\n## 1. 规则和例子\n\n以舍入到整数为例：\n\n| 原值 | HALF_UP 四舍五入 | HALF_EVEN |\n|---|---:|---:|\n| 2.5 | 3 | 2 |\n| 3.5 | 4 | 4 |\n| 4.5 | 5 | 4 |\n| 5.5 | 6 | 6 |\n| -2.5 | -3 | -2 |\n| -3.5 | -4 | -4 |\n\n解释：\n\n- 2.5 正好在 2 和 3 中间，选偶数，所以到 2。\n- 3.5 正好在 3 和 4 中间，选偶数，所以到 4。\n- 4.5 正好在 4 和 5 中间，选偶数，所以到 4。\n- -2.5 正好在 -2 和 -3 中间，选偶数，-2 是偶数，所以到 -2。\n\n保留两位小数时：\n\n| 原值 | HALF_EVEN 到两位 |\n|---|---:|\n| 1.225 | 1.22 |\n| 1.235 | 1.24 |\n| 1.245 | 1.24 |\n| 1.255 | 1.26 |\n\n因为 1.225 的舍去部分是 5，保留的最后一位是 2，偶数，所以舍去；1.235 的保留最后一位是 3，奇数，所以进位变成 4。\n\n注意：HALF_EVEN 只在“恰好一半”时才看奇偶。比如 2.51 仍然进到 3，2.49 仍然舍到 2。\n\n“四舍六入五成双”可以这样理解：\n\n- 小于 5：舍；\n- 大于 5：入；\n- 等于 5，且后面还有非零数字：入；\n- 等于 5，且后面全为 0：看前一位，前一位是偶数就舍，是奇数就入，使前一位变成偶数。\n\n## 2. 为什么需要 HALF_EVEN？有什么好处？\n\n### 2.1 减少系统性偏差\n\n普通四舍五入，即 HALF_UP，遇到 .5 时总是向绝对值更大的方向进。例如：\n\n```text\n2.5 -> 3\n3.5 -> 4\n4.5 -> 5\n5.5 -> 6\n```\n\n如果大量数据都刚好以 .5 结尾，那么总和会系统性偏高。\n\nHALF_EVEN 在平局时有时进、有时舍：\n\n```text\n2.5 -> 2\n3.5 -> 4\n4.5 -> 4\n5.5 -> 6\n```\n\n长期来看，向上和向下的次数大致相当，舍入误差期望接近 0，因此更“无偏”。\n\n### 2.2 财务和统计中更公平\n\n在利息计算、金额分摊、税务计算等场景，如果总是 HALF_UP，可能长期对某一方有利。HALF_EVEN 可以减少这种累计偏差，所以被称为“银行家舍入”。不过要注意：并不是所有银行都强制使用它，实际业务要以规则为准。\n\n### 2.3 是 IEEE 754 浮点数的默认舍入模式\n\nIEEE 754 标准规定，二进制浮点运算的默认舍入模式是 **roundTiesToEven**，也就是 HALF_EVEN。也就是说，CPU 做浮点加减乘除时，默认通常就是“最近偶数舍入”。\n\n好处是：\n\n- 跨平台结果更一致；\n- 舍入无偏；\n- 硬件实现简单；\n- 在连续计算中减少累计误差。\n\n### 2.4 只影响平局，不影响普通舍入\n\nHALF_EVEN 不是“所有情况都舍入到偶数”，而是：\n\n- 不是平局：按正常最近舍入；\n- 是平局：选偶数。\n\n所以它和普通四舍五入大多数时候结果相同。\n\n## 3. 怎么实现？\n\n### 3.1 十进制通用思路\n\n假设要保留 `n` 位小数：\n\n1. 把数乘以 `10^n`；\n2. 取整数部分 `q` 和小数部分 `frac`；\n3. 如果 `frac > 0.5`，进位；\n4. 如果 `frac < 0.5`，舍去；\n5. 如果 `frac == 0.5`，看 `q` 的奇偶：\n   - `q` 是偶数：保持不变；\n   - `q` 是奇数：加 1。\n\n伪代码：\n\n```python\ndef round_half_even(x, n):\n    sign = -1 if x < 0 else 1\n    factor = 10 ** n\n    y = abs(x) * factor\n    q = floor(y)\n    frac = y - q\n\n    if frac > 0.5:\n        q += 1\n    elif frac == 0.5:\n        if q % 2 == 1:\n            q += 1\n\n    return sign * q / factor\n```\n\n注意：这段代码适合理解概念。真实浮点数中很多小数不能精确表示，所以不要随便用 `double` 判断 `frac == 0.5`。\n\n### 3.2 整数定点实现\n\n如果数据可以表示成整数，例如金额以“分”为单位，可以用整数除法实现：\n\n```python\ndef div_round_half_even(a, d):\n    # 计算 a / d，并按 HALF_EVEN 舍入到整数，d > 0\n    sign = -1 if a < 0 else 1\n    a = abs(a)\n    q, r = divmod(a, d)\n\n    if 2 * r > d:\n        q += 1\n    elif 2 * r == d:\n        if q % 2 == 1:\n            q += 1\n\n    return sign * q\n```\n\n例如把 `2.5` 看成 `25 / 10`：\n\n```text\na = 25, d = 10\nq = 2, r = 5\n2*r == d，且 q=2 是偶数\n所以结果 q=2，即 2\n```\n\n把 `3.5` 看成 `35 / 10`：\n\n```text\nq = 3, r = 5\n2*r == d，且 q=3 是奇数\n所以 q 加 1 变成 4，即 4\n```\n\n### 3.3 IEEE 754 二进制浮点中的实现\n\n二进制浮点舍入时，会看被丢弃的位。常见术语：\n\n- `guard`：保护位，被丢弃的最高位；\n- `round`：舍入位；\n- `sticky`：粘滞位，表示后面是否还有非零位；\n- `lsb`：保留部分的最低位。\n\n简化规则：\n\n```text\n如果 guard = 0：\n    直接舍去\n否则如果 guard = 1 且 round=1 或 sticky=1：\n    进位\n否则：  # 恰好是一半\n    如果 lsb = 1：\n        进位\n    否则：\n        舍去\n```\n\n效果就是：平局时让保留部分的最低位变成 0，也就是偶数。\n\n### 3.4 常见语言/库示例\n\nJava：\n\n```java\nnew BigDecimal(\"2.5\").setScale(0, RoundingMode.HALF_EVEN); // 2\nnew BigDecimal(\"3.5\").setScale(0, RoundingMode.HALF_EVEN); // 4\nnew BigDecimal(\"1.225\").setScale(2, RoundingMode.HALF_EVEN); // 1.22\nnew BigDecimal(\"1.235\").setScale(2, RoundingMode.HALF_EVEN); // 1.24\n```\n\nPython：\n\n```python\nround(2.5)  # 2\nround(3.5)  # 4\nround(-2.5) # -2\n\nfrom decimal import Decimal, ROUND_HALF_EVEN\nDecimal(\"1.225\").quantize(Decimal(\"0.01\"), rounding=ROUND_HALF_EVEN)  # 1.22\n```\n\nC/C++：\n\n```cpp\n#include <cmath>\nstd::nearbyint(2.5); // 默认舍入模式下通常得到 2\nstd::rint(3.5);      // 通常得到 4\n```\n\n但注意：`std::round(2.5)` 通常得到 3，它不是 HALF_EVEN，而是 half away from zero。\n\n## 4. 注意事项\n\n1. **HALF_EVEN 只处理平局**。  \n   不是所有数字都舍入到偶数，只有恰好一半时才这样。\n\n2. **负数也按“最近偶数”处理**。  \n   -2.5 到 -2，-3.5 到 -4。\n\n3. **二进制浮点有精度陷阱**。  \n   例如 Python 中 `round(2.675, 2)` 可能得到 `2.67`，不是因为 HALF_EVEN 错了，而是 `2.675` 在二进制中实际略小于 2.675。要精确十进制舍入，应使用 `Decimal` 或 `BigDecimal`。\n\n4. **不是所有 `round` 都是 HALF_EVEN**。  \n   Java 的 `Math.round`、JavaScript 的 `Math.round`、Excel 的 `ROUND` 多数不是 HALF_EVEN。\n\n## 总结\n\nHALF_EVEN 就是：\n\n> 舍入到最近值；如果正好在中间，选偶数。\n\n它的主要好处是减少舍入偏差、长期统计更公平，并且是 IEEE 754 浮点数的默认舍入模式。实现时关键是判断是否恰好一半；如果是，再看保留位最后一位是奇数还是偶数。奇数就进位，偶数就舍去。",
+      "contentFormat": "markdown",
+      "readingMinutes": 7,
+      "attachments": []
+    },
+    {
       "title": "主题插件 Looper 崩溃问题",
       "slug": "theme-phone-national-day-主题插件-looper-崩溃问题完整总结",
       "date": "2026-10-08",
@@ -2948,6 +2965,25 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-10-10 文章发布记录",
+      "slug": "auto-deploy-20261010015219-posts",
+      "date": "2026-10-10",
+      "createdAt": "2026-10-10T01:52:19.732Z",
+      "updatedAt": "2026-10-10T01:52:19.732Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "文章"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 文章 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-10-10 文章发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-10-10T01:52:19.732Z\n2. 发布模块：文章\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“文章”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update posts content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-10-08 文章发布记录",
       "slug": "auto-deploy-20261008055658-posts",
