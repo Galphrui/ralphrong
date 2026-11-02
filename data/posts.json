@@ -2670,6 +2670,39 @@
   ],
   "repositories": [
     {
+      "id": "源码控制管理更新记录备份操作",
+      "name": "源码控制管理更新记录备份操作",
+      "fileName": "cp_custom.sh",
+      "description": "",
+      "language": "Shell",
+      "tags": [
+        "Linux"
+      ],
+      "url": "",
+      "sourcePath": "",
+      "updatedAt": "2026-11-02",
+      "snippet": "#!/bin/bash\n\n# ---- 自动定位仓库根目录（含 .repo 目录的那一层），不依赖执行脚本时所在的目录 ----\nfind_repo_root() {\n    local dir=\"$PWD\"\n    while [ \"$dir\" != \"/\" ]; do\n        if [ -d \"$dir/.repo\" ]; then\n            echo \"$dir\"\n            return 0\n        fi\n        dir=$(dirname \"$dir\")\n    done\n    return 1\n}\n\nAP_DIR=$(find_repo_root)\nif [ -z \"$AP_DIR\" ]; then\n    echo \"[ERROR] 找不到 .repo 目录，请确认当前处于 repo 管理的源码树内（任意子目录均可）\"\n    exit 1\nfi\necho \"[INFO] 仓库根目录: $AP_DIR\"\n\necho -e '-------------Git Diff Start! ---------------------------\\n'\n(cd \"$AP_DIR\" && repo diff) > gitModify.txt\necho -e '-------------Git Diff End! ---------------------------\\n'\n\ndt=$(date +%Y_%m_%d_%H_%M_%S)\ncustomDir=\"${USER}_${TARGET_PRODUCT:-unknown}_${dt}\"\nsvn_test=\"svntest.txt\"\nuntracked_list=\"untracked.txt\"\nrm -rf \"$svn_test\" \"$untracked_list\"\n\nchmod a+x custom_modify.py\n./custom_modify.py\n\necho -e '-------------Collecting untracked & staged-new files ---------------------------\\n'\n(cd \"$AP_DIR\" && repo forall -c '\n    st=$(git status --porcelain 2>/dev/null)\n    if [ -n \"$st\" ]; then\n        echo \"$st\" | grep -E \"^(\\?\\?|A )\" | sed -E \"s/^(\\?\\? |A  )//\" | while read -r f; do\n            f=\"${f%/}\"\n            echo \"[DEBUG] project=$REPO_PATH file=$f\" >&2\n            echo \"$REPO_PATH/$f\"\n        done\n    fi\n') > \"$untracked_list\"\n\n[ -s \"$untracked_list\" ] && cat \"$untracked_list\" >> \"$svn_test\"\n\nimgdir=\"$AP_DIR/custom_3gtc/$customDir\"\n\nexclude_patterns=(\n    '^vendor/asr/prebuilts/modem/dove'\n    '^out/'\n    '^custom_3gtc/'\n\t'^vendor/asr/gator/daemon/escape/escape'\n)\n\nif [ -f \"$svn_test\" ]; then\n    sort -u \"$svn_test\" -o \"$svn_test\"\n    if [ ${#exclude_patterns[@]} -gt 0 ]; then\n        exclude_regex=$(IFS='|'; echo \"${exclude_patterns[*]}\")\n        cp \"$svn_test\" \"${svn_test}.before_filter\"\n        grep -v -E \"$exclude_regex\" \"$svn_test\" > \"${svn_test}.filtered\"\n        mv \"${svn_test}.filtered\" \"$svn_test\"\n    fi\n    echo \"---- 最终 svntest.txt (已过滤) ----\"\n    cat \"$svn_test\"\n    echo \"---------------------------\"\n    while IFS= read -r line; do\n        [ -z \"$line\" ] && continue\n        if [ ! -e \"$AP_DIR/$line\" ]; then\n            echo \"[WARN] 源文件/目录不存在，跳过: $AP_DIR/$line\"\n            continue\n        fi\n        mkdir -p \"$imgdir/${line%/*}\"\n        cp -r -- \"$AP_DIR/$line\" \"$imgdir/${line%/*}/\"\n    done < \"$svn_test\"\n    echo \" copy diff file success >>>>> $imgdir \"\n    cp \"$svn_test\" \"$imgdir/manifest.txt\"\n    cp \"gitModify.txt\" \"$imgdir/gitModify.txt\"\nfi\n\n#cp -rf \"$AP_DIR\"/custom_3gtc/output/*.html \"$imgdir\" 2>/dev/null\necho -e '-------------End! ---------------------------\\n'",
+      "notes": "",
+      "attachments": [
+        {
+          "id": "att-1793599379287-hai76y",
+          "name": "cp_custom.sh",
+          "fileName": "cp_custom.sh",
+          "mimeType": "text/x-sh",
+          "size": 2732,
+          "url": "",
+          "rawUrl": "",
+          "path": "",
+          "dataUrl": "data:text/x-sh;base64,IyEvYmluL2Jhc2gKCiMgLS0tLSDoh6rliqjlrprkvY3ku5PlupPmoLnnm67lvZXvvIjlkKsgLnJlcG8g55uu5b2V55qE6YKj5LiA5bGC77yJ77yM5LiN5L6d6LWW5omn6KGM6ISa5pys5pe25omA5Zyo55qE55uu5b2VIC0tLS0KZmluZF9yZXBvX3Jvb3QoKSB7CiAgICBsb2NhbCBkaXI9IiRQV0QiCiAgICB3aGlsZSBbICIkZGlyIiAhPSAiLyIgXTsgZG8KICAgICAgICBpZiBbIC1kICIkZGlyLy5yZXBvIiBdOyB0aGVuCiAgICAgICAgICAgIGVjaG8gIiRkaXIiCiAgICAgICAgICAgIHJldHVybiAwCiAgICAgICAgZmkKICAgICAgICBkaXI9JChkaXJuYW1lICIkZGlyIikKICAgIGRvbmUKICAgIHJldHVybiAxCn0KCkFQX0RJUj0kKGZpbmRfcmVwb19yb290KQppZiBbIC16ICIkQVBfRElSIiBdOyB0aGVuCiAgICBlY2hvICJbRVJST1JdIOaJvuS4jeWIsCAucmVwbyDnm67lvZXvvIzor7fnoa7orqTlvZPliY3lpITkuo4gcmVwbyDnrqHnkIbnmoTmupDnoIHmoJHlhoXvvIjku7vmhI/lrZDnm67lvZXlnYflj6/vvIkiCiAgICBleGl0IDEKZmkKZWNobyAiW0lORk9dIOS7k+W6k+agueebruW9lTogJEFQX0RJUiIKCmVjaG8gLWUgJy0tLS0tLS0tLS0tLS1HaXQgRGlmZiBTdGFydCEgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tXG4nCihjZCAiJEFQX0RJUiIgJiYgcmVwbyBkaWZmKSA+IGdpdE1vZGlmeS50eHQKZWNobyAtZSAnLS0tLS0tLS0tLS0tLUdpdCBEaWZmIEVuZCEgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tXG4nCgpkdD0kKGRhdGUgKyVZXyVtXyVkXyVIXyVNXyVTKQpjdXN0b21EaXI9IiR7VVNFUn1fJHtUQVJHRVRfUFJPRFVDVDotdW5rbm93bn1fJHtkdH0iCnN2bl90ZXN0PSJzdm50ZXN0LnR4dCIKdW50cmFja2VkX2xpc3Q9InVudHJhY2tlZC50eHQiCnJtIC1yZiAiJHN2bl90ZXN0IiAiJHVudHJhY2tlZF9saXN0IgoKY2htb2QgYSt4IGN1c3RvbV9tb2RpZnkucHkKLi9jdXN0b21fbW9kaWZ5LnB5CgplY2hvIC1lICctLS0tLS0tLS0tLS0tQ29sbGVjdGluZyB1bnRyYWNrZWQgJiBzdGFnZWQtbmV3IGZpbGVzIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLVxuJwooY2QgIiRBUF9ESVIiICYmIHJlcG8gZm9yYWxsIC1jICcKICAgIHN0PSQoZ2l0IHN0YXR1cyAtLXBvcmNlbGFpbiAyPi9kZXYvbnVsbCkKICAgIGlmIFsgLW4gIiRzdCIgXTsgdGhlbgogICAgICAgIGVjaG8gIiRzdCIgfCBncmVwIC1FICJeKFw/XD98QSApIiB8IHNlZCAtRSAicy9eKFw/XD8gfEEgICkvLyIgfCB3aGlsZSByZWFkIC1yIGY7IGRvCiAgICAgICAgICAgIGY9IiR7ZiUvfSIKICAgICAgICAgICAgZWNobyAiW0RFQlVHXSBwcm9qZWN0PSRSRVBPX1BBVEggZmlsZT0kZiIgPiYyCiAgICAgICAgICAgIGVjaG8gIiRSRVBPX1BBVEgvJGYiCiAgICAgICAgZG9uZQogICAgZmkKJykgPiAiJHVudHJhY2tlZF9saXN0IgoKWyAtcyAiJHVudHJhY2tlZF9saXN0IiBdICYmIGNhdCAiJHVudHJhY2tlZF9saXN0IiA+PiAiJHN2bl90ZXN0IgoKaW1nZGlyPSIkQVBfRElSL2N1c3RvbV8zZ3RjLyRjdXN0b21EaXIiCgpleGNsdWRlX3BhdHRlcm5zPSgKICAgICdedmVuZG9yL2Fzci9wcmVidWlsdHMvbW9kZW0vZG92ZScKICAgICdeb3V0LycKICAgICdeY3VzdG9tXzNndGMvJwoJJ152ZW5kb3IvYXNyL2dhdG9yL2RhZW1vbi9lc2NhcGUvZXNjYXBlJwopCgppZiBbIC1mICIkc3ZuX3Rlc3QiIF07IHRoZW4KICAgIHNvcnQgLXUgIiRzdm5fdGVzdCIgLW8gIiRzdm5fdGVzdCIKICAgIGlmIFsgJHsjZXhjbHVkZV9wYXR0ZXJuc1tAXX0gLWd0IDAgXTsgdGhlbgogICAgICAgIGV4Y2x1ZGVfcmVnZXg9JChJRlM9J3wnOyBlY2hvICIke2V4Y2x1ZGVfcGF0dGVybnNbKl19IikKICAgICAgICBjcCAiJHN2bl90ZXN0IiAiJHtzdm5fdGVzdH0uYmVmb3JlX2ZpbHRlciIKICAgICAgICBncmVwIC12IC1FICIkZXhjbHVkZV9yZWdleCIgIiRzdm5fdGVzdCIgPiAiJHtzdm5fdGVzdH0uZmlsdGVyZWQiCiAgICAgICAgbXYgIiR7c3ZuX3Rlc3R9LmZpbHRlcmVkIiAiJHN2bl90ZXN0IgogICAgZmkKICAgIGVjaG8gIi0tLS0g5pyA57uIIHN2bnRlc3QudHh0ICjlt7Lov4fmu6QpIC0tLS0iCiAgICBjYXQgIiRzdm5fdGVzdCIKICAgIGVjaG8gIi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLSIKICAgIHdoaWxlIElGUz0gcmVhZCAtciBsaW5lOyBkbwogICAgICAgIFsgLXogIiRsaW5lIiBdICYmIGNvbnRpbnVlCiAgICAgICAgaWYgWyAhIC1lICIkQVBfRElSLyRsaW5lIiBdOyB0aGVuCiAgICAgICAgICAgIGVjaG8gIltXQVJOXSDmupDmlofku7Yv55uu5b2V5LiN5a2Y5Zyo77yM6Lez6L+HOiAkQVBfRElSLyRsaW5lIgogICAgICAgICAgICBjb250aW51ZQogICAgICAgIGZpCiAgICAgICAgbWtkaXIgLXAgIiRpbWdkaXIvJHtsaW5lJS8qfSIKICAgICAgICBjcCAtciAtLSAiJEFQX0RJUi8kbGluZSIgIiRpbWdkaXIvJHtsaW5lJS8qfS8iCiAgICBkb25lIDwgIiRzdm5fdGVzdCIKICAgIGVjaG8gIiBjb3B5IGRpZmYgZmlsZSBzdWNjZXNzID4+Pj4+ICRpbWdkaXIgIgogICAgY3AgIiRzdm5fdGVzdCIgIiRpbWdkaXIvbWFuaWZlc3QudHh0IgogICAgY3AgImdpdE1vZGlmeS50eHQiICIkaW1nZGlyL2dpdE1vZGlmeS50eHQiCmZpCgojY3AgLXJmICIkQVBfRElSIi9jdXN0b21fM2d0Yy9vdXRwdXQvKi5odG1sICIkaW1nZGlyIiAyPi9kZXYvbnVsbAplY2hvIC1lICctLS0tLS0tLS0tLS0tRW5kISAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS1cbic=",
+          "chunked": false,
+          "chunkSize": 0,
+          "chunkCount": 0,
+          "chunks": [],
+          "createdAt": "2026-11-02T06:02:59.287Z"
+        }
+      ]
+    },
+    {
       "id": "自动化抓取设备apk信息",
       "name": "自动化抓取设备APK信息",
       "fileName": "adb_app_storage_report.py",
@@ -3119,6 +3152,25 @@
     }
   ],
   "devLogs": [
+    {
+      "title": "2026-11-02 代码库发布记录",
+      "slug": "auto-deploy-20261102060308-code",
+      "date": "2026-11-02",
+      "createdAt": "2026-11-02T06:03:08.504Z",
+      "updatedAt": "2026-11-02T06:03:08.504Z",
+      "tags": [
+        "自动记录",
+        "部署",
+        "代码库"
+      ],
+      "visibility": "public",
+      "accessPassword": "",
+      "summary": "自动记录 代码库 模块的一次保存、发布、推送和上线流程。",
+      "content": "## 2026-11-02 代码库发布记录\n\n## 1. 本次发布信息\n\n1. 发布时间：2026-11-02T06:03:08.504Z\n2. 发布模块：代码库\n3. 数据文件：data/posts.json\n4. 发布方式：外网后台通过 Worker 写入 GitHub\n\n## 2. 后台操作步骤\n\n1. 打开后台 admin.html。\n2. 登录管理员账号。\n3. 点击顶部的“代码库”模块入口。\n4. 确认本次新增或修改内容已经保存。\n5. 点击“保存并发布”。\n6. 等待后台状态栏提示正在等待公开博客上线。\n\n## 3. 本地维护时建议执行的命令\n\n进入项目目录：\n\n    cd /Users/galph/Documents/MyPersionWeb\n\n检查工作区：\n\n    git status --short\n\n前端构建：\n\n    ./node_modules/.bin/vite build\n\n后台脚本语法检查：\n\n    node --check admin.js\n    node --check local-admin-server.mjs\n    node --check worker/admin-worker.js\n\n## 4. GitHub 推送和上线检查\n\n如果是本地提交代码，按顺序执行：\n\n    git add .\n    git commit -m \"Update code content\"\n    git push origin main\n\n然后打开 GitHub Actions：\n\n    https://github.com/Galphrui/ralphrong/actions\n\n确认最新的 Deploy to GitHub Pages 任务是绿色对勾。\n\n## 5. 前台确认方式\n\n部署成功后打开线上页面，并使用 Command + Shift + R 强制刷新。\n\n常用地址：\n\n    文章：https://galphrui.github.io/ralphrong/#posts\n    代码库：https://galphrui.github.io/ralphrong/#code\n    工具库：https://galphrui.github.io/ralphrong/#tools\n    开发日志：https://galphrui.github.io/ralphrong/#devlogs\n\n## 6. 失败时先排查\n\n1. GitHub Actions 是否红叉。\n2. data/posts.json 是否已经更新。\n3. 浏览器是否需要强制刷新。\n4. 如果是附件问题，检查 public-assets/tools 目录是否有文件。\n5. 如果是页面空白，先执行本地构建命令查看报错。\n\n## 7. 本次结果\n\n本次发布流程已经提交。最终是否上线，以后台状态栏、GitHub Actions 绿色对勾、线上页面刷新后的内容为准。",
+      "contentFormat": "markdown",
+      "readingMinutes": 3,
+      "attachments": []
+    },
     {
       "title": "2026-11-02 文章发布记录",
       "slug": "auto-deploy-20261102032352-posts",
